@@ -23,6 +23,7 @@ const Notice = () => {
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <NoticeMainCanvas />
+          <TextEditorModal />
         </section>
       </MainZone>
     </div>

@@ -5,12 +5,15 @@ import SideBar from "../components/SideBar";
 import TextEditorModal from "../components/TextEditorModal";
 import HomeMainCanvas from "../components/Home/HomeMainCanvas";
 import HomeTimerCanvas from "../components/Home/HomeTimerCanvas";
+import QRCodeGenerator from "../components/common/QRCodeGenerator";
 
 const MainZone = styled.div``;
 
 const Education = () => {
   const { pathname } = useLocation();
   const [homeMode, setHomeMode] = useState("main");
+
+  const ids = ["진미_평양_오뎅", "전주_함흥_마들렌"];
 
   // 페이지 전체 리턴
   return (
@@ -21,9 +24,7 @@ const Education = () => {
       </div>
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground h-screen">
         <section className="flex flex-row items-center w-full justify-between h-full rounded-2xl">
-          {homeMode === "main" && <HomeMainCanvas />}
-          {homeMode === "timer" && <HomeTimerCanvas />}
-          {/* 홈을 벗어나면 타이머가 리셋되는 것은 추후 개선 */}
+          <QRCodeGenerator ids={ids} />
         </section>
       </MainZone>
     </div>

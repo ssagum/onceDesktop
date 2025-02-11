@@ -4,6 +4,7 @@ import ModalTemplate from "../common/ModalTemplate";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import hospitalStocks from "../../datas/stocks";
 import StockRow from "./StockRow";
+import { FilterButton, FilterChips } from "../common/FilterButton";
 
 const SearchZone = styled.div``;
 const BoxZone = styled.div``;
@@ -16,6 +17,7 @@ const InventoryStatusZone = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(7);
   const [isFilterModalOn, setIsFilterModalOn] = useState(true);
+  const [selectedFilters, setSelectedFilters] = useState(["기타 소모품"]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
 
@@ -31,6 +33,18 @@ const InventoryStatusZone = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
+  };
+
+  const handleFilterClick = () => {
+    setIsFilterModalOn(true);
+  };
+
+  const handleResetFilters = () => {
+    setSelectedFilters([]); // 모든 필터 초기화
+  };
+
+  const handleRemoveFilter = (filter) => {
+    setSelectedFilters(selectedFilters.filter((f) => f !== filter));
   };
 
   return (
@@ -54,12 +68,26 @@ const InventoryStatusZone = () => {
             ></path>
           </svg>
         </div>
-        <button className="flex flex-row text-[#002D5D]">
-          <span>필터</span>
-        </button>
+        <span className="text-once18 font-semibold">
+          ✅ 기존 물품인지 확인 후, 신규 품목이면 상단의 '품목등록'을
+          눌러주세요! 😊
+        </span>
       </SearchZone>
+      <div className="flex flex-row w-full justify-between my-[20px]">
+        <div>
+          <FilterChips
+            selectedFilters={selectedFilters}
+            removeFilter={handleRemoveFilter}
+          />
+        </div>
+        <FilterButton
+          selectedFilters={selectedFilters}
+          onClick={handleFilterClick}
+          onReset={handleResetFilters}
+        />
+      </div>
       <BoxZone
-        className={`flex flex-col w-full my-[40px] border-gray-300 border rounded-md`}
+        className={`flex flex-col w-full mb-[40px] border-gray-300 border rounded-md`}
       >
         <IndexPart className="grid grid-cols-7 gap-4 border-b border-gray-300 h-boxH items-center">
           <div className="text-center text-[#9D9D9C]">분류</div>
@@ -190,6 +218,9 @@ const InventoryStatusZone = () => {
             <div className="flex flex-col">
               <div className="flex flex-row mb-[20px]">
                 <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
+                  주문 필요
+                </button>
+                <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
                   승인
                 </button>
                 <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
@@ -200,9 +231,6 @@ const InventoryStatusZone = () => {
                 </button>
                 <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
                   입고 완료
-                </button>
-                <button className="w-[110px] border border-gray-400 rounded-md h-[40px]">
-                  주문 필요
                 </button>
               </div>
             </div>
