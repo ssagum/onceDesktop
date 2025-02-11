@@ -394,19 +394,20 @@ function TaskMainCanvas() {
         </PaginationZone>
         <div className="flex flex-row gap-x-[20px]">
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder who="1원장님" />
-            <DragGoalFolder who="2원장님" />
-            <DragGoalFolder who="3원장님" />
+            <DragGoalFolder
+              column={initialColumns.원장님}
+              tasks={initialTasks}
+            />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder who="경영지원 팀장님" />
+            {/* <DragGoalFolder who="경영지원 팀장님" />
             <DragGoalFolder />
-            <DragGoalFolder />
+            <DragGoalFolder /> */}
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
+            {/* <DragGoalFolder />
             <DragGoalFolder />
-            <DragGoalFolder />
-            <DragGoalFolder />
+            <DragGoalFolder /> */}
           </div>
         </div>
         <DragOverlay>

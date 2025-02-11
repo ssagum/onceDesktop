@@ -10,16 +10,16 @@ const FolderContainer = styled.div`
   transform: ${(props) => (props.isOver ? "scale(1.10)" : "scale(1)")};
 `;
 
-export default function DragGoalFolder({ who }) {
+export default function DragGoalFolder({ column, tasks }) {
   // useDroppable 훅을 사용해 드래그 오버 상태를 감지합니다.
   const { setNodeRef, isOver } = useDroppable({
-    id: "drag-goal-folder",
-    data: { type: "container", containerId: "drag-goal-folder" },
+    id: column.id,
+    data: { type: "container", containerId: column.id },
   });
 
   return (
     <FolderContainer ref={setNodeRef} isOver={isOver}>
-      {/* 폴더 상단: 폴더 모양 SVG */}
+      {/* 폴더 하단: 배경색이 기본적으로 bg-onceHover 클래스 적용 */}
       <div className="relative inline-block">
         <svg
           className="w-[170px] h-[30px]"
@@ -35,12 +35,20 @@ export default function DragGoalFolder({ who }) {
               xmlns="http://www.w3.org/1999/xhtml"
               className="flex items-center justify-center w-full h-full text-black border-l-[6px] border-onceHover"
             >
-              {who}
+              {column.title}
             </div>
           </foreignObject>
         </svg>
-        {/* 폴더 하단: 배경색이 기본적으로 bg-onceHover 클래스 적용 */}
-        <div className="w-[240px] h-[50px] bg-onceHover"></div>
+        <div className="w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center">
+          {column.taskIds.map((taskId, index) => (
+            <div
+              key={taskId}
+              className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"
+            >
+              {`+${index + 1}`}
+            </div>
+          ))}
+        </div>
       </div>
     </FolderContainer>
   );
