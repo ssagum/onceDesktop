@@ -25,7 +25,7 @@ const WarehouseButton = ({ targetText, targetStatus, onClick }) => {
 
 const Warehouse = () => {
   //inventoryStatus, itemRegistration, vendor
-  const [warehouseMode, setWarehouseMode] = useState("품목등록");
+  const [warehouseMode, setWarehouseMode] = useState("비품현황");
   const { pathname } = useLocation();
 
   // 페이지 전체 리턴

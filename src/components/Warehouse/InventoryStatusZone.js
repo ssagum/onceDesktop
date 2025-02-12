@@ -16,7 +16,7 @@ const RowPart = styled.div``;
 const InventoryStatusZone = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(7);
-  const [isFilterModalOn, setIsFilterModalOn] = useState(true);
+  const [isFilterModalOn, setIsFilterModalOn] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState(["기타 소모품"]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
@@ -50,21 +50,21 @@ const InventoryStatusZone = () => {
   return (
     <div className="flex flex-col w-full bg-white h-full">
       <SearchZone className="flex flex-row w-full items-center justify-between">
-        <div class="relative w-[400px]">
+        <div className="relative w-[400px]">
           <input
             type="text"
             placeholder="품목명을 입력해주세요."
-            class="w-full border border-[#9D9D9C] bg-[#FCFAFA] rounded px-4 py-2"
+            className="w-full border border-[#9D9D9C] bg-[#FCFAFA] rounded px-4 py-2"
           />
           <svg
-            class="absolute right-3 top-3 w-5 h-5 text-[#9D9D9C]"
+            className="absolute right-3 top-3 w-5 h-5 text-[#9D9D9C]"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
             <path
-              fill-rule="evenodd"
+              fillRule="evenodd"
               d="M12.9 14.32a8 8 0 111.414-1.414l4.387 4.387a1 1 0 01-1.414 1.414l-4.387-4.387zM14 8a6 6 0 11-12 0 6 6 0 0112 0z"
-              clip-rule="evenodd"
+              clipRule="evenodd"
             ></path>
           </svg>
         </div>

@@ -1,0 +1,53 @@
+// UserLevelContext.js
+import React, { createContext, useContext, useState, useEffect } from "react";
+
+const UserLevelContext = createContext();
+
+// 단 한 번만 선언
+const adminPassword = "skylover";
+
+const getInitialUserLevelData = () => {
+  try {
+    const stored = localStorage.getItem("userLevelData");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error("로컬 저장소에서 userLevelData 읽기 실패", e);
+  }
+  return {
+    department: "간호",
+    role: "팀장",
+    departmentLeader: true,
+  };
+};
+
+export function UserLevelProvider({ children }) {
+  const [userLevelData, setUserLevelData] = useState(getInitialUserLevelData());
+
+  const updateUserLevelData = (newData, password) => {
+    if (password === adminPassword) {
+      setUserLevelData(newData);
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("userLevelData", JSON.stringify(userLevelData));
+    } catch (e) {
+      console.error("로컬 저장소에 userLevelData 저장 실패", e);
+    }
+  }, [userLevelData]);
+
+  return (
+    <UserLevelContext.Provider value={{ userLevelData, updateUserLevelData }}>
+      {children}
+    </UserLevelContext.Provider>
+  );
+}
+
+export function useUserLevel() {
+  return useContext(UserLevelContext);
+}

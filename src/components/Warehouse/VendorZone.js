@@ -74,97 +74,52 @@ const VendorZone = () => {
           <div className="text-center text-[#9D9D9C]">이메일</div>
           <div className="text-center text-[#9D9D9C]">관련 문서</div>
         </IndexPart>
-        <div class="divide-y divide-gray-200">
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">사무용 소모품</div>
-            <div class="text-center text-black">주사바늘</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#F4A809]">입고 중</div>
-            <div class="text-center text-black">30</div>
-            <div class="text-center text-black">BOX</div>
-            <div class="text-center text-black">2-carm</div>
+        <div className="divide-y divide-gray-200">
+          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
+            <div className="text-center text-black">사무용 소모품</div>
+            <div className="text-center text-black">주사바늘</div>
+            <div className="text-center text-black">진료팀</div>
+            <div className="text-center text-[#F4A809]">입고 중</div>
+            <div className="text-center text-black">30</div>
+            <div className="text-center text-black">BOX</div>
+            <div className="text-center text-black">2-carm</div>
           </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">사무용품</div>
-            <div class="text-center text-black">노트북</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#002D5D]">승인</div>
-            <div class="text-center text-black">15</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">처치실</div>
+          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
+            <div className="text-center text-black">사무용품</div>
+            <div className="text-center text-black">노트북</div>
+            <div className="text-center text-black">진료팀</div>
+            <div className="text-center text-[#002D5D]">승인</div>
+            <div className="text-center text-black">15</div>
+            <div className="text-center text-black">EA</div>
+            <div className="text-center text-black">처치실</div>
           </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">의료용 소모품</div>
-            <div class="text-center text-black">모니터</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#16B028]">입고 완료</div>
-            <div class="text-center text-black">20</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">2-carm</div>
+          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
+            <div className="text-center text-black">의료용 소모품</div>
+            <div className="text-center text-black">모니터</div>
+            <div className="text-center text-black">진료팀</div>
+            <div className="text-center text-[#16B028]">입고 완료</div>
+            <div className="text-center text-black">20</div>
+            <div className="text-center text-black">EA</div>
+            <div className="text-center text-black">2-carm</div>
           </div>
 
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">마케팅 용품</div>
-            <div class="text-center text-black">프린터</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#FF762D]">주문 완료</div>
-            <div class="text-center text-black">5</div>
-            <div class="text-center text-black">BOX</div>
-            <div class="text-center text-black">처치실</div>
+          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
+            <div className="text-center text-black">마케팅 용품</div>
+            <div className="text-center text-black">프린터</div>
+            <div className="text-center text-black">진료팀</div>
+            <div className="text-center text-[#FF762D]">주문 완료</div>
+            <div className="text-center text-black">5</div>
+            <div className="text-center text-black">BOX</div>
+            <div className="text-center text-black">처치실</div>
           </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">사무용 소모품</div>
-            <div class="text-center text-black">프린터</div>
-            <div class="text-center text-black">진료팀</div>
+          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
+            <div className="text-center text-black">사무용 소모품</div>
+            <div className="text-center text-black">프린터</div>
+            <div className="text-center text-black">진료팀</div>
             <ChipText text={"주문 필요"} />
-            <div class="text-center text-black">8</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">2-carm</div>
-          </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">사무용 소모품</div>
-            <div class="text-center text-black">키보드</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#F4A809]">입고 중</div>
-            <div class="text-center text-black">12</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">처치실</div>
-          </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">의료용 소모품</div>
-            <div class="text-center text-black">마우스</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#002D5D]">승인</div>
-            <div class="text-center text-black">25</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">2-carm</div>
-          </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">마케팅 용품</div>
-            <div class="text-center text-black">프로젝터</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#16B028]">입고 완료</div>
-            <div class="text-center text-black">10</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">처치실</div>
-          </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">의료용 소모품</div>
-            <div class="text-center text-black">프린터 스캐너</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#FF762D]">주문 완료</div>
-            <div class="text-center text-black">3</div>
-            <div class="text-center text-black">BOX</div>
-            <div class="text-center text-black">2-carm</div>
-          </div>
-          <div class="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div class="text-center text-black">마케팅 용품</div>
-            <div class="text-center text-black">모니터</div>
-            <div class="text-center text-black">진료팀</div>
-            <div class="text-center text-[#FF2D2D]">주문 필요</div>
-            <div class="text-center text-black">7</div>
-            <div class="text-center text-black">EA</div>
-            <div class="text-center text-black">처치실</div>
+            <div className="text-center text-black">8</div>
+            <div className="text-center text-black">EA</div>
+            <div className="text-center text-black">2-carm</div>
           </div>
         </div>
       </BoxZone>

@@ -31,5 +31,11 @@ export default function ChipText({ text }) {
         <span className="text-onceGreen">{text}</span>
       </div>
     );
+  } else {
+    return (
+      <div className="flex w-[100px] h-[36px] items-center justify-center rounded-full bg-onceChipBlue">
+        <span className="text-onceBlue">{text}</span>
+      </div>
+    );
   }
 }

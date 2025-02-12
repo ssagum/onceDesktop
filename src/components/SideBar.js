@@ -20,6 +20,7 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
+import PCAllocation from "./PCAllocation";
 
 const TopZone = styled.div``;
 const LoginZone = styled.div``;
@@ -121,7 +122,7 @@ export default function SideBar() {
             </p>
           </LoginZone>
         )}
-        {true && (
+        {/* {true && (
           <LoginZone className="flex flex-col w-full items-center h-[240px] justify-center">
             <div className="flex-1 flex w-full items-center justify-center">
               <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
@@ -133,11 +134,12 @@ export default function SideBar() {
                 }}
                 className="bg-onceBlue w-[160px] h-[60px]"
               >
-                <span className="text-white">로그인</span>
+                <span className="text-white">PC 할당</span>
               </button>
             </div>
           </LoginZone>
-        )}
+        )} */}
+        <PCAllocation />
         <IndexZone className="flex flex-col px-[10px] items-center">
           <div className="w-full bg-[#162D66] h-[3px] rounded-2xl mb-[50px]" />
           <Link to="/">

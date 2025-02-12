@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.js";
 import { HashRouter } from "react-router-dom";
+import { UserLevelProvider } from "./utils/UserLevelContext.js";
 
 console.log("✅ React 시작됨!");
 
@@ -22,9 +23,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const root = ReactDOM.createRoot(container);
   root.render(
     <React.StrictMode>
-      <HashRouter>
-        <App />
-      </HashRouter>
+      <UserLevelProvider>
+        <HashRouter>
+          <App />
+        </HashRouter>
+      </UserLevelProvider>
     </React.StrictMode>
   );
 

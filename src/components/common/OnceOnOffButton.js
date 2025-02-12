@@ -7,6 +7,7 @@ export default function OnceOnOffButton({
   alertMessage = "버튼이 꺼져 있습니다.",
   className = "w-full rounded-md h-[50px]", // 추가적인 className prop
 }) {
+  console.log("on pddrop:", on);
   const handleClick = () => {
     if (on) {
       // 활성 상태(on)인 경우, 전달된 onClick 함수 실행 (있다면)

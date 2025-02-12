@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import ChipText from "../common/ChipText";
+import StockDetailModal from "./StockDetailModal";
 
 const StockRow = ({
   index, // 부모에서 넘겨받은 index
@@ -11,12 +12,17 @@ const StockRow = ({
   measure,
   position, // 필요시 chip 스타일 커스터마이징
 }) => {
+  const [isDetailModalOn, setIsDetailModalOn] = useState(false);
+
   // index가 2의 배수이면 'bg-gray-100', 아니면 'bg-white' 적용
   const rowBgClass =
     index % 2 === 0 ? "bg-onceTextBackground" : "bg-onceBackground";
 
   return (
     <div
+      onClick={() => {
+        setIsDetailModalOn(true);
+      }}
       className={`grid grid-cols-7 gap-4 py-2 h-boxH items-center ${rowBgClass}`}
     >
       <div className="text-center text-black">{category}</div>
@@ -28,6 +34,10 @@ const StockRow = ({
       <div className="text-center text-black">{quantity}</div>
       <div className="text-center text-black">{measure}</div>
       <div className="text-center text-black">{position}</div>
+      <StockDetailModal
+        isVisible={isDetailModalOn}
+        setIsVisible={setIsDetailModalOn}
+      />
     </div>
   );
 };

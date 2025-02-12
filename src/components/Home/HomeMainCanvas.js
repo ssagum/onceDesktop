@@ -19,6 +19,7 @@ import NoticeModal from "../Notice.js/NoticeModal";
 import DayChanger from "../common/DayChanger";
 import ChatHistory from "../common/ChatHistory";
 import CallModal from "../call/CallModal";
+import { useUserLevel } from "../../utils/UserLevelContext";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -65,7 +66,8 @@ const Square = ({ title }) => {
 
 export default function HomeMainCanvas() {
   const [isVisible, setIsVisible] = useState(true);
-  const [callIsVisible, setCallIsVisible] = useState(true);
+  const [callIsVisible, setCallIsVisible] = useState(false);
+  const { userLevelData, updateUserLevelData } = useUserLevel();
 
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
@@ -94,7 +96,7 @@ export default function HomeMainCanvas() {
           <LeftZone className="flex-[3] h-full bg-white rounded-xl">
             <div className="flex-col h-full flex w-full p-[30px]">
               <InsideHeaderZone className="pb-[30px] w-full flex flex-row justify-between">
-                <InsideHeader title={"원장님"} />
+                <InsideHeader title={userLevelData?.department} />
                 <DayChanger />
               </InsideHeaderZone>
               <ToDoZone className="flex-col h-full">
