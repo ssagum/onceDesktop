@@ -21,6 +21,7 @@ import {
   limit,
 } from "firebase/firestore";
 import PCAllocation from "./PCAllocation";
+import packageJson from "../../package.json";
 
 const TopZone = styled.div``;
 const LoginZone = styled.div``;
@@ -192,32 +193,12 @@ export default function SideBar() {
           </Link>
         </IndexZone>
         <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
-          <span className="text-onceGray text-once18">V.1.0.0</span>
+          <span className="text-onceGray text-once18">
+            V.{packageJson.version}
+          </span>
         </div>
       </TopZone>
       {/* Modal for Verification Code */}
-      <Modal
-        isOpen={isModalOpen}
-        onRequestClose={() => setIsModalOpen(false)}
-        style={customModalStyles}
-        contentLabel="Verification Code Modal"
-        shouldCloseOnOverlayClick={true} // 모달 외부 클릭 시 닫힘
-      >
-        <h2>Enter Petsy Veno Verification Code</h2>
-        <input
-          type="text"
-          value={verificationCode}
-          onChange={handleCodeInputChange}
-          maxLength={6}
-          className="border p-2 mt-2 mb-4"
-        />
-        <button
-          onClick={handleVerifyCode}
-          className="bg-blue-500 text-white p-2 rounded ml-[10px]"
-        >
-          Verify
-        </button>
-      </Modal>
     </div>
   );
 }
