@@ -154,12 +154,12 @@ export default function SideBar() {
               nowURL={nowURL === "/notice" ? "공지사항" : nowURL}
             />
           </Link>
-          <Link to="/education">
+          {/* <Link to="/education">
             <RenderIndex
               indexValue="교육자료"
               nowURL={nowURL === "/education" ? "교육자료" : nowURL}
             />
-          </Link>
+          </Link> */}
           <Link to="/warehouse">
             <RenderIndex
               indexValue="비품현황"

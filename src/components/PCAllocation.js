@@ -4,39 +4,7 @@ import { useUserLevel } from "../utils/UserLevelContext";
 import { FiSettings } from "react-icons/fi";
 import ChipText from "./common/ChipText";
 import UserChipText from "./common/UserChipText";
-
-// 옵션 배열들을 별도의 변수로 분리
-const departmentArray = [
-  "간호팀",
-  "물리치료팀",
-  "원무팀",
-  "방사선팀",
-  "진료팀",
-  "경영지원팀",
-];
-
-const roleOptions = {
-  간호팀: ["팀원", "간호팀장"],
-  물리치료팀: ["팀원", "물리치료팀장"],
-  원무팀: ["팀원", "원무과장"],
-  방사선팀: ["팀원", "방사선팀장"],
-  진료팀: ["원장"],
-  경영지원팀: ["팀원", "경영지원팀장"],
-};
-
-const locationOptions = {
-  간호팀: ["안대 데스크"],
-  물리치료팀: [
-    "4층 물리치료 데스크",
-    "3층 물리치료 데스크",
-    "3층 물리치료실 1",
-    "3층 물리치료실 2",
-  ],
-  원무팀: ["원무과장실 PC", "X-RAY실", "초음파실", "C-ARM실"],
-  방사선팀: ["X-RAY실", "초음파실", "C-ARM실"],
-  진료팀: ["원장실"],
-  경영지원팀: ["경영지원팀 PC"],
-};
+import { departmentArray, locationOptions, roleOptions } from "../datas/users";
 
 function PCAllocation() {
   const { userLevelData, updateUserLevelData } = useUserLevel();

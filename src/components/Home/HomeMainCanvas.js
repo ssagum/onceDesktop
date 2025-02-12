@@ -83,9 +83,9 @@ export default function HomeMainCanvas() {
           <RenderTitlePart
             item={[]}
             category={"전체"}
-            title={"원내 공지!!!"}
-            owner={"박상현"}
-            time={"30분 전"}
+            title={"공지사항 기능은 다음 버전에 업데이트 됩니다"}
+            owner={"경영지원팀"}
+            time={""}
           />
         </div>
       </TopZone>
@@ -130,29 +130,29 @@ export default function HomeMainCanvas() {
                   <img src={bell} alt="Logo" className="w-[80px] mb-[10px]" />
                   <span className="text-once18">호 출</span>
                 </button>
-                <div className="w-[240px] h-[240px] flex-col flex justify-between">
+                <div className="w-[120px] h-[240px] flex-col flex justify-between">
                   {/* <NoticeModal
                     isVisible={isVisible}
                     setIsVisible={setIsVisible}
                   /> */}
                   {false ? (
-                    <div className="w-[240px] flex flex-row justify-between">
+                    <div className="w-[120px] flex flex-row justify-between">
                       <Square title={"공지등록"} />
                       <Square title={"업무추가"} />
                     </div>
                   ) : (
-                    <div className="w-[240px] flex flex-row justify-between">
+                    <div className="w-[120px] flex flex-row justify-between">
                       <Square title={"비품신청"} />
-                      <Square title={"휴가신청"} />
+                      {/* <Square title={"휴가신청"} /> */}
                     </div>
                   )}
-                  <div className="w-[240px] flex flex-row justify-between">
+                  <div className="w-[120px] flex flex-row justify-between">
                     <Square title={"타이머"} />
-                    {false ? (
+                    {/* {false ? (
                       <Square title={"병원현황"} />
                     ) : (
                       <Square title={"요청하기"} />
-                    )}
+                    )} */}
                   </div>
                 </div>
                 <CallModal

@@ -4,6 +4,8 @@ import styled from "styled-components";
 import { cancel } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import WhoSelector from "../common/WhoSelector";
+import { useUserLevel } from "../../utils/UserLevelContext";
+import UserChipText from "../common/UserChipText";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -12,6 +14,8 @@ const ContentZone = styled.div``;
 const ButtonZone = styled.div``;
 
 export default function CallModal({ isVisible, setIsVisible }) {
+  const { userLevelData, updateUserLevelData } = useUserLevel();
+
   return (
     <ModalTemplate
       isVisible={isVisible}
@@ -31,12 +35,14 @@ export default function CallModal({ isVisible, setIsVisible }) {
           />
         </ModalHeaderZone>
         <WhoZone className="flex flex-row items-center w-full px-[20px] my-[20px]">
-          <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px]">
-            작성자:
+          <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[60px]">
+            발신:
           </label>
-          <WhoSelector who={"작성자"} />
+          <div className="w-[160px]">
+            <UserChipText text={userLevelData?.location} yellowMode={true} />
+          </div>
           <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] ml-[40px]">
-            대상:
+            수신:
           </label>
           <WhoSelector who={"부서명"} />
         </WhoZone>
@@ -49,7 +55,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
         </TitleZone> */}
         <ContentZone className="flex flex-col w-full px-[20px] mb-[20px] h-full">
           <textarea
-            placeholder="공지를 작성해주세요"
+            placeholder="단순 호출 시에는 내용을 작성하지 않으시고 비워 두시는 것이 권장됩니다."
             className="border border-gray-400 rounded-md h-full p-4 w-full bg-textBackground"
           />
         </ContentZone>
