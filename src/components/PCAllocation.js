@@ -1,25 +1,66 @@
 import React, { useState } from "react";
 import { logoLong } from "../assets";
 import { useUserLevel } from "../utils/UserLevelContext";
-import { FaCog } from "react-icons/fa";
-import { MdSettings } from "react-icons/md";
-import { IoIosSettings } from "react-icons/io";
 import { FiSettings } from "react-icons/fi";
 import ChipText from "./common/ChipText";
+import UserChipText from "./common/UserChipText";
+
+// 옵션 배열들을 별도의 변수로 분리
+const departmentArray = [
+  "간호팀",
+  "물리치료팀",
+  "원무팀",
+  "방사선팀",
+  "진료팀",
+  "경영지원팀",
+];
+
+const roleOptions = {
+  간호팀: ["팀원", "간호팀장"],
+  물리치료팀: ["팀원", "물리치료팀장"],
+  원무팀: ["팀원", "원무과장"],
+  방사선팀: ["팀원", "방사선팀장"],
+  진료팀: ["원장"],
+  경영지원팀: ["팀원", "경영지원팀장"],
+};
+
+const locationOptions = {
+  간호팀: ["안대 데스크"],
+  물리치료팀: [
+    "4층 물리치료 데스크",
+    "3층 물리치료 데스크",
+    "3층 물리치료실 1",
+    "3층 물리치료실 2",
+  ],
+  원무팀: ["원무과장실 PC", "X-RAY실", "초음파실", "C-ARM실"],
+  방사선팀: ["X-RAY실", "초음파실", "C-ARM실"],
+  진료팀: ["원장실"],
+  경영지원팀: ["경영지원팀 PC"],
+};
 
 function PCAllocation() {
   const { userLevelData, updateUserLevelData } = useUserLevel();
+
+  // userLevelData의 부서가 유효한지 검사 후 기본값 설정
+  const validDepartment =
+    userLevelData?.department &&
+    departmentArray.includes(userLevelData.department)
+      ? userLevelData.department
+      : "간호팀";
+  const defaultDepartment = validDepartment;
+  const defaultRole = userLevelData?.role || roleOptions[defaultDepartment][0];
+  const defaultLocation =
+    userLevelData?.location || locationOptions[defaultDepartment][0];
+
+  // 초기 departmentLeader는 defaultRole에 "장"이 포함되어 있는지 여부로 설정
+  const [departmentLeader, setDepartmentLeader] = useState(
+    defaultRole.includes("장")
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  const [department, setDepartment] = useState(
-    userLevelData?.department || "진료"
-  );
-  const [role, setRole] = useState(userLevelData?.role || "의사");
-  const [departmentLeader, setDepartmentLeader] = useState(
-    userLevelData?.departmentLeader !== undefined
-      ? userLevelData.departmentLeader
-      : true
-  );
+  const [department, setDepartment] = useState(defaultDepartment);
+  const [role, setRole] = useState(defaultRole);
+  const [location, setLocation] = useState(defaultLocation);
   const [message, setMessage] = useState("");
 
   const openModal = () => {
@@ -34,7 +75,8 @@ function PCAllocation() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const newData = { department, role, departmentLeader };
+    // departmentLeader는 이미 자동 업데이트 되었으므로 그대로 전송
+    const newData = { department, role, location, departmentLeader };
     const success = updateUserLevelData(newData, adminPasswordInput);
     if (success) {
       setMessage("PC 할당 완료");
@@ -49,22 +91,21 @@ function PCAllocation() {
 
   return (
     <div>
-      <div className="LoginZone flex flex-col w-full items-center h-[240px] justify-center">
-        <div className="flex-1 flex w-full items-center justify-center">
+      <div className="LoginZone flex flex-col w-full items-center h-[300px] justify-center">
+        <div className="flex-[2] flex w-full items-center justify-center">
           <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
         </div>
-        <div className="flex-1 flex w-full items-center justify-center">
+        <div className="flex-[3] flex w-full items-center justify-center h-full">
           {userLevelData ? (
-            // PC 할당 완료 후, 부서와 역할 표시 + 톱니바퀴 버튼
+            // PC 할당 완료 후, 부서, 역할, 위치 표시 + 톱니바퀴 버튼
             <div className="flex flex-row items-center w-full px-[20px]">
-              <div className="flex flex-col w-full gap-y-[10px] items-center">
-                <ChipText text={userLevelData.department} />
-                <ChipText text={userLevelData.role} />
+              <div className="flex flex-col w-full gap-y-[10px] items-center px-[10px]">
+                <UserChipText text={userLevelData.department} />
+                <UserChipText text={userLevelData.role} />
+                <UserChipText text={userLevelData.location} yellowMode={true} />
               </div>
               <FiSettings
-                onClick={() => {
-                  setModalOpen(true);
-                }}
+                onClick={() => setModalOpen(true)}
                 className="text-onceBlue text-[30px]"
               />
             </div>
@@ -94,32 +135,69 @@ function PCAllocation() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-sm">부서:</label>
-                <input
-                  type="text"
+              {/* 부서 선택 */}
+              <div className="flex flex-row items-center">
+                <label className="block text-sm w-[50px]">부서:</label>
+                <select
                   value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
+                  onChange={(e) => {
+                    const newDept = e.target.value;
+                    setDepartment(newDept);
+                    // 부서 변경 시 역할과 위치의 기본값을 업데이트하고,
+                    // 역할에 "장" 문자가 포함되어 있는지에 따라 부서 리더 값을 자동 설정
+                    const newRole = roleOptions[newDept][0];
+                    setRole(newRole);
+                    setDepartmentLeader(newRole.includes("장"));
+                    setLocation(locationOptions[newDept][0]);
+                  }}
                   className="w-full border rounded px-2 py-1"
-                />
+                >
+                  {departmentArray.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label className="block text-sm">역할:</label>
-                <input
-                  type="text"
+
+              {/* 역할 선택 */}
+              <div className="flex flex-row items-center">
+                <label className="block text-sm w-[50px]">역할:</label>
+                <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value)}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setRole(newRole);
+                    // 역할 변경 시 "장" 문자가 포함되어 있으면 자동 체크
+                    setDepartmentLeader(newRole.includes("장"));
+                  }}
                   className="w-full border rounded px-2 py-1"
-                />
+                >
+                  {(roleOptions[department] || []).map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="flex items-center">
-                <label className="text-sm mr-2">부서 리더:</label>
-                <input
-                  type="checkbox"
-                  checked={departmentLeader}
-                  onChange={(e) => setDepartmentLeader(e.target.checked)}
-                />
+
+              {/* 위치 선택 */}
+              <div className="flex flex-row items-center">
+                <label className="block text-sm w-[50px]">위치:</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  {(locationOptions[department] || []).map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {/* 관리자 패스워드 입력 */}
               <div>
                 <label className="block text-sm">Admin Password:</label>
                 <input
@@ -129,6 +207,7 @@ function PCAllocation() {
                   className="w-full border rounded px-2 py-1"
                 />
               </div>
+
               <button
                 type="submit"
                 className="w-full bg-onceBlue text-white py-2 rounded"

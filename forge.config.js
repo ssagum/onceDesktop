@@ -9,11 +9,16 @@ module.exports = {
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
-      config: {},
+      config: {
+        setupIcon: "./src/assets/icons/icon.ico", // Windows용 아이콘 (.ico)
+      },
     },
     {
       name: "@electron-forge/maker-zip",
       platforms: ["darwin"],
+      config: {
+        icon: "./src/assets/icons/icon.icns", // macOS용 아이콘 (.icns)
+      },
     },
     {
       name: "@electron-forge/maker-deb",

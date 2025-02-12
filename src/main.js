@@ -20,6 +20,8 @@ const createWindow = () => {
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
+  Menu.setApplicationMenu(null);
+
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     (details, callback) => {
       callback({

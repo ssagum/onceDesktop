@@ -19,9 +19,9 @@ export default function InsideHeader({ title }) {
         )}
       </div>
       <div className="ml-[20px] text-once20 font-semibold">{title}</div>
-      <div className="ml-[20px] w-[60px] h-[26px] flex justify-center items-center rounded-lg bg-onceBlue text-once14 font-semibold text-white">
+      {/* <div className="ml-[20px] w-[60px] h-[26px] flex justify-center items-center rounded-lg bg-onceBlue text-once14 font-semibold text-white">
         New
-      </div>
+      </div> */}
     </div>
   );
 }
