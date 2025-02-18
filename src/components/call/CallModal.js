@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ModalTemplate from "../common/ModalTemplate";
 import styled from "styled-components";
 import { cancel } from "../../assets";
@@ -6,6 +6,7 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import WhoSelector from "../common/WhoSelector";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import UserChipText from "../common/UserChipText";
+import ModeToggle from "../ModeToggle";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -15,6 +16,7 @@ const ButtonZone = styled.div``;
 
 export default function CallModal({ isVisible, setIsVisible }) {
   const { userLevelData, updateUserLevelData } = useUserLevel();
+  const [simpleMode, setSimpleMode] = useState(true);
 
   return (
     <ModalTemplate
@@ -26,13 +28,16 @@ export default function CallModal({ isVisible, setIsVisible }) {
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <span className="text-[34px] font-bold">호출</span>
-          <img
-            onClick={() => setIsVisible(false)}
-            className="w-[30px]"
-            src={cancel}
-            alt="닫기"
-            style={{ cursor: "pointer" }}
-          />
+          <div className="flex flex-row items-center">
+            <ModeToggle />
+            <img
+              onClick={() => setIsVisible(false)}
+              className="w-[30px]"
+              src={cancel}
+              alt="닫기"
+              style={{ cursor: "pointer" }}
+            />
+          </div>
         </ModalHeaderZone>
         <WhoZone className="flex flex-row items-center w-full px-[20px] my-[20px]">
           <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[60px]">

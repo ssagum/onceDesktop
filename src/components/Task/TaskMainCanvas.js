@@ -241,7 +241,7 @@ function TaskMainCanvas() {
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [totalPages] = useState(7);
   const [currentPage, setCurrentPage] = useState(1);
-  const [aboutTaskModalOn, setAboutTaskModalOn] = useState(false);
+  const [aboutTaskModalOn, setAboutTaskModalOn] = useState(true);
   const [aboutTaskInfoModalOn, setAboutTaskInfoModalOn] = useState(false);
   const [aboutTaskRecordModalOn, setAboutTaskRecordModalOn] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -418,59 +418,6 @@ function TaskMainCanvas() {
           ) : null}
         </DragOverlay>
       </div>
-      <ModalTemplate
-        isVisible={aboutTaskModalOn}
-        setIsVisible={setAboutTaskModalOn}
-        showCancel={false}
-      >
-        <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
-          <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
-            <span className="text-[34px] font-bold">원장님 업무</span>
-            <img
-              onClick={() => setAboutTaskModalOn(false)}
-              className="w-[30px]"
-              src={cancel}
-              alt="닫기"
-              style={{ cursor: "pointer" }}
-            />
-          </ModalHeaderZone>
-          <ModalContentZone className="flex flex-row h-full py-[50px] w-full">
-            <button
-              className="px-3 py-1 rounded text-[30px]"
-              onClick={handlePrevDay}
-            >
-              &lt;
-            </button>
-            <div className="flex flex-row w-full items-center justify-center gap-x-[20px] h-full">
-              {/* 이전 근무일 버튼 */}
-              <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">
-                  {formatDate(previousDate)}
-                </div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
-              </DayCol>
-              {/* 오늘 날짜 표시 */}
-              <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">
-                  {formatDate(currentDate)}
-                </div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
-              </DayCol>
-              {/* 이후 근무일 버튼 */}
-              <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">{formatDate(nextDate)}</div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
-              </DayCol>
-            </div>
-            <button
-              className="px-3 py-1 rounded text-[30px]"
-              onClick={handleNextDay}
-            >
-              &gt;
-            </button>
-          </ModalContentZone>
-        </div>
-      </ModalTemplate>
       {/* 업무 상세 */}
       <ModalTemplate
         isVisible={aboutTaskInfoModalOn}

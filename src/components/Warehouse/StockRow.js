@@ -3,6 +3,7 @@ import ChipText from "../common/ChipText";
 import StockDetailModal from "./StockDetailModal";
 
 const StockRow = ({
+  item,
   index, // 부모에서 넘겨받은 index
   category,
   itemName,

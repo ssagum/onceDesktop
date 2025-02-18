@@ -5,6 +5,9 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import ChipText from "../common/ChipText";
 import EditableField from "../common/EditableField";
 import PhoneNumberField from "../common/PhoneNumberField";
+import { vendors } from "../../datas/vendors";
+import JcyTable from "../common/JcyTable";
+import VendorRow from "./VendorRow";
 
 const SearchZone = styled.div``;
 const BoxZone = styled.div``;
@@ -13,6 +16,16 @@ const SectionZone = styled.div``;
 const IndexPart = styled.div``;
 const OneLine = styled.div``;
 const Half = styled.div``;
+
+// 거래처 테이블용 컬럼 정의
+const vendorColumns = [
+  { label: "거래처명", key: "clientName" },
+  { label: "담당자", key: "manager" },
+  { label: "업종", key: "industry" },
+  { label: "연락처", key: "contact" },
+  { label: "이메일", key: "email" },
+  { label: "관련 문서", key: "documents" },
+];
 
 const VendorZone = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,7 +51,7 @@ const VendorZone = () => {
 
   return (
     <div className="flex flex-col w-full bg-white h-full">
-      <SearchZone className="flex flex-row w-full items-center justify-between">
+      <SearchZone className="flex flex-row w-full items-center justify-between mb-[40px]">
         <div class="relative w-[400px]">
           <input
             type="text"
@@ -63,97 +76,12 @@ const VendorZone = () => {
           className="w-[100px] rounded-full"
         />
       </SearchZone>
-      <BoxZone
-        className={`flex flex-col w-full my-[40px] border-gray-300 border rounded-md`}
-      >
-        <IndexPart className="grid grid-cols-[2fr_2fr_2fr_3fr_3fr_2fr] gap-4 border-b border-gray-300 h-boxH items-center">
-          <div className="text-center text-[#9D9D9C]">거래처명</div>
-          <div className="text-center text-[#9D9D9C]">담당자</div>
-          <div className="text-center text-[#9D9D9C]">업종</div>
-          <div className="text-center text-[#9D9D9C]">연락처</div>
-          <div className="text-center text-[#9D9D9C]">이메일</div>
-          <div className="text-center text-[#9D9D9C]">관련 문서</div>
-        </IndexPart>
-        <div className="divide-y divide-gray-200">
-          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div className="text-center text-black">사무용 소모품</div>
-            <div className="text-center text-black">주사바늘</div>
-            <div className="text-center text-black">진료팀</div>
-            <div className="text-center text-[#F4A809]">입고 중</div>
-            <div className="text-center text-black">30</div>
-            <div className="text-center text-black">BOX</div>
-            <div className="text-center text-black">2-carm</div>
-          </div>
-          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div className="text-center text-black">사무용품</div>
-            <div className="text-center text-black">노트북</div>
-            <div className="text-center text-black">진료팀</div>
-            <div className="text-center text-[#002D5D]">승인</div>
-            <div className="text-center text-black">15</div>
-            <div className="text-center text-black">EA</div>
-            <div className="text-center text-black">처치실</div>
-          </div>
-          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div className="text-center text-black">의료용 소모품</div>
-            <div className="text-center text-black">모니터</div>
-            <div className="text-center text-black">진료팀</div>
-            <div className="text-center text-[#16B028]">입고 완료</div>
-            <div className="text-center text-black">20</div>
-            <div className="text-center text-black">EA</div>
-            <div className="text-center text-black">2-carm</div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div className="text-center text-black">마케팅 용품</div>
-            <div className="text-center text-black">프린터</div>
-            <div className="text-center text-black">진료팀</div>
-            <div className="text-center text-[#FF762D]">주문 완료</div>
-            <div className="text-center text-black">5</div>
-            <div className="text-center text-black">BOX</div>
-            <div className="text-center text-black">처치실</div>
-          </div>
-          <div className="grid grid-cols-7 gap-4 py-2 h-boxH items-center">
-            <div className="text-center text-black">사무용 소모품</div>
-            <div className="text-center text-black">프린터</div>
-            <div className="text-center text-black">진료팀</div>
-            <ChipText text={"주문 필요"} />
-            <div className="text-center text-black">8</div>
-            <div className="text-center text-black">EA</div>
-            <div className="text-center text-black">2-carm</div>
-          </div>
-        </div>
-      </BoxZone>
-      <PaginationZone className="flex justify-center items-center space-x-2">
-        {/* 이전 페이지 버튼 */}
-        <button
-          className="px-3 py-1 border border-gray-300 rounded"
-          onClick={handlePrevious}
-        >
-          &lt;
-        </button>
-        {/* 페이지 번호 버튼 */}
-        {pages.map((page) => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            className={`px-3 py-1 rounded ${
-              page === currentPage
-                ? "bg-[#002D5D] text-white" // 현재 페이지인 경우 색상 반전
-                : "border border-gray-300" // 나머지 버튼은 기본 스타일
-            }`}
-          >
-            {page}
-          </button>
-        ))}
-
-        {/* 다음 페이지 버튼 */}
-        <button
-          className="px-3 py-1 border border-gray-300 rounded"
-          onClick={handleNext}
-        >
-          &gt;
-        </button>
-      </PaginationZone>
+      <JcyTable
+        columns={vendorColumns}
+        columnWidths="grid-cols-6"
+        data={vendors}
+        renderRow={(row, index) => <VendorRow partner={row} index={index} />}
+      />
       <ModalTemplate
         isVisible={isFilterModalOn}
         setIsVisible={setIsFilterModalOn}

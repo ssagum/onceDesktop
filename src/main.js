@@ -21,6 +21,7 @@ const createWindow = () => {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   Menu.setApplicationMenu(null);
+  mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     (details, callback) => {

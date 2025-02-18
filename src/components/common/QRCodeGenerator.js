@@ -27,7 +27,7 @@ const ids = [
   "세종_조치원_복숭아",
 ];
 
-const QRCodeGenerator = () => {
+const QRCodeGenerator = ({ idList = ids }) => {
   const [qrSize, setQrSize] = useState(150);
   const printRef = useRef();
 

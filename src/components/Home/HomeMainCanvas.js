@@ -20,6 +20,7 @@ import DayChanger from "../common/DayChanger";
 import ChatHistory from "../common/ChatHistory";
 import CallModal from "../call/CallModal";
 import { useUserLevel } from "../../utils/UserLevelContext";
+import TaskListModal from "../Task/TaskListModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -68,6 +69,7 @@ export default function HomeMainCanvas() {
   const [isVisible, setIsVisible] = useState(true);
   const [callIsVisible, setCallIsVisible] = useState(false);
   const { userLevelData, updateUserLevelData } = useUserLevel();
+  const [taskListModalOn, setTaskListModalOn] = useState(true);
 
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
@@ -97,6 +99,10 @@ export default function HomeMainCanvas() {
             <div className="flex-col h-full flex w-full p-[30px]">
               <InsideHeaderZone className="pb-[30px] w-full flex flex-row justify-between">
                 <InsideHeader title={userLevelData?.department} />
+                <TaskListModal
+                  isVisible={taskListModalOn}
+                  setIsVisible={setTaskListModalOn}
+                />
                 <DayChanger />
               </InsideHeaderZone>
               <ToDoZone className="flex-col h-full">
@@ -130,29 +136,29 @@ export default function HomeMainCanvas() {
                   <img src={bell} alt="Logo" className="w-[80px] mb-[10px]" />
                   <span className="text-once18">호 출</span>
                 </button>
-                <div className="w-[120px] h-[240px] flex-col flex justify-between">
+                <div className="w-[240px] h-[240px] flex-col flex justify-between">
                   {/* <NoticeModal
                     isVisible={isVisible}
                     setIsVisible={setIsVisible}
                   /> */}
                   {false ? (
-                    <div className="w-[120px] flex flex-row justify-between">
+                    <div className="w-[240px] flex flex-row justify-between">
                       <Square title={"공지등록"} />
                       <Square title={"업무추가"} />
                     </div>
                   ) : (
-                    <div className="w-[120px] flex flex-row justify-between">
+                    <div className="w-[240px] flex flex-row justify-between">
                       <Square title={"비품신청"} />
-                      {/* <Square title={"휴가신청"} /> */}
+                      <Square title={"휴가신청"} />
                     </div>
                   )}
-                  <div className="w-[120px] flex flex-row justify-between">
+                  <div className="w-[240px] flex flex-row justify-between">
                     <Square title={"타이머"} />
-                    {/* {false ? (
+                    {false ? (
                       <Square title={"병원현황"} />
                     ) : (
                       <Square title={"요청하기"} />
-                    )} */}
+                    )}
                   </div>
                 </div>
                 <CallModal

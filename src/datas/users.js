@@ -18,7 +18,7 @@ export const roleOptions = {
 };
 
 export const locationOptions = {
-  간호팀: ["안대 데스크"],
+  간호팀: ["안내 데스크"],
   물리치료팀: [
     "4층 물리치료 데스크",
     "3층 물리치료 데스크",
