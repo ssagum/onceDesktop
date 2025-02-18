@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
+
+const isDevelopment = process.env.NODE_ENV === "development";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -39,6 +41,44 @@ const createWindow = () => {
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
 };
+
+function createTimerWindow() {
+  const timerWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: false, // 보안을 위해 false로 설정
+      contextIsolation: true,
+      preload: TIMER_WINDOW_PRELOAD_WEBPACK_ENTRY,
+    },
+    backgroundColor: "#000000",
+  });
+
+  timerWindow.loadURL(TIMER_WINDOW_WEBPACK_ENTRY);
+
+  // CSP 설정 추가
+  timerWindow.webContents.session.webRequest.onHeadersReceived(
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+          ],
+        },
+      });
+    }
+  );
+
+  if (isDevelopment) {
+    timerWindow.webContents.openDevTools();
+  }
+}
+
+// IPC 통신 설정
+ipcMain.on("open-timer-window", () => {
+  createTimerWindow();
+});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

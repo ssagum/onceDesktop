@@ -50,6 +50,14 @@ module.exports = {
                 js: "./src/preload.js",
               },
             },
+            {
+              html: "./src/timer.html",
+              js: "./src/timer.js",
+              name: "timer_window",
+              preload: {
+                js: "./src/preload.js",
+              },
+            },
           ],
         },
       },

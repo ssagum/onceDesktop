@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 // Import the functions you need from the SDKs you need
 import Home from "./pages/Home";
 import Contact from "./pages/Contact";
@@ -18,54 +18,12 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/Notice" element={<Notice />} />
-        <Route
-          path="/Education"
-          element={
-            <div>
-              <Education />
-            </div>
-          }
-        />
-        <Route
-          path="/Warehouse"
-          element={
-            <div>
-              <Warehouse />
-            </div>
-          }
-        />
-        <Route
-          path="/write"
-          element={
-            <div>
-              <Write />
-            </div>
-          }
-        />
-        <Route
-          path="/Call"
-          element={
-            <div>
-              <Call />
-            </div>
-          }
-        />
-        <Route
-          path="/contact"
-          element={
-            <div>
-              <Contact />
-            </div>
-          }
-        />
-        <Route
-          path="/task"
-          element={
-            <div>
-              <Task />
-            </div>
-          }
-        />
+        <Route path="/Education" element={<Education />} />
+        <Route path="/Warehouse" element={<Warehouse />} />
+        <Route path="/write" element={<Write />} />
+        <Route path="/Call" element={<Call />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/task" element={<Task />} />
       </Routes>
       {/* <ChatBot /> */}
     </div>

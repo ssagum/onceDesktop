@@ -1,6 +1,7 @@
 // Firebase 초기화 파일
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // 추가
 
 const firebaseConfig = {
   apiKey: "AIzaSyCYOZyLtXGv7jW0N5gnoqUp0BhVIyLheZo",
@@ -14,5 +15,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const storage = getStorage(app); // 추가
 
-export { db };
+export { db, storage };

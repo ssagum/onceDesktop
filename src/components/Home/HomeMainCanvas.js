@@ -21,6 +21,7 @@ import ChatHistory from "../common/ChatHistory";
 import CallModal from "../call/CallModal";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import TaskListModal from "../Task/TaskListModal";
+import TimerModal from "../Timer/TimerModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -65,11 +66,16 @@ const Square = ({ title }) => {
   );
 };
 
+const openTimerWindow = () => {
+  window.electron.openTimerWindow();
+};
+
 export default function HomeMainCanvas() {
   const [isVisible, setIsVisible] = useState(true);
   const [callIsVisible, setCallIsVisible] = useState(false);
   const { userLevelData, updateUserLevelData } = useUserLevel();
   const [taskListModalOn, setTaskListModalOn] = useState(true);
+  const [timerModalOn, setTimerModalOn] = useState(false);
 
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
@@ -153,7 +159,9 @@ export default function HomeMainCanvas() {
                     </div>
                   )}
                   <div className="w-[240px] flex flex-row justify-between">
-                    <Square title={"타이머"} />
+                    <div onClick={openTimerWindow}>
+                      <Square title={"타이머"} />
+                    </div>
                     {false ? (
                       <Square title={"병원현황"} />
                     ) : (
@@ -170,6 +178,7 @@ export default function HomeMainCanvas() {
           </RightZone>
         </div>
       </BottomZone>
+      <TimerModal isVisible={timerModalOn} setIsVisible={setTimerModalOn} />
     </div>
   );
 }
