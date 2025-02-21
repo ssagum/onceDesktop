@@ -1,5 +1,6 @@
 // UserLevelContext.js
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { checkPermissions, hasPermission } from "./permissionUtils";
 
 const UserLevelContext = createContext();
 
@@ -33,6 +34,10 @@ export function UserLevelProvider({ children }) {
     return false;
   };
 
+  const checkUserPermission = (requiredPermission) => {
+    return hasPermission(userLevelData, requiredPermission);
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem("userLevelData", JSON.stringify(userLevelData));
@@ -42,7 +47,14 @@ export function UserLevelProvider({ children }) {
   }, [userLevelData]);
 
   return (
-    <UserLevelContext.Provider value={{ userLevelData, updateUserLevelData }}>
+    <UserLevelContext.Provider
+      value={{
+        userLevelData,
+        updateUserLevelData,
+        checkUserPermission,
+        checkPermissions: (type) => checkPermissions[type](userLevelData),
+      }}
+    >
       {children}
     </UserLevelContext.Provider>
   );

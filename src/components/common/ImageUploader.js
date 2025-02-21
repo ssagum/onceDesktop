@@ -28,9 +28,22 @@ const ImageUploader = ({ value, onChange }) => {
     <div>
       {/* 이미지가 없을 때: 클릭하면 파일 업로드 */}
       {!preview ? (
-        <label className="flex flex-col items-center cursor-pointer">
-          <div className="w-[80px] h-[80px] flex items-center justify-center border border-gray-300 rounded-md bg-gray-100">
-            <span className="text-gray-500">+</span>
+        <label className="flex flex-col items-center justify-center h-[42px] w-[120px] cursor-pointer border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+          <div className="flex items-center space-x-2">
+            <svg
+              className="w-4 h-4 text-gray-500"
+              fill="none"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            <span className="text-sm text-gray-500">사진 추가</span>
           </div>
           <input
             type="file"
@@ -38,31 +51,40 @@ const ImageUploader = ({ value, onChange }) => {
             onChange={handleFileChange}
             className="hidden"
           />
-          <span className="text-sm text-gray-500 mt-2">사진 추가</span>
         </label>
       ) : (
         // 이미지가 있을 때: 클릭하면 모달 오픈
         <div
           onClick={() => setIsModalOpen(true)}
-          className="w-[80px] h-[80px] border border-gray-300 rounded-md bg-gray-100 flex items-center justify-center cursor-pointer"
+          className="relative h-[42px] w-[120px] border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer overflow-hidden group"
         >
-          <span className="text-gray-500 text-sm">사진 보기</span>
+          <img
+            src={preview}
+            alt="Preview"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+            <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+              사진 보기
+            </span>
+          </div>
         </div>
       )}
 
-      {/* 모달 (이미지가 있을 때만 표시) */}
+      {/* 모달 개선 */}
       {isModalOpen && preview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 rounded-md shadow-lg">
-            <img
-              src={preview}
-              alt="Uploaded Preview"
-              className="max-w-[400px] max-h-[400px]"
-            />
-            <div className="flex justify-between mt-4">
-              {/* 파일 변경 버튼 */}
-              <label className="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded-md">
-                변경
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-[90vw] max-h-[90vh]">
+            <div className="relative">
+              <img
+                src={preview}
+                alt="Uploaded Preview"
+                className="max-w-[600px] max-h-[600px] object-contain"
+              />
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <label className="cursor-pointer px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors">
+                <span className="text-sm text-gray-700">변경</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -70,17 +92,15 @@ const ImageUploader = ({ value, onChange }) => {
                   className="hidden"
                 />
               </label>
-              {/* 삭제 버튼 */}
               <button
                 onClick={handleDelete}
-                className="bg-red-500 text-white px-4 py-2 rounded-md"
+                className="px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-50 transition-colors text-sm"
               >
                 삭제
               </button>
-              {/* 닫기 버튼 */}
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="bg-gray-500 text-white px-4 py-2 rounded-md"
+                className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm"
               >
                 닫기
               </button>

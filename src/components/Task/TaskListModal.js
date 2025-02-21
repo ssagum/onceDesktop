@@ -5,6 +5,8 @@ import { cancel } from "../../assets";
 import { tasks } from "../../datas/tasks";
 import JcyTable from "../common/JcyTable";
 import TaskRow from "./TaskRow";
+import ToDo from "../common/ToDo";
+import { useUserLevel } from "../../utils/UserLevelContext";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -26,6 +28,7 @@ export default function TaskListModal({
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tableViewMode, setTableViewMode] = useState(true);
+  const { userLevelData } = useUserLevel();
 
   // 날짜에 일(day)를 더하거나 빼는 헬퍼 함수입니다.
   const addDays = (date, days) => {
@@ -66,6 +69,16 @@ export default function TaskListModal({
     { label: "요일", key: "days" },
   ];
 
+  // 부서별 업무 필터링 (부서장인 경우 모든 업무 표시)
+  const departmentTasks = tasks.filter((task) => {
+    const isUserDepartmentHead = userLevelData?.role.includes("장");
+    return (
+      task.department === role ||
+      task.department === "전체" ||
+      (isUserDepartmentHead && task.department === userLevelData?.department)
+    );
+  });
+
   return (
     <ModalTemplate
       isVisible={isVisible}
@@ -75,14 +88,39 @@ export default function TaskListModal({
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
           <span className="text-[34px] font-bold">{role} 업무</span>
-          <img
-            onClick={() => setIsVisible(false)}
-            className="w-[30px]"
-            src={cancel}
-            alt="닫기"
-            style={{ cursor: "pointer" }}
-          />
+          <div className="flex items-center gap-x-4">
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+              <button
+                className={`px-4 py-2 rounded-lg transition-all ${
+                  !tableViewMode
+                    ? "bg-white text-gray-800 shadow"
+                    : "text-gray-500"
+                }`}
+                onClick={() => setTableViewMode(false)}
+              >
+                일자별
+              </button>
+              <button
+                className={`px-4 py-2 rounded-lg transition-all ${
+                  tableViewMode
+                    ? "bg-white text-gray-800 shadow"
+                    : "text-gray-500"
+                }`}
+                onClick={() => setTableViewMode(true)}
+              >
+                목록
+              </button>
+            </div>
+            <img
+              onClick={() => setIsVisible(false)}
+              className="w-[30px]"
+              src={cancel}
+              alt="닫기"
+              style={{ cursor: "pointer" }}
+            />
+          </div>
         </ModalHeaderZone>
+
         {tableViewMode === false && (
           <ModalContentZone className="flex flex-row h-full py-[50px] w-full">
             <button
@@ -92,24 +130,50 @@ export default function TaskListModal({
               &lt;
             </button>
             <div className="flex flex-row w-full items-center justify-center gap-x-[20px] h-full">
-              {/* 이전 근무일 버튼 */}
+              {/* 이전 근무일 */}
               <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">
+                <div className="bg-onceBlue py-2 w-full text-center">
                   {formatDate(previousDate)}
                 </div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
+                <div className="w-full h-full flex-col flex bg-textBackground p-4">
+                  {departmentTasks
+                    .filter((task) =>
+                      isSameDay(new Date(task.startDate), previousDate)
+                    )
+                    .map((task, index) => (
+                      <ToDo key={task.id || index} task={task} />
+                    ))}
+                </div>
               </DayCol>
-              {/* 오늘 날짜 표시 */}
+              {/* 오늘 */}
               <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">
+                <div className="bg-onceBlue py-2 w-full text-center">
                   {formatDate(currentDate)}
                 </div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
+                <div className="w-full h-full flex-col flex bg-textBackground p-4">
+                  {departmentTasks
+                    .filter((task) =>
+                      isSameDay(new Date(task.startDate), currentDate)
+                    )
+                    .map((task, index) => (
+                      <ToDo key={task.id || index} task={task} />
+                    ))}
+                </div>
               </DayCol>
-              {/* 이후 근무일 버튼 */}
+              {/* 다음 근무일 */}
               <DayCol className="flex flex-col w-full items-center bg-onceBlue text-white rounded h-full border-onceBlue border">
-                <div className="bg-onceBlue py-2">{formatDate(nextDate)}</div>
-                <div className="w-full h-full flex-col flex bg-textBackground"></div>
+                <div className="bg-onceBlue py-2 w-full text-center">
+                  {formatDate(nextDate)}
+                </div>
+                <div className="w-full h-full flex-col flex bg-textBackground p-4">
+                  {departmentTasks
+                    .filter((task) =>
+                      isSameDay(new Date(task.startDate), nextDate)
+                    )
+                    .map((task, index) => (
+                      <ToDo key={task.id || index} task={task} />
+                    ))}
+                </div>
               </DayCol>
             </div>
             <button
@@ -120,12 +184,13 @@ export default function TaskListModal({
             </button>
           </ModalContentZone>
         )}
+
         {tableViewMode === true && (
           <ModalContentZone className="flex flex-row h-full py-[50px] w-full">
             <JcyTable
               columns={columns}
               columnWidths="grid-cols-8"
-              data={tasks}
+              data={departmentTasks}
               rowClassName={(index) =>
                 index % 2 === 0 ? "bg-gray-100" : "bg-white"
               }
@@ -135,5 +200,14 @@ export default function TaskListModal({
         )}
       </div>
     </ModalTemplate>
+  );
+}
+
+// 날짜 비교 헬퍼 함수
+function isSameDay(date1, date2) {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
   );
 }

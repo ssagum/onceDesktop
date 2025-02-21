@@ -22,6 +22,7 @@ import { cancel } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import { JcyCalendar } from "../common/JcyCalendar";
 import NameCoin from "../common/NameCoin";
+import TaskAddModal from "./TaskAddModal";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -204,7 +205,7 @@ export function ToDoDragComponent({ column, tasks }) {
    3) PersonFolder: 인원별 할 일 배정 폴더 영역
    - droppable 영역으로 설정하고,
    - 드래그가 폴더 위에 있을 때 isOver 값을 활용해 폴더가 커지거나 열리는 애니메이션 적용
-   - 내부에서는 할 일 배정 개수를 “+1”, “+2” 등으로 표시
+   - 내부에서는 할 일 배정 개수를 "+"로 표시
 ============================================== */
 function PersonFolder({ column, tasks }) {
   // useDroppable 훅에서 isOver를 받아 드래그 오버 상태를 감지합니다.
@@ -245,6 +246,7 @@ function TaskMainCanvas() {
   const [aboutTaskInfoModalOn, setAboutTaskInfoModalOn] = useState(false);
   const [aboutTaskRecordModalOn, setAboutTaskRecordModalOn] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [taskAddModalOn, setTaskAddModalOn] = useState(false);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
@@ -360,7 +362,13 @@ function TaskMainCanvas() {
       <div className="w-full flex flex-col h-full bg-white min-w-[1100px] min-h-[900px] rounded-xl px-[40px] py-[30px]">
         <TitleZone className="w-full mb-[50px] flex flex-row justify-between items-center">
           <span className="text-[34px] font-semibold">업무분장</span>
-          <div className="flex flex-row gap-x-[20px]"></div>
+          <div className="w-[160px]">
+            <OnceOnOffButton
+              text={"업무 추가하기 +"}
+              onClick={() => setTaskAddModalOn(true)}
+              on={true}
+            />
+          </div>
         </TitleZone>
         {/* 상단 할 일 목록 (9칸 고정 그리드) */}
         <ToDoDragComponent column={columns.unassigned} tasks={tasks} />
@@ -560,6 +568,10 @@ function TaskMainCanvas() {
           </ModalContentZone>
         </div>
       </ModalTemplate>
+      <TaskAddModal
+        isVisible={taskAddModalOn}
+        setIsVisible={setTaskAddModalOn}
+      />
     </DndContext>
   );
 }

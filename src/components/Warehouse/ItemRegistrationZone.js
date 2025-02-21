@@ -276,12 +276,14 @@ const ItemRegistrationZone = () => {
             <img src={imageFile} alt="Logo" className="w-[30px] h-[30px]" />
           </div>
           <span>재고위치 사진을 추가해주세요 +</span> */}
-          <ImageUploader
-            value={formData.locationImage}
-            onChange={(file) =>
-              setFormData((prev) => ({ ...prev, locationImage: file }))
-            }
-          />
+          <div className="ml-[20px]">
+            <ImageUploader
+              value={formData.locationImage}
+              onChange={(file) =>
+                setFormData((prev) => ({ ...prev, locationImage: file }))
+              }
+            />
+          </div>
         </div>
       </div>
 

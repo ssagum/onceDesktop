@@ -161,22 +161,23 @@ const RenderCells = ({
 
 export const JcyCalendar = ({
   standardWidth = 300,
-  tripDuration = 7,
   lockDates = false,
   preStartDay = "",
   setTargetStartDay = () => {},
   preEndDay = "",
   setTargetEndDay = () => {},
+  isEdit = true, // 수정 모드 여부
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [isSelectingStart, setIsSelectingStart] = useState(true);
 
   const parseCustomDate = (dateStr) => {
-    const parsedDate = parse(dateStr, "MM/dd/yyyy", new Date());
+    // yyyy/MM/dd 형식으로 변경
+    const parsedDate = parse(dateStr, "yyyy/MM/dd", new Date());
 
-    // Check if parsedDate is valid
     if (isNaN(parsedDate.getTime())) {
       console.error(`Invalid date format: ${dateStr}`);
       return null;
@@ -194,8 +195,9 @@ export const JcyCalendar = ({
         setStartDate(parsedStartDate);
         setEndDate(parsedEndDate);
         setCurrentMonth(parsedStartDate);
-        setTargetStartDay(format(parsedStartDate, "MM/dd/yyyy"));
-        setTargetEndDay(format(parsedEndDate, "MM/dd/yyyy"));
+        // yyyy/MM/dd 형식으로 변경
+        setTargetStartDay(format(parsedStartDate, "yyyy/MM/dd"));
+        setTargetEndDay(format(parsedEndDate, "yyyy/MM/dd"));
       }
     }
   }, [preStartDay, preEndDay, setTargetStartDay, setTargetEndDay]);
@@ -203,20 +205,34 @@ export const JcyCalendar = ({
   const prevMonth = () => {
     setCurrentMonth(subMonths(currentMonth, 1));
   };
+
   const nextMonth = () => {
     setCurrentMonth(addMonths(currentMonth, 1));
   };
-  const onDateClick = (day) => {
-    setSelectedDate(day);
-    const start = day;
-    const end = addDays(day, tripDuration - 1);
 
-    const formattedStart = format(start, "MM/dd/yyyy");
-    const formattedEnd = format(end, "MM/dd/yyyy");
-    setTargetStartDay(formattedStart);
-    setStartDate(formattedStart);
-    setTargetEndDay(formattedEnd);
-    setEndDate(formattedEnd);
+  const onDateClick = (day) => {
+    if (!isEdit || lockDates) return;
+
+    setSelectedDate(day);
+    if (isSelectingStart) {
+      setStartDate(day);
+      // yyyy/MM/dd 형식으로 변경
+      setTargetStartDay(format(day, "yyyy/MM/dd"));
+      setIsSelectingStart(false);
+    } else {
+      if (day < startDate) {
+        setStartDate(day);
+        setEndDate(startDate);
+        // yyyy/MM/dd 형식으로 변경
+        setTargetStartDay(format(day, "yyyy/MM/dd"));
+        setTargetEndDay(format(startDate, "yyyy/MM/dd"));
+      } else {
+        setEndDate(day);
+        // yyyy/MM/dd 형식으로 변경
+        setTargetEndDay(format(day, "yyyy/MM/dd"));
+      }
+      setIsSelectingStart(true);
+    }
   };
 
   return (

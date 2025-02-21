@@ -22,6 +22,8 @@ import CallModal from "../call/CallModal";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import TaskListModal from "../Task/TaskListModal";
 import TimerModal from "../Timer/TimerModal";
+import TaskAddModal from "../Task/TaskAddModal";
+import { tasks } from "../../datas/tasks";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -76,6 +78,64 @@ export default function HomeMainCanvas() {
   const { userLevelData, updateUserLevelData } = useUserLevel();
   const [taskListModalOn, setTaskListModalOn] = useState(true);
   const [timerModalOn, setTimerModalOn] = useState(false);
+  const [taskAddModalOn, setTaskAddModalOn] = useState(false);
+
+  // 오늘 날짜의 업무만 필터링
+  const todayTasks = tasks.filter((task) => {
+    // 부서 및 위치 필터링
+    const isDepartmentMatch =
+      task.department === userLevelData?.department ||
+      task.department === "전체";
+    const isLocationMatch =
+      !task.location ||
+      task.location === userLevelData?.location ||
+      task.department === "전체";
+
+    // 역할 기반 필터링
+    const isRoleMatch =
+      !task.assignee ||
+      task.assignee === userLevelData?.role ||
+      task.assignee === "전체" ||
+      (userLevelData?.role.includes("장") &&
+        task.department === userLevelData?.department);
+
+    // 날짜 필터링
+    const today = new Date();
+    const taskDate = new Date(task.startDate);
+    const isSameDay =
+      today.getFullYear() === taskDate.getFullYear() &&
+      today.getMonth() === taskDate.getMonth() &&
+      today.getDate() === taskDate.getDate();
+
+    // 주기에 따른 필터링
+    let isInCycle = false;
+    switch (task.cycle) {
+      case "매일":
+        isInCycle = true;
+        break;
+      case "매주":
+        isInCycle = today.getDay() === taskDate.getDay();
+        break;
+      case "격주":
+        const weekDiff = Math.floor(
+          (today - taskDate) / (7 * 24 * 60 * 60 * 1000)
+        );
+        isInCycle = weekDiff % 2 === 0 && today.getDay() === taskDate.getDay();
+        break;
+      case "일회성":
+        isInCycle = isSameDay;
+        break;
+      default:
+        isInCycle = false;
+    }
+
+    return (
+      isDepartmentMatch &&
+      isLocationMatch &&
+      isRoleMatch &&
+      (isSameDay || isInCycle)
+    );
+  });
 
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
@@ -112,13 +172,14 @@ export default function HomeMainCanvas() {
                 <DayChanger />
               </InsideHeaderZone>
               <ToDoZone className="flex-col h-full">
-                <ToDo />
-                <ToDo />
-                <ToDo />
-                <ToDo />
-                <ToDo />
+                {todayTasks.map((task) => (
+                  <ToDo key={task.id} task={task} />
+                ))}
               </ToDoZone>
-              <OnceOnOffButton text={"업무 추가하기 +"} />
+              <OnceOnOffButton
+                text={"업무 추가하기 +"}
+                onClick={() => setTaskAddModalOn(true)}
+              />
             </div>
           </LeftZone>
           {/* 오른쪽 영역 */}
@@ -179,6 +240,10 @@ export default function HomeMainCanvas() {
         </div>
       </BottomZone>
       <TimerModal isVisible={timerModalOn} setIsVisible={setTimerModalOn} />
+      <TaskAddModal
+        isVisible={taskAddModalOn}
+        setIsVisible={setTaskAddModalOn}
+      />
     </div>
   );
 }

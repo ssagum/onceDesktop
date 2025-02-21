@@ -2,11 +2,11 @@
 import React, { useState } from "react";
 // 상황에 적합한 아이콘 선택: 사업자등록증은 문서 아이콘, 명함은 연락처 아이콘을 사용
 import { MdDescription, MdContactPage } from "react-icons/md";
-// import PartnerDetailModal from "./PartnerDetailModal"; // 거래처 상세 모달 컴포넌트
+import VendorModal from "./VendorModal";
 
 const VendorRow = ({ partner, index }) => {
   const { clientName, manager, industry, contact, email, documents } = partner;
-  const [isDetailModalOn, setIsDetailModalOn] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // index가 짝수면 "bg-onceTextBackground", 홀수면 "bg-onceBackground" 적용
   const rowBgClass =
@@ -15,8 +15,8 @@ const VendorRow = ({ partner, index }) => {
   return (
     <>
       <div
-        onClick={() => setIsDetailModalOn(true)}
-        className={`grid grid-cols-6 gap-4 py-2 h-boxH items-center ${rowBgClass} cursor-pointer`}
+        className="grid grid-cols-6 text-center py-4 border-b cursor-pointer hover:bg-gray-50"
+        onClick={() => setIsModalOpen(true)}
       >
         <div className="text-center text-black">{clientName}</div>
         <div className="text-center text-black">{manager}</div>
@@ -38,13 +38,12 @@ const VendorRow = ({ partner, index }) => {
           )}
         </div>
       </div>
-      {/* {isDetailModalOn && (
-        <PartnerDetailModal
-          isVisible={isDetailModalOn}
-          setIsVisible={setIsDetailModalOn}
-          partner={partner}
-        />
-      )} */}
+
+      <VendorModal
+        isVisible={isModalOpen}
+        setIsVisible={setIsModalOpen}
+        vendor={partner}
+      />
     </>
   );
 };
