@@ -27,7 +27,7 @@ const ids = [
   "세종_조치원_복숭아",
 ];
 
-const QRCodeGenerator = ({ idList = ids }) => {
+const QRCodeGenerator = ({ idList }) => {
   const [qrSize, setQrSize] = useState(150);
   const printRef = useRef();
 
@@ -45,8 +45,8 @@ const QRCodeGenerator = ({ idList = ids }) => {
     let y = height - margin - qrSize - 20;
     const qrPerRow = 3;
 
-    for (let i = 0; i < ids.length; i++) {
-      const element = document.getElementById(`qr-${ids[i]}`);
+    for (let i = 0; i < idList.length; i++) {
+      const element = document.getElementById(`qr-${idList[i]}`);
       const canvas = await html2canvas(element, { scale: 2 });
       const qrImage = await pdfDoc.embedPng(canvas.toDataURL("image/png"));
 
@@ -73,7 +73,7 @@ const QRCodeGenerator = ({ idList = ids }) => {
   };
 
   return (
-    <div className="flex flex-col items-center w-full h-screen overflow-y-auto">
+    <div className="flex flex-col items-center w-full h-[600px] overflow-y-auto">
       <div className="flex justify-between w-full mb-4">
         <label className="font-semibold">QR 크기 조정: </label>
         <input
@@ -91,7 +91,7 @@ const QRCodeGenerator = ({ idList = ids }) => {
         className="grid grid-cols-3 gap-4 p-4 border rounded-md bg-white w-full"
         style={{ pageBreakInside: "avoid" }}
       >
-        {ids.map((id) => (
+        {idList.map((id) => (
           <div
             key={id}
             className="flex flex-col items-center p-2 border rounded-md"

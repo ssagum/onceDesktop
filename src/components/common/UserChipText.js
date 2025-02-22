@@ -1,17 +1,24 @@
 import React from "react";
 
-export default function UserChipText({ text, yellowMode = false }) {
-  if (yellowMode === false) {
-    return (
-      <div className="flex w-full h-[36px] items-center justify-center rounded-full bg-onceChipBlue">
-        <span className="text-onceBlue">{text}</span>
-      </div>
-    );
-  } else {
-    return (
-      <div className="flex w-full h-[36px] items-center justify-center rounded-full bg-onceChipGreen">
-        <span className="text-onceGreen">{text}</span>
-      </div>
-    );
-  }
-}
+const UserChipText = ({ options = [], selected, onChange }) => {
+  return (
+    <div className="flex flex-wrap">
+      {options.map((option) => (
+        <div
+          key={option.value}
+          className={`flex w-[160px] h-[36px] items-center justify-center rounded-full cursor-pointer 
+                      ${
+                        selected === option.value
+                          ? "bg-onceChipBlue text-onceBlue"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default UserChipText;

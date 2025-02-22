@@ -1,0 +1,14 @@
+.toolbar-class {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.toolbar-class .rdw-fontSize-dropdown {
+  min-width: 60px;
+}
+
+.toolbar-class .rdw-dropdown-selectedtext {
+  padding: 4px 8px;
+}

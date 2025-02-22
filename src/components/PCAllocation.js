@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { logoLong } from "../assets";
 import { useUserLevel } from "../utils/UserLevelContext";
 import { FiSettings } from "react-icons/fi";
-import ChipText from "./common/ChipText";
 import UserChipText from "./common/UserChipText";
 import { departmentArray, locationOptions, roleOptions } from "../datas/users";
 
@@ -68,9 +67,34 @@ function PCAllocation() {
             // PC 할당 완료 후, 부서, 역할, 위치 표시 + 톱니바퀴 버튼
             <div className="flex flex-row items-center w-full px-[20px]">
               <div className="flex flex-col w-full gap-y-[10px] items-center px-[10px]">
-                <UserChipText text={userLevelData.department} />
-                <UserChipText text={userLevelData.role} />
-                <UserChipText text={userLevelData.location} yellowMode={true} />
+                <UserChipText
+                  options={[
+                    {
+                      label: userLevelData.department,
+                      value: userLevelData.department,
+                    },
+                  ]}
+                  selected={userLevelData.department}
+                  onChange={() => {}}
+                />
+                <UserChipText
+                  options={[
+                    { label: userLevelData.role, value: userLevelData.role },
+                  ]}
+                  selected={userLevelData.role}
+                  onChange={() => {}}
+                />
+                <UserChipText
+                  options={[
+                    {
+                      label: userLevelData.location,
+                      value: userLevelData.location,
+                    },
+                  ]}
+                  selected={userLevelData.location}
+                  onChange={() => {}}
+                  yellowMode={true}
+                />
               </div>
               <FiSettings
                 onClick={() => setModalOpen(true)}

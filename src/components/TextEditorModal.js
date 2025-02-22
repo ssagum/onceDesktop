@@ -16,6 +16,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
+import UserChipText from "./common/UserChipText";
 
 const COLORS = [
   { label: "검정", value: "#000000" },
@@ -28,10 +29,15 @@ const COLORS = [
 ];
 
 const SIZES = [
-  { label: "본문", value: "16" },
-  { label: "큰 제목", value: "24" },
-  { label: "중간 제목", value: "20" },
-  { label: "작은 제목", value: "18" },
+  { label: "24", value: "24" },
+  { label: "22", value: "22" },
+  { label: "20", value: "20" },
+  { label: "18", value: "18" },
+  { label: "16", value: "16" },
+  { label: "14", value: "14" },
+  { label: "12", value: "12" },
+  { label: "10", value: "10" },
+  { label: "8", value: "8" },
 ];
 
 // 허용되는 파일 타입 정의
@@ -45,6 +51,27 @@ const ALLOWED_FILE_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 
+const DEPARTMENTS = [
+  { label: "원무", value: "원무" },
+  { label: "영상의학", value: "영상의학" },
+  { label: "방사능", value: "방사능" },
+  { label: "진료", value: "진료" },
+  { label: "물리치료", value: "물리치료" },
+];
+
+const formatRelativeTime = (timestamp) => {
+  const now = Date.now();
+  const seconds = Math.floor((now - timestamp) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return `${seconds}초 전`;
+  if (minutes < 60) return `${minutes}분 전`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${days}일 전`;
+};
+
 const TextEditorModal = ({
   show,
   handleClose,
@@ -57,6 +84,9 @@ const TextEditorModal = ({
   const editorRef = useRef(null);
   const composingRef = useRef(false);
   const [title, setTitle] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState(
+    DEPARTMENTS[0].value
+  );
 
   const execCommand = useCallback((command, value = null) => {
     if (command === "fontSize") {
@@ -349,9 +379,13 @@ const TextEditorModal = ({
         classification: classification,
         noticeType: noticeType,
         author: "관리자",
-        createdAt: serverTimestamp(),
-        pinned: noticeType === "pinned",
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
       };
+
+      // createdAt을 상대적인 시간으로 변환하여 사용
+      const relativeTime = formatRelativeTime(noticeData.createdAt);
+      console.log(relativeTime); // 예시로 콘솔에 출력
 
       await addDoc(collection(db, "notices"), noticeData);
       setTitle("");
@@ -381,71 +415,20 @@ const TextEditorModal = ({
               style={titleInputStyle}
             />
           </div>
+          <div>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              style={selectStyle}
+            >
+              {DEPARTMENTS.map((department) => (
+                <option key={department.value} value={department.value}>
+                  {department.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="editor-toolbar" style={toolbarStyle}>
-            <div style={toolGroupStyle}>
-              <select
-                onChange={(e) => execCommand("fontSize", e.target.value)}
-                style={selectStyle}
-              >
-                {SIZES.map((size) => (
-                  <option key={size.value} value={size.value}>
-                    {size.label}
-                  </option>
-                ))}
-              </select>
-              <div style={colorGroupStyle}>
-                <div style={colorPickerContainerStyle}>
-                  <button
-                    onClick={(e) => {
-                      e.currentTarget.nextElementSibling.style.display =
-                        e.currentTarget.nextElementSibling.style.display ===
-                        "none"
-                          ? "flex"
-                          : "none";
-                    }}
-                    style={buttonStyle}
-                    title="글자 색상"
-                  >
-                    <div
-                      style={{
-                        width: "14px",
-                        height: "14px",
-                        backgroundColor: "#000000",
-                        border: "1px solid #ddd",
-                        borderRadius: "2px",
-                      }}
-                    />
-                  </button>
-                  <div style={colorDropdownStyle}>
-                    {COLORS.map((color) => (
-                      <button
-                        key={color.value}
-                        onClick={(e) => {
-                          execCommand("foreColor", color.value);
-                          e.currentTarget.parentElement.style.display = "none";
-                        }}
-                        style={{
-                          ...colorOptionStyle,
-                          backgroundColor: color.value,
-                        }}
-                        title={color.label}
-                      >
-                        <span
-                          style={{
-                            ...colorLabelStyle,
-                            color: ["#000000", "#808080"].includes(color.value)
-                              ? "white"
-                              : "black",
-                          }}
-                        >
-                          {color.label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
             <div style={toolGroupStyle}>
               <button
                 onClick={() => execCommand("bold")}
@@ -500,22 +483,6 @@ const TextEditorModal = ({
               </button>
             </div>
             <div style={toolGroupStyle}>
-              <button
-                onClick={() => execCommand("insertOrderedList")}
-                style={buttonStyle}
-                title="번호 목록"
-              >
-                <FaListOl />
-              </button>
-              <button
-                onClick={() => execCommand("insertUnorderedList")}
-                style={buttonStyle}
-                title="글머리 기호"
-              >
-                <FaListUl />
-              </button>
-            </div>
-            <div style={toolGroupStyle}>
               <input
                 type="file"
                 id="imageUpload"
@@ -535,13 +502,6 @@ const TextEditorModal = ({
                 title="이미지 삽입"
               >
                 <FaImage />
-              </button>
-              <button
-                onClick={() => document.getElementById("fileUpload").click()}
-                style={buttonStyle}
-                title="파일 첨부"
-              >
-                <FaFileUpload />
               </button>
             </div>
           </div>

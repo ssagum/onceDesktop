@@ -15,7 +15,7 @@ const SectionZone = styled.div``;
 const IndexPart = styled.div``;
 const RowPart = styled.div``;
 
-const InventoryStatusZone = () => {
+const InventoryStatusZone = ({ onDataUpdate }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(7);
   const [isFilterModalOn, setIsFilterModalOn] = useState(false);
@@ -178,6 +178,12 @@ const InventoryStatusZone = () => {
     selectedDepartmentFilters,
     selectedStatusFilters,
   ]);
+
+  useEffect(() => {
+    if (typeof onDataUpdate === "function") {
+      onDataUpdate(sortedData);
+    }
+  }, [sortedData]);
 
   return (
     <div className="flex flex-col w-full bg-white h-full">

@@ -55,6 +55,21 @@ const NoticeShowModal = ({ show, handleClose, notice }) => {
 
   if (!show) return null;
 
+  const formatRelativeTime = (timestamp) => {
+    const now = Date.now();
+    const seconds = Math.floor((now - timestamp) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return `${seconds}초 전`;
+    if (minutes < 60) return `${minutes}분 전`;
+    if (hours < 24) return `${hours}시간 전`;
+    return `${days}일 전`;
+  };
+
+  const relativeCreatedAt = formatRelativeTime(notice?.createdAt);
+
   return (
     <div className="modal-overlay" style={overlayStyle}>
       <div className="modal-content" style={modalStyle}>
@@ -68,9 +83,9 @@ const NoticeShowModal = ({ show, handleClose, notice }) => {
           <div style={titleContainerStyle}>
             <h3 style={noticeTitleStyle}>{notice?.title}</h3>
             <div style={metaInfoStyle}>
-              <span>작성자: {notice?.author}</span>
-              <span>작성일: {notice?.createdAt}</span>
               <span>분류: {notice?.classification}</span>
+              <span>작성자: {notice?.author}</span>
+              <span>작성일: {relativeCreatedAt}</span>
             </div>
           </div>
           <div
@@ -166,7 +181,7 @@ const bodyStyle = {
 
 const titleContainerStyle = {
   marginBottom: "20px",
-  padding: "15px",
+  paddingBottom: "20px",
   borderBottom: "1px solid #eee",
 };
 

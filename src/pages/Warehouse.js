@@ -5,6 +5,9 @@ import SideBar from "../components/SideBar";
 import InventoryStatusZone from "../components/Warehouse/InventoryStatusZone";
 import VendorZone from "../components/Warehouse/VendorZone";
 import ItemRegistrationZone from "../components/Warehouse/ItemRegistrationZone";
+import QRCodeGenerator from "../components/common/QRCodeGenerator";
+import ModalTemplate from "../components/common/ModalTemplate";
+import { cancel } from "../assets";
 
 const MainZone = styled.div``;
 const TitleZone = styled.div``;
@@ -27,6 +30,8 @@ const Warehouse = () => {
   //inventoryStatus, itemRegistration, vendor
   const [warehouseMode, setWarehouseMode] = useState("비품현황");
   const { pathname } = useLocation();
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [inventoryData, setInventoryData] = useState([]);
 
   // 페이지 전체 리턴
   return (
@@ -39,6 +44,24 @@ const Warehouse = () => {
           <TitleZone className="w-full mb-[50px] flex flex-row justify-between items-center">
             <span className="text-[34px] font-semibold">{warehouseMode}</span>
             <div className="flex flex-row gap-x-[20px]">
+              <button
+                onClick={() => setIsQRModalOpen(true)}
+                className={`rounded-md w-[140px] h-[40px] flex justify-center items-center text-center border ${
+                  warehouseMode === "QR 전체 인쇄"
+                    ? "bg-onceBlue border-onceBlue"
+                    : "bg-white border-onceBlue"
+                }`}
+              >
+                <span
+                  className={`${
+                    warehouseMode === "QR 전체 인쇄"
+                      ? "text-white"
+                      : "text-onceBlue"
+                  } font-semibold text-once18`}
+                >
+                  QR 전체 인쇄
+                </span>
+              </button>
               <button
                 onClick={() => setWarehouseMode("비품현황")}
                 className={`rounded-md w-[140px] h-[40px] flex justify-center items-center text-center border ${
@@ -96,12 +119,35 @@ const Warehouse = () => {
             </div>
           </TitleZone>
           <CenterZone className="h-full w-full">
-            {warehouseMode === "비품현황" && <InventoryStatusZone />}
+            {warehouseMode === "비품현황" && (
+              <InventoryStatusZone onDataUpdate={setInventoryData} />
+            )}
             {warehouseMode === "품목등록" && <ItemRegistrationZone />}
             {warehouseMode === "거래처관리" && <VendorZone />}
           </CenterZone>
         </section>
       </MainZone>
+      <ModalTemplate
+        isVisible={isQRModalOpen}
+        setIsVisible={setIsQRModalOpen}
+        showCancel={false}
+      >
+        <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
+          <div className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
+            <span className="text-[34px] font-bold">QR 코드 생성</span>
+            <img
+              onClick={() => setIsQRModalOpen(false)}
+              className="w-[30px]"
+              src={cancel}
+              alt="닫기"
+              style={{ cursor: "pointer" }}
+            />
+          </div>
+          <QRCodeGenerator
+            idList={inventoryData.map((item) => item?.itemName)}
+          />
+        </div>
+      </ModalTemplate>
     </div>
   );
 };

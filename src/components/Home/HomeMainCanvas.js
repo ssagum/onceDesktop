@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import RenderTitlePart from "../common/RenderTitlePart";
 import ToDo from "../common/ToDo";
@@ -24,6 +24,8 @@ import TaskListModal from "../Task/TaskListModal";
 import TimerModal from "../Timer/TimerModal";
 import TaskAddModal from "../Task/TaskAddModal";
 import { tasks } from "../../datas/tasks";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "../../firebase";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -76,9 +78,24 @@ export default function HomeMainCanvas() {
   const [isVisible, setIsVisible] = useState(true);
   const [callIsVisible, setCallIsVisible] = useState(false);
   const { userLevelData, updateUserLevelData } = useUserLevel();
-  const [taskListModalOn, setTaskListModalOn] = useState(true);
+  const [taskListModalOn, setTaskListModalOn] = useState(false);
   const [timerModalOn, setTimerModalOn] = useState(false);
   const [taskAddModalOn, setTaskAddModalOn] = useState(false);
+  const [notices, setNotices] = useState([]);
+
+  useEffect(() => {
+    const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const noticeList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt || "",
+      }));
+      setNotices(noticeList);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // 오늘 날짜의 업무만 필터링
   const todayTasks = tasks.filter((task) => {
@@ -148,13 +165,11 @@ export default function HomeMainCanvas() {
               <button className="text-gray-600 underline">더보기</button>
             </Link>
           </InsideHeaderZone>
-          <RenderTitlePart
-            item={[]}
-            category={"전체"}
-            title={"공지사항 기능은 다음 버전에 업데이트 됩니다"}
-            owner={"경영지원팀"}
-            time={""}
-          />
+
+          {/* 상위 4개의 공지사항만 표시 */}
+          {notices.slice(0, 4).map((notice) => (
+            <RenderTitlePart key={notice.id} row={notice} />
+          ))}
         </div>
       </TopZone>
       {/* 아래 영역 */}
@@ -164,7 +179,14 @@ export default function HomeMainCanvas() {
           <LeftZone className="flex-[3] h-full bg-white rounded-xl">
             <div className="flex-col h-full flex w-full p-[30px]">
               <InsideHeaderZone className="pb-[30px] w-full flex flex-row justify-between">
-                <InsideHeader title={userLevelData?.department} />
+                <div className="flex flex-row items-center">
+                  <div className="w-[40px] h-[40px] flex justify-center items-center">
+                    <img src={task} alt="logo" className="w-[34px] h-auto" />
+                  </div>
+                  <div className="ml-[20px] text-once20 font-semibold">
+                    {userLevelData?.department}
+                  </div>
+                </div>
                 <TaskListModal
                   isVisible={taskListModalOn}
                   setIsVisible={setTaskListModalOn}
