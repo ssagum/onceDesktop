@@ -99,16 +99,14 @@ export default function StockDetailModal({
             ...data,
             date: data.date?.toDate().toLocaleDateString() || "-",
             requesterId: data.requesterId || "-",
+            dateForSort: data.date?.toDate() || new Date(0),
           };
         });
 
-        // JavaScript로 날짜 기준 내림차순 정렬
-        const sortedHistory = [...history].sort((a, b) => {
-          const dateA = a.date?.toDate?.() || new Date(0);
-          const dateB = b.date?.toDate?.() || new Date(0);
-          return dateB - dateA;
-        });
-
+        // JavaScript로 date 기준 내림차순 정렬
+        const sortedHistory = history.sort(
+          (a, b) => b.dateForSort - a.dateForSort
+        );
         setStockHistory(sortedHistory);
       } catch (error) {
         console.error("Error fetching stock history:", error);
@@ -132,16 +130,14 @@ export default function StockDetailModal({
           ...data,
           date: data.date?.toDate().toLocaleDateString() || "-",
           requesterId: data.requesterId || "-",
+          dateForSort: data.date?.toDate() || new Date(0),
         };
       });
 
-      // JavaScript로 날짜 기준 내림차순 정렬
-      const sortedHistory = [...history].sort((a, b) => {
-        const dateA = a.date?.toDate?.() || new Date(0);
-        const dateB = b.date?.toDate?.() || new Date(0);
-        return dateB - dateA;
-      });
-
+      // JavaScript로 date 기준 내림차순 정렬
+      const sortedHistory = history.sort(
+        (a, b) => b.dateForSort - a.dateForSort
+      );
       setStockHistory(sortedHistory);
     });
 
@@ -389,8 +385,8 @@ export default function StockDetailModal({
               />
             </Zone>
           </TopLeftZone>
-          <TopRightZone className="flex-[2] flex flex-col pr-[30px] py-[20px]">
-            <label className="flex relative w-full h-full bg-gray-100 cursor-pointer">
+          <TopRightZone className="flex-[2] flex flex-col pr-[30px] py-[20px] h-[380px]">
+            <div className="flex relative w-full h-full bg-gray-100 cursor-pointer overflow-hidden rounded-lg">
               {item?.locationImage ? (
                 <img
                   src={item.locationImage}
@@ -407,10 +403,10 @@ export default function StockDetailModal({
                   {position || "위치 미지정"}
                 </span>
               </div>
-            </label>
+            </div>
           </TopRightZone>
         </TopZone>
-        <ContentZone className="flex flex-col w-full px-[20px] my-[20px] h-[400px]">
+        <ContentZone className="flex flex-col w-full px-[20px] my-[20px] h-[300px]">
           <div className="w-full h-full border border-gray-300 rounded-md overflow-hidden">
             {/* 테이블 헤더 */}
             <div className="grid grid-cols-7 gap-4 bg-gray-50 border-b border-gray-300 h-12 items-center font-semibold sticky top-0">
