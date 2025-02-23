@@ -265,7 +265,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
             ></path>
           </svg>
         </div>
-        <span className="text-once18 font-semibold">
+        <span className="text-once16 font-semibold">
           ✅ 기존 물품인지 확인 후, 신규 품목이면 상단의 '품목등록'을
           눌러주세요! 😊
         </span>

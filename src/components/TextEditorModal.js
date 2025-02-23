@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import {
   FaBold,
   FaItalic,
@@ -17,6 +17,7 @@ import { storage } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import UserChipText from "./common/UserChipText";
+import { useUserLevel } from "../utils/UserLevelContext";
 
 const COLORS = [
   { label: "검정", value: "#000000" },
@@ -52,11 +53,13 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 const DEPARTMENTS = [
+  { label: "전체", value: "전체" },
   { label: "원무", value: "원무" },
   { label: "영상의학", value: "영상의학" },
   { label: "방사능", value: "방사능" },
   { label: "진료", value: "진료" },
   { label: "물리치료", value: "물리치료" },
+  { label: "경영지원", value: "경영지원" },
 ];
 
 const formatRelativeTime = (timestamp) => {
@@ -81,12 +84,29 @@ const TextEditorModal = ({
   classification = "전체",
   noticeType = "regular",
 }) => {
+  const { userLevelData } = useUserLevel();
   const editorRef = useRef(null);
   const composingRef = useRef(false);
   const [title, setTitle] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState(
     DEPARTMENTS[0].value
   );
+
+  // 초기 제목과 내용 설정
+  useEffect(() => {
+    if (show) {
+      setTitle("모바일/PC 프로그램 연동 관련 안내");
+      setContent(`
+        <div style="line-height: 1.6; font-size: 15px;">
+          <p>안녕하세요.</p>
+          <p>모바일 앱과 PC용 프로그램을 동시에 개발하여 연결하는 과정에서 일시적으로 일부 기능이 제한되었습니다.</p>
+          <p>공지사항에 희망하시는 기능이나 불편한 부분을 댓글로 남겨주시면, 빠른 시일 내에 개선하여 찾아뵙도록 하겠습니다.</p>
+          <p>이용에 불편을 드려 죄송합니다.</p>
+          <p>감사합니다.</p>
+        </div>
+      `);
+    }
+  }, [show]);
 
   const execCommand = useCallback((command, value = null) => {
     if (command === "fontSize") {
@@ -376,16 +396,16 @@ const TextEditorModal = ({
       const noticeData = {
         title: title.trim(),
         content: content,
-        classification: classification,
+        classification: selectedDepartment,
         noticeType: noticeType,
-        author: "관리자",
+        author: `${userLevelData.role}`,
         createdAt: Date.now(),
         createdAt2: serverTimestamp(),
       };
 
       // createdAt을 상대적인 시간으로 변환하여 사용
       const relativeTime = formatRelativeTime(noticeData.createdAt);
-      console.log(relativeTime); // 예시로 콘솔에 출력
+      console.log(relativeTime);
 
       await addDoc(collection(db, "notices"), noticeData);
       setTitle("");

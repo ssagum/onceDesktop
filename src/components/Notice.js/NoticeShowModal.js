@@ -9,10 +9,12 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { useUserLevel } from "../../utils/UserLevelContext";
 
 const NoticeShowModal = ({ show, handleClose, notice }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
+  const { userLevelData, checkUserPermission } = useUserLevel();
 
   useEffect(() => {
     if (!notice?.id) return;
@@ -43,7 +45,9 @@ const NoticeShowModal = ({ show, handleClose, notice }) => {
       await addDoc(collection(db, "comments"), {
         noticeId: notice.id,
         content: newComment.trim(),
-        author: "관리자",
+        author: userLevelData.role,
+        department: userLevelData.department,
+        role: userLevelData.role,
         createdAt: serverTimestamp(),
       });
       setNewComment("");

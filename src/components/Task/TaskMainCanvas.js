@@ -73,20 +73,77 @@ const initialColumns = {
     title: "할 일 목록",
     taskIds: ["task-1", "task-2", "task-3", "task-4"],
   },
-  원장님: {
-    id: "원장님",
-    title: "원장님",
+  원장: {
+    id: "원장",
+    title: "원장",
     taskIds: [],
   },
-  부장님: {
-    id: "부장님",
-    title: "부장님",
+  경영지원팀장: {
+    id: "경영지원팀장",
+    title: "경영지원팀장",
+    taskIds: [],
+  },
+  원무과장: {
+    id: "원무과장",
+    title: "원무과장",
+    taskIds: [],
+  },
+  간호팀장: {
+    id: "간호팀장",
+    title: "간호팀장",
+    taskIds: [],
+  },
+  물리치료팀장: {
+    id: "물리치료팀장",
+    title: "물리치료팀장",
+    taskIds: [],
+  },
+  방사선팀장: {
+    id: "방사선팀장",
+    title: "방사선팀장",
+    taskIds: [],
+  },
+  경영지원팀: {
+    id: "경영지원팀",
+    title: "경영지원팀",
+    taskIds: [],
+  },
+  원무팀: {
+    id: "원무팀",
+    title: "원무팀",
+    taskIds: [],
+  },
+  간호팀: {
+    id: "간호팀",
+    title: "간호팀",
+    taskIds: [],
+  },
+  물리치료팀: {
+    id: "물리치료팀",
+    title: "물리치료팀",
+    taskIds: [],
+  },
+  방사선팀: {
+    id: "방사선팀",
+    title: "방사선팀",
     taskIds: [],
   },
 };
 
 // 화면에 보여줄 컬럼 순서
-const columnOrder = ["unassigned", "원장님", "부장님"];
+const columnOrder = [
+  "unassigned",
+  "경영지원팀장",
+  "원무과장",
+  "간호팀장",
+  "물리치료팀장",
+  "방사선팀장",
+  "경영지원팀",
+  "원무팀",
+  "간호팀",
+  "물리치료팀",
+  "방사선팀",
+];
 
 /* ==============================================
    내부 ToDoItem 컴포넌트 (기존 UI)
@@ -365,8 +422,11 @@ function TaskMainCanvas() {
           <div className="w-[160px]">
             <OnceOnOffButton
               text={"업무 추가하기 +"}
-              onClick={() => setTaskAddModalOn(true)}
               on={true}
+              onClick={() => {
+                alert("현재 제한된 기능입니다.");
+                // setTaskAddModalOn(true); // 기존 기능 주석 처리
+              }}
             />
           </div>
         </TitleZone>
@@ -402,20 +462,43 @@ function TaskMainCanvas() {
         </PaginationZone>
         <div className="flex flex-row gap-x-[20px]">
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
+            <DragGoalFolder column={initialColumns.원장} tasks={initialTasks} />
+          </div>
+          <div className="flex-1 flex flex-col items-center gap-y-[10px]">
             <DragGoalFolder
-              column={initialColumns.원장님}
+              column={initialColumns.원무과장}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.간호팀장}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.물리치료팀장}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.방사선팀장}
               tasks={initialTasks}
             />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            {/* <DragGoalFolder who="경영지원 팀장님" />
-            <DragGoalFolder />
-            <DragGoalFolder /> */}
-          </div>
-          <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            {/* <DragGoalFolder />
-            <DragGoalFolder />
-            <DragGoalFolder /> */}
+            <DragGoalFolder
+              column={initialColumns.간호팀}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.원무팀}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.물리치료팀}
+              tasks={initialTasks}
+            />
+            <DragGoalFolder
+              column={initialColumns.방사선팀}
+              tasks={initialTasks}
+            />
           </div>
         </div>
         <DragOverlay>
