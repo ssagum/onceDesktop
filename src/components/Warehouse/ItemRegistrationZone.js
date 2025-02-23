@@ -30,7 +30,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       ? {
           ...item,
           stock: item.quantity || "",
-          location: item.position || "",
+          location: item.location || "",
           writer: item.writer || [],
           requester: item.requester || [],
         }
@@ -58,7 +58,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       setFormData({
         ...item,
         stock: item.quantity || "",
-        location: item.position || "",
+        location: item.location || "",
         writer: item.writer || [],
         requester: item.requester || [],
       });
@@ -128,57 +128,88 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     setMode(newMode);
   };
 
+  // 재고 히스토리 생성을 위한 함수 추가
+  const createStockHistory = async (params) => {
+    const { itemId, type, quantity, previousStock, currentStock, reason } =
+      params;
+
+    const stockHistoryData = {
+      itemId: itemId,
+      type: type,
+      quantity: Number(quantity) || 0,
+      previousStock: Number(previousStock) || 0,
+      currentStock: Number(currentStock) || 0,
+      date: serverTimestamp(),
+      requesterId:
+        formData.writer.length > 0
+          ? formData.writer.map((w) => w.id || "unknown")
+          : ["unknown"],
+      reason: reason || "미지정",
+      status: "완료",
+    };
+
+    // 모든 필드가 유효한지 확인
+    Object.entries(stockHistoryData).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        throw new Error(`${key} 필드가 유효하지 않습니다.`);
+      }
+    });
+
+    return addDoc(collection(db, "stockHistory"), stockHistoryData);
+  };
+
   const handleRegister = async () => {
     console.log("1. ItemRegistrationZone handleRegister 시작");
     console.log("현재 mode:", mode);
     console.log("받은 item:", item);
 
     const generateItemId = () => {
+      const timestamp = new Date().getTime();
       const baseParts = [formData.department, formData.itemName];
       if (formData.measure) {
         baseParts.push(formData.measure);
       }
-      return baseParts.join("_");
+      return `${baseParts.join("_")}_${timestamp}`;
     };
-
-    const itemData = {
-      ...formData,
-      id: generateItemId(),
-      quantity: formData.stock,
-      position: formData.location,
-      lastUpdated: serverTimestamp(),
-    };
-
-    console.log("2. 생성된 itemData:", itemData);
 
     try {
       if (mode === "신규") {
-        // Firestore에 새 아이템 추가
-        const itemRef = await addDoc(collection(db, "items"), itemData);
+        const newItemData = {
+          ...formData,
+          id: generateItemId(),
+          quantity: formData.stock,
+          location: formData.location,
+          lastUpdated: serverTimestamp(),
+        };
 
-        // 초기 재고 입고 기록 생성
-        await addDoc(collection(db, "stockHistory"), {
-          itemId: itemRef.id,
-          type: "입고",
-          quantity: Number(formData.stock),
-          previousStock: 0,
-          currentStock: Number(formData.stock),
-          date: serverTimestamp(),
-          requesterId: formData.writer[0]?.id, // 작성자 ID
-          reason: "초기 등록",
-          status: "완료",
+        // Firestore에 새 아이템 추가
+        const docRef = await addDoc(collection(db, "stocks"), newItemData);
+
+        // 문서 ID를 저장
+        await updateDoc(docRef, {
+          id: docRef.id,
         });
 
-        onRegister({ type: "create", data: itemData });
+        // 초기 재고 입고 기록 생성
+        await createStockHistory({
+          itemId: docRef.id,
+          type: "입고",
+          quantity: formData.stock,
+          previousStock: 0,
+          currentStock: formData.stock,
+          reason: "초기 등록",
+        });
+
+        onRegister({ type: "create", data: { ...newItemData, id: docRef.id } });
       } else {
         console.log("3. 수정 모드 진입");
         console.log("item.id:", item.id);
 
-        const itemRef = doc(db, "items", item.id);
+        const itemRef = doc(db, "stocks", item.id);
         console.log("4. Firestore 문서 참조 생성:", itemRef);
 
         const updateData = {
-          ...itemData,
+          ...formData,
           id: item.id,
         };
         console.log("5. 업데이트할 데이터:", updateData);
@@ -193,22 +224,19 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           console.log("이전 수량:", item.quantity);
           console.log("새로운 수량:", formData.stock);
 
-          await addDoc(collection(db, "stockHistory"), {
+          await createStockHistory({
             itemId: item.id,
             type:
               Number(formData.stock) > Number(item.quantity) ? "입고" : "출고",
             quantity: Math.abs(Number(formData.stock) - Number(item.quantity)),
             previousStock: Number(item.quantity),
             currentStock: Number(formData.stock),
-            date: serverTimestamp(),
-            requesterId: formData.writer[0]?.id,
             reason: "수량 정정",
-            status: "완료",
           });
           console.log("8. 재고 히스토리 기록 완료");
         }
 
-        const finalData = { ...itemData, id: item.id };
+        const finalData = { ...formData, id: item.id };
         console.log("9. onRegister에 전달할 최종 데이터:", finalData);
         onRegister({ type: "update", data: finalData });
       }
@@ -236,7 +264,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       console.log("11. 폼 초기화 완료");
     } catch (error) {
       console.error("Error in handleRegister:", error);
-      alert("저장 중 오류가 발생했습니다.");
+      alert("저장 중 오류가 발생했습니다: " + error.message);
     }
   };
 

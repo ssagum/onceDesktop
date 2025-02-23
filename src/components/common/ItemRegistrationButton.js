@@ -7,7 +7,12 @@ export default function ItemRegistrationButton({
   onClick,
 }) {
   const getMissingFields = () => {
-    return requiredFields.filter((field) => !formData[field]);
+    return requiredFields.filter((field) => {
+      if (field === "writer" || field === "requester") {
+        return !formData[field] || formData[field].length === 0;
+      }
+      return !formData[field];
+    });
   };
 
   const handleClick = () => {

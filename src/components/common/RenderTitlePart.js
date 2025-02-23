@@ -21,7 +21,6 @@ const GrowMiddleZone = styled.div`
 const FixedLeftZone = styled.div`
   display: flex;
   flex-direction: row;
-  width: 200px;
 `;
 
 export default function RenderTitlePart({ row }) {
@@ -81,22 +80,22 @@ export default function RenderTitlePart({ row }) {
               text={title}
             />
           </GrowMiddleZone>
-          <FixedLeftZone className="flex flex-row w-[200px]">
+          <div className="flex flex-row w-[250px]">
             <div
-              className={`flex flex-1 text-once18 pl-[10px] ${
+              className={`flex flex-1 text-once18 ml-[20px] justify-center items-center ${
                 classification === "전체" ? "text-onceOrange" : "text-black"
               }`}
             >
               {author}
             </div>
             <div
-              className={`flex flex-1 text-once18 pl-[30px] ${
+              className={`flex flex-1 text-once18 justify-center items-center ${
                 classification === "전체" ? "text-onceOrange" : "text-black"
               }`}
             >
               {relativeCreatedAt}
             </div>
-          </FixedLeftZone>
+          </div>
         </HoverFrame>
       </div>
 

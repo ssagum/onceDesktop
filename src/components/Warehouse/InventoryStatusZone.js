@@ -169,7 +169,8 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
 
   useEffect(() => {
     console.log("5. inventoryItems 변경됨:", inventoryItems);
-    let filtered = inventoryItems;
+    // 먼저 숨겨진 아이템 필터링
+    let filtered = inventoryItems.filter((item) => !item.isHidden);
 
     // 검색어 필터
     if (searchTerm) {
@@ -226,7 +227,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
     { label: "상태", key: "state" },
     { label: "재고", key: "quantity" },
     { label: "단위", key: "measure" },
-    { label: "위치", key: "position" },
+    { label: "위치", key: "location" },
   ];
 
   const handleItemUpdate = (updatedItem) => {

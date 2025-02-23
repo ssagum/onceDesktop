@@ -64,7 +64,7 @@ export default function StockDetailModal({
     quantity,
     safeStock,
     vendor,
-    position,
+    location,
     measure,
     state,
   } = item || {};
@@ -166,9 +166,27 @@ export default function StockDetailModal({
     }));
   };
 
-  const handleDeleteItem = () => {
-    // 품목 삭제 로직 구현 필요
-    console.log("품목 삭제");
+  const handleDeleteItem = async () => {
+    try {
+      if (!item?.id) return;
+
+      if (!window.confirm("정말로 이 품목을 삭제하시겠습니까?")) {
+        return;
+      }
+
+      const itemRef = doc(db, "stocks", item.id);
+      await updateDoc(itemRef, {
+        isHidden: true,
+        lastUpdated: serverTimestamp(),
+      });
+
+      // 모달 닫기
+      setIsVisible(false);
+      alert("품목이 삭제되었습니다.");
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      alert("품목 삭제 중 오류가 발생했습니다.");
+    }
   };
 
   const handlePurchaseRequest = async () => {
@@ -400,7 +418,7 @@ export default function StockDetailModal({
               )}
               <div className="absolute w-full flex h-[40px] bottom-0 items-center justify-center opacity-50 bg-black">
                 <span className="text-white text-once18 text-center">
-                  {position || "위치 미지정"}
+                  {location || "위치 미지정"}
                 </span>
               </div>
             </div>

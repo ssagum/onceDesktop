@@ -11,7 +11,7 @@ const StockRow = ({ index, item, onClick }) => {
     return null;
   }
 
-  const { category, department, itemName, state, quantity, measure, position } =
+  const { category, department, itemName, state, quantity, measure, location } =
     item;
 
   // index가 2의 배수이면 'bg-gray-100', 아니면 'bg-white' 적용
@@ -31,7 +31,7 @@ const StockRow = ({ index, item, onClick }) => {
       </div>
       <div className="text-center text-black">{quantity}</div>
       <div className="text-center text-black">{measure}</div>
-      <div className="text-center text-black">{position}</div>
+      <div className="text-center text-black">{location}</div>
       <StockDetailModal
         isVisible={isDetailModalOn}
         setIsVisible={setIsDetailModalOn}
