@@ -20,6 +20,7 @@ const getInitialUserLevelData = () => {
     department: "간호",
     role: "팀장",
     departmentLeader: true,
+    location: "안내 데스크",
   };
 };
 

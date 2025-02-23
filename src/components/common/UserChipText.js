@@ -1,6 +1,6 @@
 import React from "react";
 
-const UserChipText = ({ options = [], selected, onChange }) => {
+const UserChipText = ({ options = [], selected, onChange, green = false }) => {
   return (
     <div className="flex flex-wrap">
       {options.map((option) => (
@@ -9,7 +9,9 @@ const UserChipText = ({ options = [], selected, onChange }) => {
           className={`flex w-[160px] h-[36px] items-center justify-center rounded-full cursor-pointer 
                       ${
                         selected === option.value
-                          ? "bg-onceChipBlue text-onceBlue"
+                          ? green
+                            ? "bg-green-100 text-green-700"
+                            : "bg-onceChipBlue text-onceBlue"
                           : "bg-gray-200 text-gray-700"
                       }`}
           onClick={() => onChange(option.value)}

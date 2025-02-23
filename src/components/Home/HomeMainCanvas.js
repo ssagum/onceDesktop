@@ -26,6 +26,8 @@ import TaskAddModal from "../Task/TaskAddModal";
 import { tasks } from "../../datas/tasks";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
+import ReceivedCallList from "../call/ReceivedCallList";
+import ChatHistoryModal from "../common/ChatHistoryModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -82,6 +84,9 @@ export default function HomeMainCanvas() {
   const [timerModalOn, setTimerModalOn] = useState(false);
   const [taskAddModalOn, setTaskAddModalOn] = useState(false);
   const [notices, setNotices] = useState([]);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+
+  console.log(userLevelData);
 
   useEffect(() => {
     const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
@@ -211,10 +216,15 @@ export default function HomeMainCanvas() {
               <RightTopZone className="flex-[1] w-full bg-white rounded-xl">
                 <InsideHeaderZone className="p-[30px] flex flex-row w-full justify-between">
                   <InsideHeader title={"알림"} />
-                  <button className="text-gray-600 underline">더보기</button>
+                  <button
+                    className="text-gray-600 underline"
+                    onClick={() => setShowChatHistory(true)}
+                  >
+                    더보기
+                  </button>
                 </InsideHeaderZone>
-                <div className="w-full h-[200px] px-[20px] pb-[20px]">
-                  <ChatHistory />
+                <div className="w-full h-[200px] overflow-y-auto px-[20px]">
+                  <ReceivedCallList />
                 </div>
               </RightTopZone>
               <RightBottomZone className="w-full flex-row flex">
@@ -265,6 +275,11 @@ export default function HomeMainCanvas() {
       <TaskAddModal
         isVisible={taskAddModalOn}
         setIsVisible={setTaskAddModalOn}
+      />
+      <ChatHistoryModal
+        isVisible={showChatHistory}
+        setIsVisible={setShowChatHistory}
+        recentCalls={[]} // 실제 데이터를 여기에 전달
       />
     </div>
   );

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { MdDescription, MdContactPage } from "react-icons/md";
 import VendorModal from "./VendorModal";
 
-const VendorRow = ({ partner, index }) => {
+const VendorRow = ({ partner, index, onUpdate }) => {
   const { clientName, manager, industry, contact, email, documents } = partner;
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -43,6 +43,8 @@ const VendorRow = ({ partner, index }) => {
         isVisible={isModalOpen}
         setIsVisible={setIsModalOpen}
         vendor={partner}
+        onUpdate={onUpdate}
+        mode="edit"
       />
     </>
   );

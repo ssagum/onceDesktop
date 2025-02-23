@@ -1,28 +1,79 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const ImageUploader = ({ value, onChange }) => {
   const [preview, setPreview] = useState(value || null); // 이미지 상태
   const [isModalOpen, setIsModalOpen] = useState(false); // 모달 상태
+
+  // value prop 변경 추적
+  useEffect(() => {
+    console.log("ImageUploader value changed:", value);
+    if (value instanceof File) {
+      // value가 File 객체인 경우 URL 생성
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result);
+      };
+      reader.readAsDataURL(value);
+    } else {
+      // value가 URL이나 data URL인 경우
+      setPreview(value);
+    }
+  }, [value]);
 
   // 파일 업로드 핸들러
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    console.log("File selected:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    });
+
     const reader = new FileReader();
     reader.onloadend = () => {
-      setPreview(reader.result); // 미리보기 업데이트
-      onChange(file); // 부모 컴포넌트에 전달
+      const imageData = reader.result;
+      console.log("FileReader loaded image successfully");
+      console.log("Image data type:", typeof imageData);
+      setPreview(imageData); // 미리보기용 data URL 설정
+      onChange(file); // 부모 컴포넌트에는 File 객체 전달
+    };
+    reader.onerror = (error) => {
+      console.error("FileReader error:", error);
     };
     reader.readAsDataURL(file);
   };
 
+  // 이미지 로드 확인을 위한 useEffect
+  useEffect(() => {
+    if (preview) {
+      console.log("Preview updated:", {
+        type: typeof preview,
+        valueStart:
+          typeof preview === "string"
+            ? preview.substring(0, 30)
+            : "not a string",
+        isDataURL:
+          typeof preview === "string" && preview.startsWith("data:image/"),
+      });
+    }
+  }, [preview]);
+
   // 삭제 핸들러
   const handleDelete = () => {
+    console.log("Image deleted");
     setPreview(null);
     onChange(null);
     setIsModalOpen(false);
   };
+
+  // preview 값의 타입을 확인하고 적절히 로깅
+  console.log("Current preview:", {
+    type: typeof preview,
+    value: preview,
+    isString: typeof preview === "string",
+  });
 
   return (
     <div>

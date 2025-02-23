@@ -93,7 +93,7 @@ function PCAllocation() {
                   ]}
                   selected={userLevelData.location}
                   onChange={() => {}}
-                  yellowMode={true}
+                  green={true}
                 />
               </div>
               <FiSettings

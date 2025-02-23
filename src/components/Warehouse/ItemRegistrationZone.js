@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { imageFile, search, task } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
@@ -8,68 +8,284 @@ import SelectableButton from "../common/SelectableButton";
 import CurrencyInput from "../common/CurrencyInput";
 import CustomSelect from "../common/CustomSelect";
 import ImageUploader from "../common/ImageUploader";
+import ItemRegistrationButton from "../common/ItemRegistrationButton";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "../../firebase";
 
 const TopZone = styled.div``;
 const SortZone = styled.div``;
 const TeamZone = styled.div``;
 
-const ItemRegistrationZone = () => {
-  const [formData, setFormData] = useState({
-    id: "",
-    category: "",
-    itemName: "",
-    department: "",
-    price: "",
-    vat: true,
-    stock: "",
-    safeStock: "",
-    vendor: "",
-    location: "",
-    writer: "",
-  });
+const ItemRegistrationZone = ({ onRegister, item }) => {
+  const [mode, setMode] = useState(item ? "정정" : "신규");
+  const [formData, setFormData] = useState(
+    item
+      ? {
+          ...item,
+          stock: item.quantity || "",
+          location: item.position || "",
+          writer: item.writer || [],
+          requester: item.requester || [],
+        }
+      : {
+          id: "",
+          category: "",
+          itemName: "",
+          department: "",
+          price: "",
+          vat: true,
+          stock: "",
+          safeStock: "",
+          vendor: "",
+          location: "",
+          writer: [],
+          requester: [],
+          measure: "",
+          state: "입고 완료",
+        }
+  );
 
-  const requiredFields = ["itemName", "category", "price", "stock", "writer"];
+  useEffect(() => {
+    if (item) {
+      setMode("정정");
+      setFormData({
+        ...item,
+        stock: item.quantity || "",
+        location: item.position || "",
+        writer: item.writer || [],
+        requester: item.requester || [],
+      });
+    } else {
+      setMode("신규");
+      setFormData({
+        id: "",
+        category: "",
+        itemName: "",
+        department: "",
+        price: "",
+        vat: true,
+        stock: "",
+        safeStock: "",
+        vendor: "",
+        location: "",
+        writer: [],
+        requester: [],
+        measure: "",
+        state: "입고 완료",
+      });
+    }
+  }, [item]);
+
+  useEffect(() => {
+    console.log("ItemRegistrationZone - Current item:", item);
+    console.log("ItemRegistrationZone - Current formData:", formData);
+    console.log("ItemRegistrationZone - Current mode:", mode);
+  }, [item, formData, mode]);
+
+  const requiredFields = [
+    "itemName",
+    "category",
+    "price",
+    "stock",
+    "writer",
+    "requester",
+    "department",
+    "location",
+  ];
+
+  const isFormValid = () => {
+    return requiredFields.every((field) => !!formData[field]);
+  };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleCategoryChange = (value) => {
     setFormData((prev) => ({ ...prev, category: value }));
   };
-  const handleRegister = () => {
-    const missingFields = requiredFields.filter((field) => !formData[field]);
-    if (missingFields.length > 0) {
-      alert(`다음 필수 항목을 입력하세요: ${missingFields.join(", ")}`);
+
+  const handleModeChange = (newMode) => {
+    if (newMode === "신규" && item) {
+      alert("정정 중인 품목이 있어 신규 등록이 불가능합니다.");
       return;
     }
+    if (newMode === "정정" && !item) {
+      alert("정정은 비품현황을 통해서만 가능합니다.");
+      return;
+    }
+    setMode(newMode);
+  };
 
-    console.log("📌 등록 데이터:", formData);
-    alert("등록 완료!");
+  const handleRegister = async () => {
+    console.log("1. ItemRegistrationZone handleRegister 시작");
+
+    const generateItemId = () => {
+      const baseParts = [formData.department, formData.itemName];
+      if (formData.measure) {
+        baseParts.push(formData.measure);
+      }
+      return baseParts.join("_");
+    };
+
+    const itemData = {
+      ...formData,
+      id: generateItemId(),
+      quantity: formData.stock,
+      position: formData.location,
+      lastUpdated: serverTimestamp(),
+    };
+
+    try {
+      if (mode === "신규") {
+        // Firestore에 새 아이템 추가
+        const itemRef = await addDoc(collection(db, "items"), itemData);
+
+        // 초기 재고 입고 기록 생성
+        await addDoc(collection(db, "stockHistory"), {
+          itemId: itemRef.id,
+          type: "입고",
+          quantity: Number(formData.stock),
+          previousStock: 0,
+          currentStock: Number(formData.stock),
+          date: serverTimestamp(),
+          requesterId: formData.writer[0]?.id, // 작성자 ID
+          reason: "초기 등록",
+          status: "완료",
+        });
+
+        onRegister({ type: "create", data: itemData });
+      } else {
+        // 기존 아이템 수정
+        const itemRef = doc(db, "items", item.id);
+        await updateDoc(itemRef, itemData);
+
+        // 재고 수량이 변경된 경우 히스토리 기록
+        if (Number(item.quantity) !== Number(formData.stock)) {
+          await addDoc(collection(db, "stockHistory"), {
+            itemId: item.id,
+            type:
+              Number(formData.stock) > Number(item.quantity) ? "입고" : "출고",
+            quantity: Math.abs(Number(formData.stock) - Number(item.quantity)),
+            previousStock: Number(item.quantity),
+            currentStock: Number(formData.stock),
+            date: serverTimestamp(),
+            requesterId: formData.writer[0]?.id,
+            reason: "수량 정정",
+            status: "완료",
+          });
+        }
+
+        onRegister({ type: "update", data: itemData });
+      }
+
+      alert(mode === "신규" ? "등록 완료!" : "수정 완료!");
+
+      // 폼 초기화
+      setFormData({
+        id: "",
+        category: "",
+        itemName: "",
+        department: "",
+        price: "",
+        vat: true,
+        stock: "",
+        safeStock: "",
+        vendor: "",
+        location: "",
+        writer: [],
+        requester: [],
+        measure: "",
+        state: "입고 완료",
+      });
+    } catch (error) {
+      console.error("Error saving item:", error);
+      alert("저장 중 오류가 발생했습니다.");
+    }
   };
 
   const locations = ["창고 A", "창고 B", "사무실", "물류센터"]; // 예제 옵션
+
+  // 소모품 카테고리 목록
+  const consumableCategories = [
+    "사무용 소모품",
+    "의료용 소모품",
+    "마케팅 소모품",
+    "기타 소모품",
+  ];
+
+  // 현재 선택된 카테고리가 소모품인지 확인하는 함수
+  const isConsumableCategory = (category) => {
+    return consumableCategories.includes(category);
+  };
+
+  const handleDepartmentChange = (value) => {
+    setFormData((prev) => ({ ...prev, department: value }));
+  };
+
+  // WhoSelector 변경 핸들러 추가
+  const handlePeopleChange = (type) => (selectedPeople) => {
+    setFormData((prev) => ({
+      ...prev,
+      [type]: selectedPeople,
+    }));
+  };
 
   return (
     <div className="w-full flex flex-col relative h-full">
       <TopZone className="w-full flex flex-row justify-between">
         <div className="flex space-x-4 mb-6">
-          <button className="w-[89px] h-[38px] border border-gray-400 rounded-md">
+          <button
+            className={`w-[89px] h-[38px] border rounded-md ${
+              mode === "신규"
+                ? "border-onceBlue bg-onceBlue text-white"
+                : "border-gray-400 text-gray-600"
+            } ${item ? "opacity-50" : ""}`}
+            onClick={() => handleModeChange("신규")}
+          >
             신규
           </button>
-          <button className="w-[89px] h-[38px] border border-gray-400 rounded-md">
+          <button
+            className={`w-[89px] h-[38px] border rounded-md ${
+              mode === "정정"
+                ? "border-onceBlue bg-onceBlue text-white"
+                : "border-gray-400 text-gray-600"
+            } ${!item ? "opacity-50" : ""}`}
+            onClick={() => handleModeChange("정정")}
+          >
             정정
           </button>
         </div>
         <div className="flex justify-between mb-8">
           <div className="flex items-center space-x-4">
-            <label className="text-black font-semibold">작성자:</label>
-            <WhoSelector who={"작성자"} />
+            <label className="text-black font-semibold">
+              작성자:<span className="text-red-500">*</span>
+            </label>
+            <WhoSelector
+              who={"작성자"}
+              selectedPeople={formData.writer}
+              onPeopleChange={handlePeopleChange("writer")}
+            />
           </div>
           <div className="flex items-center space-x-4 ml-[20px]">
-            <label className="text-black font-semibold">요청자:</label>
-            <WhoSelector who={"요청자"} />
+            <label className="text-black font-semibold">
+              요청자:<span className="text-red-500">*</span>
+            </label>
+            <WhoSelector
+              who={"요청자"}
+              selectedPeople={formData.requester}
+              onPeopleChange={handlePeopleChange("requester")}
+            />
           </div>
         </div>
       </TopZone>
@@ -84,6 +300,9 @@ const ItemRegistrationZone = () => {
           />
           <input
             type="text"
+            name="itemName"
+            value={formData.itemName}
+            onChange={handleChange}
             placeholder="품명"
             className="w-[630px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
           />
@@ -151,21 +370,31 @@ const ItemRegistrationZone = () => {
           />
           <div className="flex flex-col">
             <div className="flex flex-row mb-[20px]">
-              <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
-                진료
-              </button>
-              <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
-                물리치료
-              </button>
-              <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
-                원장님
-              </button>
-              <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
-                간호
-              </button>
-              <button className="w-[110px] border border-gray-400 rounded-md h-[40px] mr-[20px]">
-                방사선
-              </button>
+              <SelectableButton
+                field={formData.department}
+                value="진료"
+                onChange={handleDepartmentChange}
+              />
+              <SelectableButton
+                field={formData.department}
+                value="간호"
+                onChange={handleDepartmentChange}
+              />
+              <SelectableButton
+                field={formData.department}
+                value="물리치료"
+                onChange={handleDepartmentChange}
+              />
+              <SelectableButton
+                field={formData.department}
+                value="원무"
+                onChange={handleDepartmentChange}
+              />
+              <SelectableButton
+                field={formData.department}
+                value="방사선"
+                onChange={handleDepartmentChange}
+              />
             </div>
           </div>
         </TeamZone>
@@ -178,6 +407,9 @@ const ItemRegistrationZone = () => {
           />
           <input
             type="text"
+            name="measure"
+            value={formData.measure}
+            onChange={handleChange}
             placeholder="단위"
             className="border border-gray-400 rounded-md h-[40px] px-4 w-[280px] bg-textBackground mr-[40px]"
           />
@@ -187,12 +419,10 @@ const ItemRegistrationZone = () => {
             className="h-[40px] flex items-center font-semibold text-black w-[80px]"
           />
           <CurrencyInput
+            name="price"
             value={formData.price}
             onChange={(value) =>
-              setFormData((prev) => ({
-                ...prev,
-                price: value, // 👈 input에서 받은 값을 업데이트
-              }))
+              handleChange({ target: { name: "price", value } })
             }
           />
 
@@ -200,12 +430,12 @@ const ItemRegistrationZone = () => {
             <label className="font-semibold text-gray-600">VAT 포함</label>
             <input
               type="checkbox"
-              checked={formData.vat} // VAT 포함 상태이면 체크됨
-              onChange={() =>
-                setFormData((prev) => ({
-                  ...prev,
-                  vat: !prev.vat,
-                }))
+              name="vat"
+              checked={formData.vat}
+              onChange={(e) =>
+                handleChange({
+                  target: { name: "vat", value: e.target.checked },
+                })
               }
               className="w-5 h-5"
             />
@@ -220,26 +450,37 @@ const ItemRegistrationZone = () => {
           />
           <input
             type="text"
+            name="stock"
+            value={formData.stock}
+            onChange={handleChange}
             placeholder="현재재고 수량"
-            className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground  mr-[40px]"
+            className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground mr-[40px]"
           />
-          <FormLabel
-            label={"안전재고"}
-            required={false}
-            className="h-[40px] flex items-center font-semibold text-black mb-2 w-[80px]"
-          />
-          <input
-            type="text"
-            placeholder="안전재고 수량"
-            className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-          />
+          {isConsumableCategory(formData.category) && (
+            <>
+              <FormLabel
+                label={"안전재고"}
+                required={false}
+                className="h-[40px] flex items-center font-semibold text-black mb-2 w-[80px]"
+              />
+              <input
+                type="text"
+                name="safeStock"
+                value={formData.safeStock}
+                onChange={handleChange}
+                placeholder="안전재고 수량"
+                className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+              />
+            </>
+          )}
         </div>
 
-        {/* 알림 문구 */}
-        <p className="text-red-500 text-sm mt-4">
-          * 안전재고 이하로 수량이 떨어지면 알림이 갑니다. 소모품의 경우에만
-          입력해주세요.
-        </p>
+        {/* 안전재고 알림 문구 - 소모품일 때만 표시 */}
+        {isConsumableCategory(formData.category) && (
+          <p className="text-red-500 text-sm mt-4">
+            * 안전재고 이하로 수량이 떨어지면 알림이 갑니다.
+          </p>
+        )}
 
         {/* 거래처 */}
         <div className="flex flex-row items-center">
@@ -248,6 +489,9 @@ const ItemRegistrationZone = () => {
           </label>
           <input
             type="text"
+            name="vendor"
+            value={formData.vendor}
+            onChange={handleChange}
             placeholder="URL을 입력해주세요"
             className="w-[600px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
           />
@@ -259,37 +503,39 @@ const ItemRegistrationZone = () => {
           <span>기존 거래처의 경우 검색하세요</span>
         </div>
 
-        {/* 위치 */}
+        {/* 위치 - 필수 표시 추가 */}
         <div className="flex flex-row items-center">
           <label className="h-[40px] flex items-center font-semibold text-black w-[80px]">
-            위치:
+            위치:<span className="text-red-500">*</span>
           </label>
-          <CustomSelect
+          <input
+            type="text"
+            name="location"
             value={formData.location}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, location: e.target.value }))
-            }
-            options={locations}
-            placeholder="위치를 선택해주세요"
+            onChange={handleChange}
+            placeholder="위치를 입력해주세요"
+            className="w-[600px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
           />
-          {/* <div className="w-[80px] flex justify-center">
-            <img src={imageFile} alt="Logo" className="w-[30px] h-[30px]" />
-          </div>
-          <span>재고위치 사진을 추가해주세요 +</span> */}
           <div className="ml-[20px]">
             <ImageUploader
+              name="locationImage"
               value={formData.locationImage}
               onChange={(file) =>
-                setFormData((prev) => ({ ...prev, locationImage: file }))
+                handleChange({ target: { name: "locationImage", value: file } })
               }
             />
           </div>
         </div>
       </div>
 
-      {/* 등록 버튼 */}
+      {/* 등록/수정 버튼 */}
       <div className="absolute bottom-0 w-full">
-        <OnceOnOffButton text={"등록하기"} />
+        <ItemRegistrationButton
+          mode={mode}
+          formData={formData}
+          requiredFields={requiredFields}
+          onClick={handleRegister}
+        />
       </div>
     </div>
   );

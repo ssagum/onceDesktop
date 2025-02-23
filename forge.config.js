@@ -74,4 +74,13 @@ module.exports = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  config: {
+    forge: {
+      webPreferences: {
+        webSecurity: true,
+        contextIsolation: true,
+        nodeIntegration: true,
+      },
+    },
+  },
 };

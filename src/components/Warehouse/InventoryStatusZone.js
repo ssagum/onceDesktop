@@ -7,6 +7,10 @@ import StockRow from "./StockRow";
 import { FilterButton, FilterChips } from "../common/FilterButton";
 import JcyTable from "../common/JcyTable";
 import { cancel } from "../../assets";
+import { db } from "../../firebase.js";
+import { collection, onSnapshot, query } from "firebase/firestore";
+import StockDetailModal from "./StockDetailModal";
+import PropTypes from "prop-types";
 
 const SearchZone = styled.div``;
 const BoxZone = styled.div``;
@@ -15,12 +19,13 @@ const SectionZone = styled.div``;
 const IndexPart = styled.div``;
 const RowPart = styled.div``;
 
-const InventoryStatusZone = ({ onDataUpdate }) => {
+const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(7);
+  const [totalPages, setTotalPages] = useState(1);
   const [isFilterModalOn, setIsFilterModalOn] = useState(false);
-  // 검색어 상태
   const [searchTerm, setSearchTerm] = useState("");
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   // 각 필터별 상태 (필요에 따라 기본값을 지정할 수 있음)
   const [selectedCategoryFilters, setSelectedCategoryFilters] = useState([]);
@@ -36,7 +41,7 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
     ...selectedStatusFilters,
   ];
 
-  const [sortedData, setSortedData] = useState(hospitalStocks);
+  const [sortedData, setSortedData] = useState([]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
 
@@ -126,20 +131,47 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
     setSortedData(sorted);
   };
 
-  const columns = [
-    { label: "분류", key: "category" },
-    { label: "부서", key: "department" },
-    { label: "품명", key: "itemName" },
-    { label: "상태", key: "state" },
-    { label: "재고", key: "quantity" },
-    { label: "단위", key: "measure" },
-    { label: "위치", key: "position" },
-  ];
+  // 새로운 아이템 등록 핸들러로 되돌리기
+  const handleRegisterItem = (newItem) => {
+    // 중복 체크
+    const isDuplicate = inventoryItems.some((item) => item.id === newItem.id);
+
+    if (isDuplicate) {
+      alert("이미 등록된 품목입니다. 수정하시려면 정정 버튼을 이용해주세요.");
+      return false;
+    }
+
+    setInventoryItems((prev) => [...prev, newItem]);
+    return true;
+  };
+
+  // Firestore 실시간 데이터 구독
+  useEffect(() => {
+    console.log("1. Firestore 구독 시작");
+
+    const q = query(collection(db, "stocks"));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      console.log("2. Firestore 데이터 변경 감지");
+      const items = [];
+      querySnapshot.forEach((doc) => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      console.log("3. 변환된 데이터:", items);
+      setInventoryItems(items);
+    });
+
+    return () => {
+      console.log("4. Firestore 구독 해제");
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
-    let filtered = hospitalStocks;
+    console.log("5. inventoryItems 변경됨:", inventoryItems);
+    let filtered = inventoryItems;
 
-    // 검색어 필터: 공백을 제거한 문자열로 비교
+    // 검색어 필터
     if (searchTerm) {
       const cleanedSearchTerm = searchTerm.replace(/\s+/g, "").toLowerCase();
       filtered = filtered.filter((item) =>
@@ -172,11 +204,13 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
     }
 
     setSortedData(filtered);
+    setTotalPages(Math.ceil(filtered.length / 10)); // 페이지당 10개 아이템
   }, [
     searchTerm,
     selectedCategoryFilters,
     selectedDepartmentFilters,
     selectedStatusFilters,
+    inventoryItems,
   ]);
 
   useEffect(() => {
@@ -184,6 +218,29 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
       onDataUpdate(sortedData);
     }
   }, [sortedData]);
+
+  const columns = [
+    { label: "분류", key: "category" },
+    { label: "부서", key: "department" },
+    { label: "품명", key: "itemName" },
+    { label: "상태", key: "state" },
+    { label: "재고", key: "quantity" },
+    { label: "단위", key: "measure" },
+    { label: "위치", key: "position" },
+  ];
+
+  const handleItemUpdate = (updatedItem) => {
+    // 업데이트된 아이템을 기존 목록에 반영
+    setInventoryItems((prevItems) =>
+      prevItems.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+    );
+    setSelectedItem(null);
+  };
+
+  // StockRow 컴포넌트에 대한 클릭 핸들러 추가
+  const handleRowClick = (item) => {
+    setSelectedItem(item);
+  };
 
   return (
     <div className="flex flex-col w-full bg-white h-full">
@@ -229,20 +286,14 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
       <JcyTable
         columns={columns}
         columnWidths="grid-cols-7"
-        data={sortedData}
+        data={sortedData.slice((currentPage - 1) * 10, currentPage * 10)}
         rowClassName={(index) => (index % 2 === 0 ? "bg-gray-100" : "bg-white")}
         renderRow={(row, index) => (
           <StockRow
-            key={index}
+            key={row.id}
             index={index}
             item={row}
-            category={row.category}
-            itemName={row.itemName}
-            department={row.department}
-            state={row.state}
-            quantity={row.quantity}
-            measure={row.measure}
-            position={row.position}
+            onClick={() => handleRowClick(row)}
           />
         )}
       />
@@ -477,8 +528,22 @@ const InventoryStatusZone = ({ onDataUpdate }) => {
           </SectionZone>
         </div>
       </ModalTemplate>
+      {selectedItem && (
+        <StockDetailModal
+          isVisible={!!selectedItem}
+          setIsVisible={() => setSelectedItem(null)}
+          item={selectedItem}
+          onUpdate={handleItemUpdate}
+          setWarehouseMode={setWarehouseMode}
+        />
+      )}
     </div>
   );
+};
+
+InventoryStatusZone.propTypes = {
+  onDataUpdate: PropTypes.func,
+  setWarehouseMode: PropTypes.func.isRequired,
 };
 
 export default InventoryStatusZone;

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import ModalTemplate from "../common/ModalTemplate";
-import OnceOnOffButton from "../common/OnceOnOffButton";
 import ChipText from "../common/ChipText";
 import EditableField from "../common/EditableField";
 import PhoneNumberField from "../common/PhoneNumberField";
@@ -9,6 +8,9 @@ import { vendors } from "../../datas/vendors";
 import JcyTable from "../common/JcyTable";
 import VendorRow from "./VendorRow";
 import VendorModal from "./VendorModal";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../../firebase";
+import { filterHiddenDocuments } from "../../utils/filterUtils";
 
 const SearchZone = styled.div``;
 const BoxZone = styled.div``;
@@ -29,6 +31,7 @@ const vendorColumns = [
 ];
 
 const VendorZone = () => {
+  const [vendors, setVendors] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(7);
   const [isFilterModalOn, setIsFilterModalOn] = useState(true);
@@ -36,6 +39,28 @@ const VendorZone = () => {
   const [isNewVendorModalOpen, setIsNewVendorModalOpen] = useState(false);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
+
+  // Firestore에서 거래처 데이터 가져오기
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "vendors"));
+        const vendorList = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setVendors(filterHiddenDocuments(vendorList));
+      } catch (error) {
+        console.error("거래처 데이터 로딩 실패:", error);
+      }
+    };
+    fetchVendors();
+  }, []);
+
+  // 거래처 데이터 업데이트 핸들러
+  const handleVendorUpdate = (updatedVendors) => {
+    setVendors(updatedVendors);
+  };
 
   // 이전 페이지로 이동하는 함수
   const handlePrevious = () => {
@@ -66,27 +91,36 @@ const VendorZone = () => {
             viewBox="0 0 20 20"
           >
             <path
-              fill-rule="evenodd"
+              fillRule="evenodd"
               d="M12.9 14.32a8 8 0 111.414-1.414l4.387 4.387a1 1 0 01-1.414 1.414l-4.387-4.387zM14 8a6 6 0 11-12 0 6 6 0 0112 0z"
-              clip-rule="evenodd"
-            ></path>
+              clipRule="evenodd"
+            />
           </svg>
         </div>
-        <OnceOnOffButton
-          text={"추가 +"}
+        <button
           onClick={() => setIsNewVendorModalOpen(true)}
-          className="w-[100px] rounded-full"
-        />
+          className="w-[100px] h-[40px] bg-onceBlue text-white rounded-full font-semibold hover:bg-blue-600 transition-colors"
+        >
+          추가 +
+        </button>
       </SearchZone>
       <JcyTable
         columns={vendorColumns}
         columnWidths="grid-cols-6"
         data={vendors}
-        renderRow={(row, index) => <VendorRow partner={row} index={index} />}
+        renderRow={(row, index) => (
+          <VendorRow
+            partner={row}
+            index={index}
+            onUpdate={handleVendorUpdate}
+          />
+        )}
       />
       <VendorModal
         isVisible={isNewVendorModalOpen}
         setIsVisible={setIsNewVendorModalOpen}
+        onUpdate={handleVendorUpdate}
+        mode="create"
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, session } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 
@@ -10,12 +10,32 @@ if (started) {
 }
 
 const createWindow = () => {
+  // CSP 설정
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          "default-src 'self';" +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com;" +
+            "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;" +
+            "worker-src 'self' blob:;" +
+            "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
+            "style-src 'self' 'unsafe-inline';",
+        ],
+      },
+    });
+  });
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1360,
     height: 980,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      nodeIntegration: true,
+      contextIsolation: true,
+      webSecurity: true,
     },
   });
 
@@ -24,19 +44,6 @@ const createWindow = () => {
 
   Menu.setApplicationMenu(null);
   mainWindow.setMenuBarVisibility(false);
-
-  mainWindow.webContents.session.webRequest.onHeadersReceived(
-    (details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com; connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com; worker-src 'self' blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline';",
-          ],
-        },
-      });
-    }
-  );
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();

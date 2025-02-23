@@ -72,6 +72,8 @@ const QRCodeGenerator = ({ idList }) => {
     link.click();
   };
 
+  console.log("idList", idList);
+
   return (
     <div className="flex flex-col items-center w-full h-[600px] overflow-y-auto">
       <div className="flex justify-between w-full mb-4">
