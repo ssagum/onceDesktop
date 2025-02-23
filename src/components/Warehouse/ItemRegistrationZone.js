@@ -15,6 +15,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -129,6 +130,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
 
   const handleRegister = async () => {
     console.log("1. ItemRegistrationZone handleRegister 시작");
+    console.log("현재 mode:", mode);
+    console.log("받은 item:", item);
 
     const generateItemId = () => {
       const baseParts = [formData.department, formData.itemName];
@@ -145,6 +148,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       position: formData.location,
       lastUpdated: serverTimestamp(),
     };
+
+    console.log("2. 생성된 itemData:", itemData);
 
     try {
       if (mode === "신규") {
@@ -166,12 +171,28 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
 
         onRegister({ type: "create", data: itemData });
       } else {
-        // 기존 아이템 수정
+        console.log("3. 수정 모드 진입");
+        console.log("item.id:", item.id);
+
         const itemRef = doc(db, "items", item.id);
-        await updateDoc(itemRef, itemData);
+        console.log("4. Firestore 문서 참조 생성:", itemRef);
+
+        const updateData = {
+          ...itemData,
+          id: item.id,
+        };
+        console.log("5. 업데이트할 데이터:", updateData);
+
+        // updateDoc 대신 setDoc with merge 사용
+        await setDoc(itemRef, updateData, { merge: true });
+        console.log("6. Firestore 문서 업데이트 완료");
 
         // 재고 수량이 변경된 경우 히스토리 기록
         if (Number(item.quantity) !== Number(formData.stock)) {
+          console.log("7. 재고 수량 변경 감지");
+          console.log("이전 수량:", item.quantity);
+          console.log("새로운 수량:", formData.stock);
+
           await addDoc(collection(db, "stockHistory"), {
             itemId: item.id,
             type:
@@ -184,11 +205,15 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
             reason: "수량 정정",
             status: "완료",
           });
+          console.log("8. 재고 히스토리 기록 완료");
         }
 
-        onRegister({ type: "update", data: itemData });
+        const finalData = { ...itemData, id: item.id };
+        console.log("9. onRegister에 전달할 최종 데이터:", finalData);
+        onRegister({ type: "update", data: finalData });
       }
 
+      console.log("10. 수정 완료, 알림 표시");
       alert(mode === "신규" ? "등록 완료!" : "수정 완료!");
 
       // 폼 초기화
@@ -208,8 +233,9 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         measure: "",
         state: "입고 완료",
       });
+      console.log("11. 폼 초기화 완료");
     } catch (error) {
-      console.error("Error saving item:", error);
+      console.error("Error in handleRegister:", error);
       alert("저장 중 오류가 발생했습니다.");
     }
   };

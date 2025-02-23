@@ -491,7 +491,13 @@ export default function StockDetailModal({
 
       {/* 품목정보 수정 모달 */}
       {isRegistrationModalOn && (
-        <ItemRegistrationZone item={item} onRegister={handleItemUpdate} />
+        <ItemRegistrationZone
+          item={{
+            ...item,
+            docId: item?.firestoreId, // Firestore document ID 추가
+          }}
+          onRegister={handleItemUpdate}
+        />
       )}
 
       {/* 추가 주문 모달 */}
