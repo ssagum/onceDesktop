@@ -53,6 +53,14 @@ export default function StockDetailModal({
   const [isQRModalOn, setIsQRModalOn] = useState(false);
   const [qrSize, setQrSize] = useState(150);
   const printRef = useRef();
+  const [isSimpleStockModalOn, setIsSimpleStockModalOn] = useState(false);
+  const [stockAction, setStockAction] = useState("입고");
+  const [simpleStockData, setSimpleStockData] = useState({
+    writer: [],
+    requester: [],
+    quantity: "",
+    reason: "",
+  });
 
   const {
     id,
@@ -76,7 +84,7 @@ export default function StockDetailModal({
     { key: "quantity", label: "수량" },
     { key: "previousStock", label: "이전재고" },
     { key: "currentStock", label: "현재재고" },
-    { key: "requesterId", label: "요청자" },
+    { key: "writer", label: "작성자" },
     { key: "reason", label: "사유" },
   ];
 
@@ -98,7 +106,7 @@ export default function StockDetailModal({
           return {
             ...data,
             date: data.date?.toDate().toLocaleDateString() || "-",
-            requesterId: data.requesterId || "-",
+            requester: data.requester || "-",
             dateForSort: data.date?.toDate() || new Date(0),
           };
         });
@@ -129,7 +137,7 @@ export default function StockDetailModal({
         return {
           ...data,
           date: data.date?.toDate().toLocaleDateString() || "-",
-          requesterId: data.requesterId || "-",
+          requester: data.requester || "-",
           dateForSort: data.date?.toDate() || new Date(0),
         };
       });
@@ -205,7 +213,8 @@ export default function StockDetailModal({
         previousStock: Number(item.quantity),
         currentStock: Number(item.quantity), // 주문 요청은 현재 재고를 변경하지 않음
         date: serverTimestamp(),
-        requesterId: formData.writer[0].name || "unknown",
+        writer: item.writer || [],
+        requester: item.requester || [],
         requestDate: serverTimestamp(),
         department: item.department,
         reason: formData.orderReason,
@@ -256,6 +265,75 @@ export default function StockDetailModal({
     link.href = URL.createObjectURL(blob);
     link.download = `QR_${item.itemName}.pdf`;
     link.click();
+  };
+
+  const handleSimpleStockUpdate = async () => {
+    try {
+      if (!simpleStockData.writer.length) {
+        alert("작성자를 선택해주세요.");
+        return;
+      }
+      if (!simpleStockData.quantity) {
+        alert("수량을 입력해주세요.");
+        return;
+      }
+
+      const currentStock = Number(item.quantity) || 0;
+      const changeAmount = Number(simpleStockData.quantity) || 0;
+      const newStock =
+        stockAction === "입고"
+          ? currentStock + changeAmount
+          : currentStock - changeAmount;
+
+      if (newStock < 0) {
+        alert("출고 수량이 현재 재고보다 많습니다.");
+        return;
+      }
+
+      // 재고 수량 업데이트
+      const itemRef = doc(db, "stocks", item.id);
+      await updateDoc(itemRef, {
+        quantity: newStock,
+        lastUpdated: serverTimestamp(),
+      });
+
+      // 재고 히스토리 생성
+      await addDoc(collection(db, "stockHistory"), {
+        itemId: item.id,
+        type: stockAction,
+        quantity: changeAmount,
+        previousStock: currentStock,
+        currentStock: newStock,
+        date: serverTimestamp(),
+        writer: simpleStockData.writer,
+        requester: simpleStockData.writer,
+        reason: simpleStockData.reason || "단순 " + stockAction,
+        status: "완료",
+      });
+
+      // 상태 업데이트
+      onUpdate({ ...item, quantity: newStock });
+
+      setIsSimpleStockModalOn(false);
+      setSimpleStockData({
+        writer: [],
+        requester: [],
+        quantity: "",
+        reason: "",
+      });
+      alert(`${stockAction} 처리가 완료되었습니다.`);
+    } catch (error) {
+      console.error("Error updating stock:", error);
+      alert(`${stockAction} 처리 중 오류가 발생했습니다.`);
+    }
+  };
+
+  // 단순 입출고용 작성자 변경 핸들러
+  const handleSimpleStockWriterChange = (selectedPeople) => {
+    setSimpleStockData((prev) => ({
+      ...prev,
+      writer: selectedPeople,
+    }));
   };
 
   return (
@@ -460,7 +538,7 @@ export default function StockDetailModal({
                     <div className="text-center">{row.quantity}</div>
                     <div className="text-center">{row.previousStock}</div>
                     <div className="text-center">{row.currentStock}</div>
-                    <div className="text-center">{row.requesterId}</div>
+                    <div className="text-center">{row.writer}</div>
                     <div className="text-center">{row.reason}</div>
                   </div>
                 ))
@@ -497,6 +575,11 @@ export default function StockDetailModal({
               on={true}
               text={"추가 주문"}
               onClick={() => setIsPlusPurchaseModalOn(true)}
+            />
+            <OnceOnOffButton
+              on={true}
+              text={"단순 입출고"}
+              onClick={() => setIsSimpleStockModalOn(true)}
             />
             <OnceOnOffButton
               on={true}
@@ -678,6 +761,122 @@ export default function StockDetailModal({
                 PDF 다운로드
               </button>
             </div>
+          </div>
+        </div>
+      </ModalTemplate>
+
+      {/* 단순 입출고 모달 */}
+      <ModalTemplate
+        isVisible={isSimpleStockModalOn}
+        setIsVisible={setIsSimpleStockModalOn}
+        showCancel={false}
+        modalClassName="rounded-xl"
+      >
+        <div className="flex flex-col items-center w-[500px] bg-white p-[30px] rounded-xl">
+          <div className="flex justify-between items-center w-full mb-6">
+            <span className="text-2xl font-bold">단순 입출고</span>
+            <img
+              onClick={() => setIsSimpleStockModalOn(false)}
+              className="w-[30px] cursor-pointer"
+              src={cancel}
+              alt="닫기"
+            />
+          </div>
+
+          {/* 품목 정보 표시 */}
+          <div className="w-full mb-6 p-4 bg-gray-50 rounded-md">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="text-gray-600">품명:</div>
+              <div>{item?.itemName}</div>
+              <div className="text-gray-600">현재 재고:</div>
+              <div>
+                {item?.quantity} {item?.measure}
+              </div>
+            </div>
+          </div>
+
+          {/* 입출고 입력 폼 */}
+          <div className="w-full space-y-4">
+            <div className="flex w-full h-[40px]">
+              <button
+                className={`flex-1 rounded-md border ${
+                  stockAction === "입고"
+                    ? "border-onceBlue bg-onceBlue text-white"
+                    : "border-gray-400 text-gray-600"
+                }`}
+                onClick={() => setStockAction("입고")}
+              >
+                입고
+              </button>
+              <div className="w-[20px]" />
+              <button
+                className={`flex-1 rounded-md border ${
+                  stockAction === "출고"
+                    ? "border-onceBlue bg-onceBlue text-white"
+                    : "border-gray-400 text-gray-600"
+                }`}
+                onClick={() => setStockAction("출고")}
+              >
+                출고
+              </button>
+            </div>
+
+            <div className="flex items-center">
+              <label className="w-24 font-semibold">작성자:</label>
+              <WhoSelector
+                who={"작성자"}
+                selectedPeople={simpleStockData.writer}
+                onPeopleChange={handleSimpleStockWriterChange}
+              />
+            </div>
+
+            <div className="flex items-center">
+              <label className="w-24 font-semibold">수량:</label>
+              <input
+                type="number"
+                value={simpleStockData.quantity || ""}
+                onChange={(e) =>
+                  setSimpleStockData((prev) => ({
+                    ...prev,
+                    quantity: e.target.value,
+                  }))
+                }
+                className="flex-1 border border-gray-300 rounded-md p-2"
+                placeholder={`${stockAction} 수량 입력 (${item?.measure})`}
+              />
+            </div>
+
+            <div className="flex items-start">
+              <label className="w-24 font-semibold mt-2">사유:</label>
+              <textarea
+                value={simpleStockData.reason || ""}
+                onChange={(e) =>
+                  setSimpleStockData((prev) => ({
+                    ...prev,
+                    reason: e.target.value,
+                  }))
+                }
+                className="flex-1 border border-gray-300 rounded-md p-2 h-24"
+                placeholder={`${stockAction} 사유를 입력하세요`}
+              />
+            </div>
+          </div>
+
+          {/* 처리 버튼 */}
+          <div className="w-full mt-6">
+            <button
+              onClick={handleSimpleStockUpdate}
+              disabled={
+                !simpleStockData.writer.length || !simpleStockData.quantity
+              }
+              className={`w-full py-3 rounded-md ${
+                simpleStockData.writer.length && simpleStockData.quantity
+                  ? "bg-onceBlue hover:bg-onceBlue text-white"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
+            >
+              {stockAction} 처리
+            </button>
           </div>
         </div>
       </ModalTemplate>

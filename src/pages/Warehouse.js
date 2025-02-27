@@ -50,6 +50,10 @@ const Warehouse = () => {
 
   // warehouseMode 변경 핸들러
   const handleWarehouseModeChange = (newMode, item = null) => {
+    // 품목정보 수정이 아닌 경우 (item이 없는 경우) selectedItem을 null로 초기화
+    if (!item && newMode === "품목등록") {
+      setSelectedItem(null);
+    }
     setWarehouseMode(newMode);
     setSelectedItem(item);
   };
@@ -175,7 +179,7 @@ const Warehouse = () => {
                 </span>
               </button>
               <button
-                onClick={() => setWarehouseMode("품목등록")}
+                onClick={() => handleWarehouseModeChange("품목등록")}
                 className={`rounded-md w-[140px] h-[40px] flex justify-center items-center text-center border ${
                   warehouseMode === "품목등록"
                     ? "bg-onceBlue border-onceBlue"

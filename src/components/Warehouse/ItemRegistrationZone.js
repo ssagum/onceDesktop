@@ -25,31 +25,33 @@ const TeamZone = styled.div``;
 
 const ItemRegistrationZone = ({ onRegister, item }) => {
   const [mode, setMode] = useState(item ? "정정" : "신규");
+  const emptyFormData = {
+    id: "",
+    category: "",
+    itemName: "",
+    department: "",
+    price: "",
+    vat: true,
+    quantity: "",
+    safeStock: "",
+    vendor: "",
+    location: "",
+    writer: [],
+    requester: [],
+    measure: "",
+    state: "입고 완료",
+  };
+
   const [formData, setFormData] = useState(
     item
       ? {
           ...item,
-          stock: item.quantity || "",
+          quantity: item.quantity || "",
           location: item.location || "",
           writer: item.writer || [],
           requester: item.requester || [],
         }
-      : {
-          id: "",
-          category: "",
-          itemName: "",
-          department: "",
-          price: "",
-          vat: true,
-          stock: "",
-          safeStock: "",
-          vendor: "",
-          location: "",
-          writer: [],
-          requester: [],
-          measure: "",
-          state: "입고 완료",
-        }
+      : emptyFormData
   );
 
   useEffect(() => {
@@ -57,29 +59,14 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       setMode("정정");
       setFormData({
         ...item,
-        stock: item.quantity || "",
+        quantity: item.quantity || "",
         location: item.location || "",
         writer: item.writer || [],
         requester: item.requester || [],
       });
     } else {
       setMode("신규");
-      setFormData({
-        id: "",
-        category: "",
-        itemName: "",
-        department: "",
-        price: "",
-        vat: true,
-        stock: "",
-        safeStock: "",
-        vendor: "",
-        location: "",
-        writer: [],
-        requester: [],
-        measure: "",
-        state: "입고 완료",
-      });
+      setFormData(emptyFormData);
     }
   }, [item]);
 
@@ -93,7 +80,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     "itemName",
     "category",
     "price",
-    "stock",
+    "quantity",
     "writer",
     "requester",
     "department",
@@ -117,14 +104,23 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   };
 
   const handleModeChange = (newMode) => {
-    if (newMode === "신규" && item) {
-      alert("정정 중인 품목이 있어 신규 등록이 불가능합니다.");
-      return;
-    }
     if (newMode === "정정" && !item) {
       alert("정정은 비품현황을 통해서만 가능합니다.");
       return;
     }
+
+    if (newMode === "신규" && mode === "정정") {
+      if (
+        window.confirm(
+          "정정 모드에서 신규 모드로 전환하시겠습니까?\n입력된 데이터가 초기화됩니다."
+        )
+      ) {
+        setMode("신규");
+        setFormData(emptyFormData);
+      }
+      return;
+    }
+
     setMode(newMode);
   };
 
@@ -140,10 +136,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       previousStock: Number(previousStock) || 0,
       currentStock: Number(currentStock) || 0,
       date: serverTimestamp(),
-      requesterId:
-        formData.writer.length > 0
-          ? formData.writer.map((w) => w.id || "unknown")
-          : ["unknown"],
+      writer: formData.writer || [],
+      requester: formData.requester || [],
       reason: reason || "미지정",
       status: "완료",
     };
@@ -174,32 +168,38 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     try {
       if (mode === "신규") {
         const generatedId = generateItemId();
-
-        // 생성된 ID로 문서 참조 생성
-        //그래 db, collection, document 순으로 가는 게 맞지
-
         const newDocRef = doc(db, "stocks", generatedId);
+
+        // 수량을 숫자로 변환하여 저장
+        const quantity = Number(formData.quantity) || 0;
 
         const newItemData = {
           ...formData,
-          id: generatedId, // 생성된 ID 사용
-          quantity: formData.stock,
+          id: generatedId,
+          quantity: quantity,
           location: formData.location,
           lastUpdated: serverTimestamp(),
         };
 
-        // setDoc을 사용하여 생성된 ID로 문서 생성
+        // stocks 컬렉션에 데이터 저장
         await setDoc(newDocRef, newItemData);
+        console.log("2. 새 아이템 등록 완료");
 
-        // 초기 재고 입고 기록 생성
-        await createStockHistory({
-          itemId: generatedId,
-          type: "입고",
-          quantity: formData.stock,
-          previousStock: 0,
-          currentStock: formData.stock,
-          reason: "초기 등록",
-        });
+        // stockHistory 생성 - 초기 입고 기록
+        try {
+          await createStockHistory({
+            itemId: generatedId,
+            type: "입고",
+            quantity: quantity,
+            previousStock: 0,
+            currentStock: quantity,
+            reason: "초기 등록",
+          });
+          console.log("3. 초기 재고 히스토리 생성 완료");
+        } catch (historyError) {
+          console.error("재고 히스토리 생성 중 오류:", historyError);
+          throw historyError;
+        }
 
         onRegister({ type: "create", data: newItemData });
       } else {
@@ -220,18 +220,22 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         console.log("6. Firestore 문서 업데이트 완료");
 
         // 재고 수량이 변경된 경우 히스토리 기록
-        if (Number(item.quantity) !== Number(formData.stock)) {
+        if (Number(item.quantity) !== Number(formData.quantity)) {
           console.log("7. 재고 수량 변경 감지");
           console.log("이전 수량:", item.quantity);
-          console.log("새로운 수량:", formData.stock);
+          console.log("새로운 수량:", formData.quantity);
 
           await createStockHistory({
             itemId: item.id,
             type:
-              Number(formData.stock) > Number(item.quantity) ? "입고" : "출고",
-            quantity: Math.abs(Number(formData.stock) - Number(item.quantity)),
+              Number(formData.quantity) > Number(item.quantity)
+                ? "입고"
+                : "출고",
+            quantity: Math.abs(
+              Number(formData.quantity) - Number(item.quantity)
+            ),
             previousStock: Number(item.quantity),
-            currentStock: Number(formData.stock),
+            currentStock: Number(formData.quantity),
             reason: "수량 정정",
           });
           console.log("8. 재고 히스토리 기록 완료");
@@ -253,7 +257,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         department: "",
         price: "",
         vat: true,
-        stock: "",
+        quantity: "",
         safeStock: "",
         vendor: "",
         location: "",
@@ -305,7 +309,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               mode === "신규"
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
-            } ${item ? "opacity-50" : ""}`}
+            }`}
             onClick={() => handleModeChange("신규")}
           >
             신규
@@ -315,7 +319,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               mode === "정정"
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
-            } ${!item ? "opacity-50" : ""}`}
+            }`}
             onClick={() => handleModeChange("정정")}
           >
             정정
@@ -505,8 +509,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           />
           <input
             type="text"
-            name="stock"
-            value={formData.stock}
+            name="quantity"
+            value={formData.quantity}
             onChange={handleChange}
             placeholder="현재재고 수량"
             className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground mr-[40px]"
