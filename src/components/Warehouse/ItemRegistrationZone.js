@@ -164,35 +164,36 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     console.log("받은 item:", item);
 
     const generateItemId = () => {
-      const timestamp = new Date().getTime();
       const baseParts = [formData.department, formData.itemName];
       if (formData.measure) {
         baseParts.push(formData.measure);
       }
-      return `${baseParts.join("_")}_${timestamp}`;
+      return `${baseParts.join("_")}`;
     };
 
     try {
       if (mode === "신규") {
+        const generatedId = generateItemId();
+
+        // 생성된 ID로 문서 참조 생성
+        //그래 db, collection, document 순으로 가는 게 맞지
+
+        const newDocRef = doc(db, "stocks", generatedId);
+
         const newItemData = {
           ...formData,
-          id: generateItemId(),
+          id: generatedId, // 생성된 ID 사용
           quantity: formData.stock,
           location: formData.location,
           lastUpdated: serverTimestamp(),
         };
 
-        // Firestore에 새 아이템 추가
-        const docRef = await addDoc(collection(db, "stocks"), newItemData);
-
-        // 문서 ID를 저장
-        await updateDoc(docRef, {
-          id: docRef.id,
-        });
+        // setDoc을 사용하여 생성된 ID로 문서 생성
+        await setDoc(newDocRef, newItemData);
 
         // 초기 재고 입고 기록 생성
         await createStockHistory({
-          itemId: docRef.id,
+          itemId: generatedId,
           type: "입고",
           quantity: formData.stock,
           previousStock: 0,
@@ -200,7 +201,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           reason: "초기 등록",
         });
 
-        onRegister({ type: "create", data: { ...newItemData, id: docRef.id } });
+        onRegister({ type: "create", data: newItemData });
       } else {
         console.log("3. 수정 모드 진입");
         console.log("item.id:", item.id);

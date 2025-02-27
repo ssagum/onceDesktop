@@ -60,7 +60,7 @@ export default function WhoSelector({
   return (
     <SelectorButton
       onClick={() => setWhoModalOpen(true)}
-      className="h-[40px] bg-white flex justify-center items-center border border-gray-300 rounded-md px-4"
+      className="h-[40px] bg-white flex justify-center items-center border border-gray-300 rounded-md px-4 w-[120px]"
     >
       {renderSelectedStaff()}
       <ModalTemplate isVisible={whoModalOpen} setIsVisible={setWhoModalOpen}>
