@@ -6,7 +6,8 @@ import UserChipText from "./common/UserChipText";
 import { departmentArray, locationOptions, roleOptions } from "../datas/users";
 
 function PCAllocation() {
-  const { userLevelData, updateUserLevelData } = useUserLevel();
+  const { userLevelData, updateUserLevelData, resetUserLevelData } =
+    useUserLevel();
 
   // userLevelData의 부서가 유효한지 검사 후 기본값 설정
   const validDepartment =
@@ -29,6 +30,10 @@ function PCAllocation() {
   const [role, setRole] = useState(defaultRole);
   const [location, setLocation] = useState(defaultLocation);
   const [message, setMessage] = useState("");
+
+  // PC 할당이 필요한 상태인지 확인하는 함수
+  const needsSetup =
+    !userLevelData.department && !userLevelData.role && !userLevelData.location;
 
   const openModal = () => {
     setModalOpen(true);
@@ -63,8 +68,8 @@ function PCAllocation() {
           <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
         </div>
         <div className="flex-[3] flex w-full items-center justify-center h-full">
-          {userLevelData ? (
-            // PC 할당 완료 후, 부서, 역할, 위치 표시 + 톱니바퀴 버튼
+          {!needsSetup ? (
+            // PC 할당 완료된 경우의 UI
             <div className="flex flex-row items-center w-full px-[20px]">
               <div className="flex flex-col w-full gap-y-[10px] items-center px-[10px]">
                 <UserChipText
@@ -96,19 +101,33 @@ function PCAllocation() {
                   green={true}
                 />
               </div>
-              <FiSettings
-                onClick={() => setModalOpen(true)}
-                className="text-onceBlue text-[30px]"
-              />
+              <div className="flex flex-col gap-2">
+                <FiSettings
+                  onClick={() => setModalOpen(true)}
+                  className="text-onceBlue text-[30px] cursor-pointer"
+                />
+                {/* 초기화 버튼 추가 */}
+                {/* <button
+                  onClick={resetUserLevelData}
+                  className="text-red-500 text-sm hover:text-red-700"
+                >
+                  초기화
+                </button> */}
+              </div>
             </div>
           ) : (
-            // 아직 PC 할당되지 않은 경우
-            <button
-              onClick={openModal}
-              className="bg-onceBlue w-[160px] h-[60px]"
-            >
-              <span className="text-white">PC 할당</span>
-            </button>
+            // PC 할당이 필요한 경우의 UI
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-gray-500 text-center">
+                이 PC는 아직 설정되지 않았습니다
+              </div>
+              <button
+                onClick={openModal}
+                className="bg-onceBlue w-[160px] h-[60px]"
+              >
+                <span className="text-white">PC 할당</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -208,16 +208,23 @@ export default function HomeMainCanvas() {
                 <DayChanger />
               </InsideHeaderZone>
               <ToDoZone className="flex-col h-full">
-                {todayTasks.map((task) => (
-                  <ToDo key={task.id} task={task} />
-                ))}
+                {todayTasks.length > 0 ? (
+                  todayTasks.map((task) => <ToDo key={task.id} task={task} />)
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 text-[15px]">
+                    <div className="text-center leading-[26px]">
+                      현재 모바일 앱과 PC용 프로그램을 동시에 개발하여
+                      <br />
+                      서로 연결하는 작업을 진행하고 있습니다.
+                      <br />
+                      일부 기능이 일시적으로 제한되어
+                      <br />
+                      불편을 드리게 된 점 양해 부탁드립니다.
+                    </div>
+                  </div>
+                )}
               </ToDoZone>
-              <OnceOnOffButton
-                text={"업무 추가하기 +"}
-                onClick={() => {
-                  setTaskAddModalOn(true);
-                }}
-              />
+              <OnceOnOffButton text={"업무 추가하기 +"} />
             </div>
           </LeftZone>
           {/* 오른쪽 영역 */}

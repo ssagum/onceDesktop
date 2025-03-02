@@ -17,15 +17,26 @@ const getInitialUserLevelData = () => {
     console.error("로컬 저장소에서 userLevelData 읽기 실패", e);
   }
   return {
-    department: "간호",
-    role: "팀장",
-    departmentLeader: true,
-    location: "안내 데스크",
+    department: "",
+    role: "",
+    departmentLeader: false,
+    location: "",
   };
 };
 
 export function UserLevelProvider({ children }) {
   const [userLevelData, setUserLevelData] = useState(getInitialUserLevelData());
+
+  const resetUserLevelData = () => {
+    const emptyData = {
+      department: "",
+      role: "",
+      departmentLeader: false,
+      location: "",
+    };
+    setUserLevelData(emptyData);
+    localStorage.removeItem("userLevelData");
+  };
 
   const updateUserLevelData = (newData, password) => {
     if (password === adminPassword) {
@@ -54,6 +65,7 @@ export function UserLevelProvider({ children }) {
         updateUserLevelData,
         checkUserPermission,
         checkPermissions: (type) => checkPermissions[type](userLevelData),
+        resetUserLevelData,
       }}
     >
       {children}
