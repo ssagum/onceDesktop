@@ -48,8 +48,7 @@ const Square = ({ title }) => {
   return (
     <div
       className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer"
-      onClick={handleClick}
-    >
+      onClick={handleClick}>
       <div className="w-[40px] h-[50px]">
         {title === "공지등록" && (
           <img src={plus} alt="Logo" className="w-[40px]" />
@@ -236,8 +235,7 @@ export default function HomeMainCanvas() {
                   <InsideHeader title={"알림"} />
                   <button
                     className="text-gray-600 underline"
-                    onClick={() => setShowChatHistory(true)}
-                  >
+                    onClick={() => setShowChatHistory(true)}>
                     더보기
                   </button>
                 </InsideHeaderZone>
@@ -248,8 +246,7 @@ export default function HomeMainCanvas() {
               <RightBottomZone className="w-full flex-row flex">
                 <button
                   onClick={() => setCallIsVisible(true)}
-                  className="w-full flex flex-col bg-white mr-[20px] rounded-xl h-[240px] justify-center items-center"
-                >
+                  className="w-full flex flex-col bg-white mr-[20px] rounded-xl h-[240px] justify-center items-center">
                   <img src={bell} alt="Logo" className="w-[80px] mb-[10px]" />
                   <span className="text-once18">호 출</span>
                 </button>
