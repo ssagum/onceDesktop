@@ -193,14 +193,8 @@ export default function SideBar() {
           </Link>
           <Link to="/schedule">
             <RenderIndex
-              indexValue="원내 일정관리"
-              nowURL={nowURL === "/schedule" ? "원내 일정관리" : nowURL}
-            />
-          </Link>
-          <Link to="/vacation">
-            <RenderIndex
-              indexValue="휴가신청"
-              nowURL={nowURL === "/vacation" ? "휴가신청" : nowURL}
+              indexValue="예약관리"
+              nowURL={nowURL === "/schedule" ? "예약관리" : nowURL}
             />
           </Link>
         </IndexZone>

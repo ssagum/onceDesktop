@@ -6,6 +6,7 @@ import ScheduleCalendar from "../components/Schedule/ScheduleCalendar";
 import ScheduleList from "../components/Schedule/ScheduleList";
 import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import WhoSelector from "../components/common/WhoSelector";
 
 const MainZone = styled.div``;
 const LeftZone = styled.div``;
@@ -15,39 +16,17 @@ const FormZone = styled.div``;
 // 더미 데이터 - 나중에 파이어베이스로 대체 가능
 const teamData = [
   {
-    id: "physicalTherapy",
-    name: "물리치료팀",
-    members: [
-      { id: "member1", name: "이진용", color: "#4F46E5" },
-      { id: "member2", name: "정현", color: "#10B981" },
-      { id: "member3", name: "이기현", color: "#F59E0B" },
-    ],
-  },
-  {
-    id: "nursing",
-    name: "간호팀",
-    members: [
-      { id: "member4", name: "김수현", color: "#EC4899" },
-      { id: "member5", name: "이민정", color: "#8B5CF6" },
-      { id: "member6", name: "박지원", color: "#06B6D4" },
-    ],
-  },
-  {
-    id: "admin",
-    name: "행정팀",
-    members: [
-      { id: "member7", name: "최지훈", color: "#F97316" },
-      { id: "member8", name: "한소희", color: "#14B8A6" },
-      { id: "member9", name: "정우성", color: "#6366F1" },
-    ],
-  },
-  {
     id: "doctor",
-    name: "의사팀",
+    name: "진료",
+    members: [{ id: "member10", name: "박상현", color: "#D946EF" }],
+  },
+  {
+    id: "physicalTherapy",
+    name: "물리치료",
     members: [
-      { id: "member10", name: "강동원", color: "#D946EF" },
-      { id: "member11", name: "손예진", color: "#EF4444" },
-      { id: "member12", name: "조인성", color: "#65A30D" },
+      { id: "member1", name: "이기현", color: "#F59E0B" },
+      { id: "member2", name: "이진용", color: "#4F46E5" },
+      { id: "member3", name: "정현", color: "#10B981" },
     ],
   },
 ];
@@ -132,6 +111,9 @@ const Schedule = () => {
     patientName: "",
     patientNumber: "",
     note: "",
+    vacationType: "휴가", // 휴가, 반차, 경조사
+    startDate: new Date(),
+    endDate: new Date(),
   });
 
   // 수정 모드 관련 상태
@@ -222,9 +204,21 @@ const Schedule = () => {
               startTime: scheduleForm.startTime,
               endTime: scheduleForm.endTime,
               memberId: scheduleForm.memberId,
-              patientName: scheduleForm.patientName,
-              patientNumber: scheduleForm.patientNumber,
+              patientName:
+                scheduleForm.type === "예약" ? scheduleForm.patientName : "",
+              patientNumber:
+                scheduleForm.type === "예약" ? scheduleForm.patientNumber : "",
               note: scheduleForm.note,
+              vacationType:
+                scheduleForm.type === "휴가" ? scheduleForm.vacationType : "",
+              startDate:
+                scheduleForm.type === "휴가"
+                  ? scheduleForm.startDate
+                  : currentDate,
+              endDate:
+                scheduleForm.type === "휴가"
+                  ? scheduleForm.endDate
+                  : currentDate,
             }
           : schedule
       );
@@ -243,9 +237,17 @@ const Schedule = () => {
         type: scheduleForm.type,
         title: scheduleForm.title,
         memberId: scheduleForm.memberId,
-        patientName: scheduleForm.patientName,
-        patientNumber: scheduleForm.patientNumber,
+        patientName:
+          scheduleForm.type === "예약" ? scheduleForm.patientName : "",
+        patientNumber:
+          scheduleForm.type === "예약" ? scheduleForm.patientNumber : "",
         note: scheduleForm.note,
+        vacationType:
+          scheduleForm.type === "휴가" ? scheduleForm.vacationType : "",
+        startDate:
+          scheduleForm.type === "휴가" ? scheduleForm.startDate : currentDate,
+        endDate:
+          scheduleForm.type === "휴가" ? scheduleForm.endDate : currentDate,
       };
 
       setSchedules([...schedules, newSchedule]);
@@ -288,6 +290,9 @@ const Schedule = () => {
       patientName: scheduleToEdit.patientName || "",
       patientNumber: scheduleToEdit.patientNumber || "",
       note: scheduleToEdit.note || "",
+      vacationType: scheduleToEdit.vacationType || "휴가",
+      startDate: scheduleToEdit.startDate || currentDate,
+      endDate: scheduleToEdit.endDate || currentDate,
     });
   };
 
@@ -304,6 +309,9 @@ const Schedule = () => {
       patientName: "",
       patientNumber: "",
       note: "",
+      vacationType: "휴가",
+      startDate: new Date(),
+      endDate: new Date(),
     });
   };
 
@@ -322,230 +330,350 @@ const Schedule = () => {
             appointments={schedules}
           />
           {/* 일정 유형 선택 */}
-          <div className="mb-6">
-            <div className="flex mb-2">
-              <button
-                className={`w-[81px] h-[38px] rounded-[5px] flex items-center justify-center ${
-                  scheduleForm.type === "일반"
-                    ? "bg-[#002D5D] text-white"
-                    : "border border-[#9D9D9C] text-[#9D9D9C]"
-                }`}
-                onClick={() =>
-                  setScheduleForm({ ...scheduleForm, type: "일반" })
-                }
-              >
-                일반
-              </button>
-              <button
-                className={`w-[81px] h-[38px] rounded-[5px] flex items-center justify-center ${
-                  scheduleForm.type === "예약"
-                    ? "bg-[#002D5D] text-white"
-                    : "border border-[#9D9D9C] text-[#9D9D9C]"
-                }`}
-                onClick={() =>
-                  setScheduleForm({ ...scheduleForm, type: "예약" })
-                }
-              >
-                예약
-              </button>
-              <button
-                className={`w-[81px] h-[38px] rounded-[5px] flex items-center justify-center ${
-                  scheduleForm.type === "휴가"
-                    ? "bg-[#002D5D] text-white"
-                    : "border border-[#9D9D9C] text-[#9D9D9C]"
-                }`}
-                onClick={() =>
-                  setScheduleForm({ ...scheduleForm, type: "휴가" })
-                }
-              >
-                휴가
-              </button>
-            </div>
+          <div className="flex flex-row w-full gap-x-2 px-2 mt-2">
+            <button
+              className={`w-full h-[38px] rounded-[5px] flex items-center justify-center ${
+                scheduleForm.type === "예약"
+                  ? "bg-[#002D5D] text-white"
+                  : "border border-[#9D9D9C] text-[#9D9D9C]"
+              }`}
+              onClick={() => setScheduleForm({ ...scheduleForm, type: "예약" })}
+            >
+              예약
+            </button>
+            <button
+              className={`w-full h-[38px] rounded-[5px] flex items-center justify-center ${
+                scheduleForm.type === "휴가"
+                  ? "bg-onceOrange text-white"
+                  : "border border-[#9D9D9C] text-[#9D9D9C]"
+              }`}
+              onClick={() => setScheduleForm({ ...scheduleForm, type: "휴가" })}
+            >
+              휴가
+            </button>
           </div>
 
           {/* 일정 추가 폼 */}
-          <FormZone id="schedule-form" className="bg-white rounded-lg p-4">
-            <h3 className="text-lg font-semibold mb-3">
-              {isEditMode ? "일정 수정" : "일정 추가"}
-            </h3>
+          <FormZone
+            id="schedule-form"
+            className="bg-white rounded-lg mt-4 px-1"
+          >
             <form onSubmit={handleAddSchedule} className="space-y-4">
-              <div className="mb-4">
-                <label className="block mb-1">담당자</label>
-                <div className="relative">
-                  <select
-                    className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none"
-                    value={scheduleForm.memberId}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        memberId: e.target.value,
-                      })
-                    }
-                  >
-                    {selectedTeam.members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg
-                      className="w-4 h-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
+              <div className="mb-4 flex flex-row items-center">
+                <label className="mr-2">
+                  {scheduleForm.type === "휴가" ? "휴가자" : "담당자"}
+                </label>
+                <WhoSelector disabled={scheduleForm.type === "휴가"} />
+              </div>
+
+              {/* 휴가 모드일 때만 휴가 유형 선택 표시 */}
+              {scheduleForm.type === "휴가" && (
+                <div className="mb-4">
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      className={`flex-1 p-2 rounded-[4px] ${
+                        scheduleForm.vacationType === "휴가"
+                          ? "bg-onceOrange text-white"
+                          : "border border-[#9D9D9C] text-[#9D9D9C]"
+                      }`}
+                      onClick={() =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          vacationType: "휴가",
+                          title: "휴가",
+                        })
+                      }
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M19 9l-7 7-7-7"
-                      ></path>
-                    </svg>
+                      휴가
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 p-2 rounded-[4px] ${
+                        scheduleForm.vacationType === "반차"
+                          ? "bg-onceOrange text-white"
+                          : "border border-[#9D9D9C] text-[#9D9D9C]"
+                      }`}
+                      onClick={() =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          vacationType: "반차",
+                          title: "반차",
+                        })
+                      }
+                    >
+                      반차
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 p-2 rounded-[4px] ${
+                        scheduleForm.vacationType === "경조사"
+                          ? "bg-onceOrange text-white"
+                          : "border border-[#9D9D9C] text-[#9D9D9C]"
+                      }`}
+                      onClick={() =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          vacationType: "경조사",
+                          title: "경조사",
+                        })
+                      }
+                    >
+                      경조사
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex space-x-4 mb-4">
-                <div className="w-1/2">
-                  <label className="block mb-1">환자명</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px]"
-                    value={scheduleForm.patientName}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        patientName: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="w-1/2">
-                  <label className="block mb-1">환자번호</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px]"
-                    value={scheduleForm.patientNumber}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        patientNumber: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex space-x-4 mb-4">
-                <div className="w-1/2">
-                  <label className="block mb-1">시작 시간</label>
-                  <div className="relative">
+              {/* 휴가 모드일 때는 환자 정보 필드 숨김 */}
+              {scheduleForm.type !== "휴가" && (
+                <div className="flex space-x-4 mb-4">
+                  <div className="w-1/2">
+                    <label className="block mb-1">환자명</label>
                     <input
-                      type="time"
-                      className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none"
-                      value={scheduleForm.startTime}
+                      type="text"
+                      className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px]"
+                      value={scheduleForm.patientName}
                       onChange={(e) =>
                         setScheduleForm({
                           ...scheduleForm,
-                          startTime: e.target.value,
+                          patientName: e.target.value,
                         })
                       }
-                      min="09:00"
-                      max="17:30"
-                      step="300"
                     />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                      <svg
-                        className="w-5 h-5 text-[#002D5D]"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        ></path>
-                      </svg>
-                    </div>
                   </div>
-                </div>
 
-                <div className="w-1/2">
-                  <label className="block mb-1">종료 시간</label>
-                  <div className="relative">
+                  <div className="w-1/2">
+                    <label className="block mb-1">환자번호</label>
                     <input
-                      type="time"
-                      className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none"
-                      value={scheduleForm.endTime}
+                      type="text"
+                      className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px]"
+                      value={scheduleForm.patientNumber}
                       onChange={(e) =>
                         setScheduleForm({
                           ...scheduleForm,
-                          endTime: e.target.value,
+                          patientNumber: e.target.value,
                         })
                       }
-                      min="09:30"
-                      max="18:00"
-                      step="300"
                     />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                      <svg
-                        className="w-5 h-5 text-[#002D5D]"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        ></path>
-                      </svg>
+                  </div>
+                </div>
+              )}
+
+              {/* 휴가 모드일 때 시작/종료 날짜 선택 */}
+              {scheduleForm.type === "휴가" ? (
+                <>
+                  <div className="flex space-x-4 mb-4">
+                    <div className="w-1/2">
+                      <label className="block mb-1">시작 날짜</label>
+                      <input
+                        type="date"
+                        className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] cursor-not-allowed opacity-70"
+                        value={
+                          scheduleForm.startDate instanceof Date
+                            ? scheduleForm.startDate.toISOString().split("T")[0]
+                            : new Date().toISOString().split("T")[0]
+                        }
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            startDate: new Date(e.target.value),
+                          })
+                        }
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="w-1/2">
+                      <label className="block mb-1">시작 시간</label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none cursor-not-allowed opacity-70"
+                          value={scheduleForm.startTime}
+                          onChange={(e) =>
+                            setScheduleForm({
+                              ...scheduleForm,
+                              startTime: e.target.value,
+                            })
+                          }
+                          min="09:00"
+                          max="17:30"
+                          step="300"
+                          readOnly
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg
+                            className="w-5 h-5 text-[#002D5D] opacity-70"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4 mb-4">
+                    <div className="w-1/2">
+                      <label className="block mb-1">종료 날짜</label>
+                      <input
+                        type="date"
+                        className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] cursor-not-allowed opacity-70"
+                        value={
+                          scheduleForm.endDate instanceof Date
+                            ? scheduleForm.endDate.toISOString().split("T")[0]
+                            : new Date().toISOString().split("T")[0]
+                        }
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            endDate: new Date(e.target.value),
+                          })
+                        }
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="w-1/2">
+                      <label className="block mb-1">종료 시간</label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none cursor-not-allowed opacity-70"
+                          value={scheduleForm.endTime}
+                          onChange={(e) =>
+                            setScheduleForm({
+                              ...scheduleForm,
+                              endTime: e.target.value,
+                            })
+                          }
+                          min="09:30"
+                          max="18:00"
+                          step="300"
+                          readOnly
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg
+                            className="w-5 h-5 text-[#002D5D] opacity-70"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex space-x-4 mb-4">
+                  <div className="w-1/2">
+                    <label className="block mb-1">시작 시간</label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none"
+                        value={scheduleForm.startTime}
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            startTime: e.target.value,
+                          })
+                        }
+                        min="09:00"
+                        max="17:30"
+                        step="300"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg
+                          className="w-5 h-5 text-[#002D5D]"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          ></path>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-1/2">
+                    <label className="block mb-1">종료 시간</label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] appearance-none"
+                        value={scheduleForm.endTime}
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            endTime: e.target.value,
+                          })
+                        }
+                        min="09:30"
+                        max="18:00"
+                        step="300"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg
+                          className="w-5 h-5 text-[#002D5D]"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          ></path>
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex space-x-4 mb-4">
-                <div className="w-1/2">
-                  <label className="block mb-1">제목</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px]"
-                    placeholder="일정 제목"
-                    value={scheduleForm.title}
+              {/* 비고 필드 - 휴가 모드가 아닐 때만 표시 */}
+              {scheduleForm.type !== "휴가" && (
+                <div className="mb-4">
+                  <label className="block mb-1">비고</label>
+                  <textarea
+                    className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] h-[90px]"
+                    placeholder="연락처나 특이사항이 있으면 입력해주세요"
+                    value={scheduleForm.note}
                     onChange={(e) =>
                       setScheduleForm({
                         ...scheduleForm,
-                        title: e.target.value,
+                        note: e.target.value,
                       })
                     }
-                    required
-                  />
+                  ></textarea>
                 </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1">비고</label>
-                <textarea
-                  className="w-full p-2 bg-[#FCFAFA] border border-[#9D9D9C] rounded-[4px] h-[100px]"
-                  placeholder="추가 내용을 입력하세요"
-                  value={scheduleForm.note}
-                  onChange={(e) =>
-                    setScheduleForm({
-                      ...scheduleForm,
-                      note: e.target.value,
-                    })
-                  }
-                ></textarea>
-              </div>
+              )}
 
               <div className="flex space-x-4">
                 {isEditMode ? (
@@ -559,17 +687,27 @@ const Schedule = () => {
                     </button>
                     <button
                       type="submit"
-                      className="w-[162px] h-[40px] bg-[#002D5D] text-white rounded-[5px] font-normal"
+                      className={`w-[162px] h-[40px] ${
+                        scheduleForm.type === "휴가"
+                          ? "bg-gray-400 cursor-not-allowed"
+                          : "bg-[#002D5D]"
+                      } text-white rounded-[5px] font-normal`}
+                      disabled={scheduleForm.type === "휴가"}
                     >
-                      수정하기
+                      {scheduleForm.type === "휴가" ? "수정 불가" : "수정하기"}
                     </button>
                   </>
                 ) : (
                   <button
                     type="submit"
-                    className="w-[162px] h-[40px] bg-[#002D5D] text-white rounded-[5px] font-normal"
+                    className={`w-full h-[40px] ${
+                      scheduleForm.type === "휴가"
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-[#002D5D]"
+                    } text-white rounded-[5px] font-normal`}
+                    disabled={scheduleForm.type === "휴가"}
                   >
-                    등록하기
+                    {scheduleForm.type === "휴가" ? "읽기 전용" : "등록하기"}
                   </button>
                 )}
               </div>

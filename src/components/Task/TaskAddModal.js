@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import ModalTemplate from "../common/ModalTemplate";
 import { cancel } from "../../assets";
@@ -22,13 +22,17 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
   const [title, setTitle] = useState(task?.title || "");
   const [writer, setWriter] = useState(task?.writer || "");
   const [assignee, setAssignee] = useState(task?.assignee || "");
-  const [category, setCategory] = useState(task?.category || "일반");
+  const [category, setCategory] = useState(task?.category || "1회성");
   const [priority, setPriority] = useState(task?.priority || "중");
   const [startDate, setStartDate] = useState(
-    task?.startDate ? format(new Date(task.startDate), "yyyy/MM/dd") : ""
+    task?.startDate
+      ? format(new Date(task.startDate), "yyyy/MM/dd")
+      : format(new Date(), "yyyy/MM/dd")
   );
   const [endDate, setEndDate] = useState(
-    task?.endDate ? format(new Date(task.endDate), "yyyy/MM/dd") : ""
+    task?.endDate
+      ? format(new Date(task.endDate), "yyyy/MM/dd")
+      : format(new Date(), "yyyy/MM/dd")
   );
 
   // 주기 변경 시 요일 자동 선택
@@ -61,7 +65,7 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
       >
         <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
           <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
-            <span className="text-[34px] font-bold">&lt; 업무</span>
+            <span className="text-[34px] font-bold">업무</span>
             <img
               onClick={() => setIsVisible(false)}
               className="w-[30px]"
@@ -72,14 +76,16 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
           </ModalHeaderZone>
           <ModalContentZone className="flex flex-col h-full py-[20px] w-full">
             <div className="flex-[5] flex flex-row w-full items-center justify-center h-full">
-              <JcyCalendar
-                preStartDay={startDate}
-                preEndDay={endDate}
-                setTargetStartDay={setStartDate}
-                setTargetEndDay={setEndDate}
-                lockDates={!isEdit}
-                isEdit={isEdit}
-              />
+              <div className="flex flex-col items-center">
+                <JcyCalendar
+                  preStartDay={startDate}
+                  preEndDay={endDate}
+                  setTargetStartDay={setStartDate}
+                  setTargetEndDay={setEndDate}
+                  lockDates={false}
+                  isEdit={true}
+                />
+              </div>
               <InforationZone className="w-full flex flex-col px-[20px]">
                 <input
                   type="text"
@@ -121,23 +127,22 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                   <div className="flex flex-row gap-x-[10px] w-full">
                     <OnceOnOffButton
                       className="h-[40px] w-full rounded-md"
-                      text={"일반"}
-                      on={category === "일반"}
-                      onClick={() => setCategory("일반")}
+                      text={"1회성 업무"}
+                      on={category === "1회성"}
+                      onClick={() => setCategory("1회성")}
                     />
                     <OnceOnOffButton
                       className="h-[40px] w-full rounded-md"
-                      text={"이벤트"}
-                      on={category === "이벤트"}
-                      onClick={() => setCategory("이벤트")}
+                      text={"반복성 업무"}
+                      on={category === "반복성"}
+                      onClick={() => setCategory("반복성")}
                     />
                     <OnceOnOffButton
                       className="h-[40px] w-full rounded-md"
-                      text={"기타"}
-                      on={category === "기타"}
-                      onClick={() => setCategory("기타")}
+                      text={"이벤트성 업무"}
+                      on={category === "이벤트성"}
+                      onClick={() => setCategory("이벤트성")}
                     />
-                    <div className="w-full" />
                   </div>
                 </InfoRow>
                 <InfoRow className="flex flex-row mb-[10px]">
@@ -159,71 +164,168 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                   <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
                     날짜:
                   </label>
-                  <div className="flex flex-row w-full items-center gap-x-[10px]">
-                    <input
-                      type="text"
-                      value={startDate}
-                      readOnly
-                      placeholder="시작일 (YYYY/MM/DD)"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                    <span>부터</span>
-                    <input
-                      type="text"
-                      value={endDate}
-                      readOnly
-                      placeholder="종료일 (YYYY/MM/DD)"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    주기:
-                  </label>
-                  <div className="flex flex-row gap-x-[10px] w-full">
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매일"}
-                      on={selectedCycle === "매일"}
-                      onClick={() => handleCycleChange("매일")}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매주"}
-                      on={selectedCycle === "매주"}
-                      onClick={() => handleCycleChange("매주")}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"격주"}
-                      on={selectedCycle === "격주"}
-                      onClick={() => handleCycleChange("격주")}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매월"}
-                      on={selectedCycle === "매월"}
-                      onClick={() => handleCycleChange("매월")}
-                    />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    요일:
-                  </label>
-                  <div className="flex flex-row gap-x-[10px] w-full">
-                    {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
-                      <DayToggle
-                        key={day}
-                        text={day}
-                        isOn={selectedDays.includes(day)}
-                        onClick={() => toggleDay(day)}
-                        disabled={selectedCycle === "매일"}
+                  <div className="flex flex-col w-full">
+                    <div className="flex flex-row items-center gap-x-[10px]">
+                      <input
+                        type="text"
+                        value={startDate}
+                        readOnly
+                        placeholder="시작일 (YYYY/MM/DD)"
+                        className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
                       />
-                    ))}
+                      <span>부터</span>
+                      <input
+                        type="text"
+                        value={endDate}
+                        readOnly
+                        placeholder="종료일 (YYYY/MM/DD)"
+                        className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+                      />
+                    </div>
                   </div>
                 </InfoRow>
+                {category === "반복성" && (
+                  <InfoRow className="flex flex-row mb-[10px]">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      주기:
+                    </label>
+                    <div className="flex flex-row gap-x-[10px] w-full">
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매일"}
+                        on={selectedCycle === "매일"}
+                        onClick={() => handleCycleChange("매일")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매주"}
+                        on={selectedCycle === "매주"}
+                        onClick={() => handleCycleChange("매주")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"격주"}
+                        on={selectedCycle === "격주"}
+                        onClick={() => handleCycleChange("격주")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매월"}
+                        on={selectedCycle === "매월"}
+                        onClick={() => handleCycleChange("매월")}
+                      />
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "1회성" && (
+                  <InfoRow className="flex flex-row mb-[10px]">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      주기:
+                    </label>
+                    <div className="flex items-center text-gray-500 italic">
+                      1회성 업무는 주기 설정이 필요하지 않습니다
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "이벤트성" && (
+                  <InfoRow className="flex flex-row mb-[10px]">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      주기:
+                    </label>
+                    <div className="flex flex-row gap-x-[10px] w-full">
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매일"}
+                        on={selectedCycle === "매일"}
+                        onClick={() => handleCycleChange("매일")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매주"}
+                        on={selectedCycle === "매주"}
+                        onClick={() => handleCycleChange("매주")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"격주"}
+                        on={selectedCycle === "격주"}
+                        onClick={() => handleCycleChange("격주")}
+                      />
+                      <OnceOnOffButton
+                        className="h-[40px] w-full rounded-md"
+                        text={"매월"}
+                        on={selectedCycle === "매월"}
+                        onClick={() => handleCycleChange("매월")}
+                      />
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "반복성" && selectedCycle !== "매일" && (
+                  <InfoRow className="flex flex-row">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      요일:
+                    </label>
+                    <div className="flex flex-row gap-x-[10px] w-full">
+                      {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
+                        <DayToggle
+                          key={day}
+                          text={day}
+                          isOn={selectedDays.includes(day)}
+                          onClick={() => toggleDay(day)}
+                          disabled={selectedCycle === "매일"}
+                        />
+                      ))}
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "1회성" && (
+                  <InfoRow className="flex flex-row">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      요일:
+                    </label>
+                    <div className="flex items-center text-gray-500 italic">
+                      1회성 업무는 요일 설정이 필요하지 않습니다
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "이벤트성" && selectedCycle !== "매일" && (
+                  <InfoRow className="flex flex-row">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      요일:
+                    </label>
+                    <div className="flex flex-row gap-x-[10px] w-full">
+                      {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
+                        <DayToggle
+                          key={day}
+                          text={day}
+                          isOn={selectedDays.includes(day)}
+                          onClick={() => toggleDay(day)}
+                          disabled={selectedCycle === "매일"}
+                        />
+                      ))}
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "이벤트성" && selectedCycle === "매일" && (
+                  <InfoRow className="flex flex-row">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      요일:
+                    </label>
+                    <div className="flex items-center text-gray-500 italic">
+                      매일 수행하는 업무는 요일 설정이 필요하지 않습니다
+                    </div>
+                  </InfoRow>
+                )}
+                {category === "반복성" && selectedCycle === "매일" && (
+                  <InfoRow className="flex flex-row">
+                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
+                      요일:
+                    </label>
+                    <div className="flex items-center text-gray-500 italic">
+                      매일 수행하는 업무는 요일 설정이 필요하지 않습니다
+                    </div>
+                  </InfoRow>
+                )}
               </InforationZone>
             </div>
             <div className="flex-[4] flex border my-[20px] bg-textBackground rounded-lg"></div>
