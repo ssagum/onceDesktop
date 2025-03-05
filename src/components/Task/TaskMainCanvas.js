@@ -424,8 +424,8 @@ function TaskMainCanvas() {
               text={"업무 추가하기 +"}
               on={true}
               onClick={() => {
-                alert("현재 제한된 기능입니다.");
-                // setTaskAddModalOn(true); // 기존 기능 주석 처리
+                // alert("현재 제한된 기능입니다.");
+                setTaskAddModalOn(true); // 기존 기능 주석 처리
               }}
             />
           </div>

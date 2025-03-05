@@ -33,7 +33,8 @@ const RenderIndex = ({ indexValue, nowURL }) => {
     <div className="mb-[50px] w-full">
       <p
         className="text-[16px] color-[#162D66] font-semibold"
-        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}>
+        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}
+      >
         {indexValue}
       </p>
     </div>
@@ -108,36 +109,6 @@ export default function SideBar() {
       audio.play();
     } catch (error) {}
   };
-
-  // Firebase 업데이트를 감지하는 함수 추가
-  useEffect(() => {
-    // 여기에 특정 컬렉션을 감시하는 코드 추가
-    // 예: calls 컬렉션의 업데이트를 감시
-    const q = query(
-      collection(db, "calls"),
-      orderBy("createdAt", "desc"),
-      limit(5)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          // 새 문서가 추가되었을 때
-          const data = change.doc.data();
-          const audio = new Audio(notification);
-          audio.play();
-
-          // 메인 프로세스에 알림 전송 (preload.js에 API 추가 필요)
-          if (window.electron && window.electron.sendNotification) {
-            window.electron.sendNotification(`새 메시지: ${data.message}`);
-          }
-        }
-      });
-    });
-
-    // 컴포넌트 언마운트 시 리스너 해제
-    return () => unsubscribe();
-  }, []);
 
   return (
     <div className="flex flex-col h-full justify-center bg-onceBackground w-[250px] min-h-[900px] py-[20px]">
@@ -218,6 +189,18 @@ export default function SideBar() {
             <RenderIndex
               indexValue="업무분장"
               nowURL={nowURL === "/task" ? "업무분장" : nowURL}
+            />
+          </Link>
+          <Link to="/schedule">
+            <RenderIndex
+              indexValue="원내 일정관리"
+              nowURL={nowURL === "/schedule" ? "원내 일정관리" : nowURL}
+            />
+          </Link>
+          <Link to="/vacation">
+            <RenderIndex
+              indexValue="휴가신청"
+              nowURL={nowURL === "/vacation" ? "휴가신청" : nowURL}
             />
           </Link>
         </IndexZone>
