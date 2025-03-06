@@ -8,6 +8,7 @@ import TaskRecordModal from "./TaskRecordModal";
 import { format } from "date-fns";
 import DayToggle from "../common/DayToggle";
 import PriorityToggle from "../common/PriorityToggle";
+import DepartmentRoleSelector from "../common/DepartmentRoleSelector";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div``;
@@ -36,6 +37,48 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
   );
   // 무한 종료일 (반복성 업무용)
   const INFINITE_END_DATE = "2099/12/31";
+
+  // 입력 필드 초기화 함수
+  const resetFields = () => {
+    if (isEdit && task) {
+      // 수정 모드일 경우 task 데이터로 초기화
+      setSelectedDays(task.days || []);
+      setSelectedCycle(task.cycle || "매일");
+      setTitle(task.title || "");
+      setWriter(task.writer || "");
+      setAssignee(task.assignee || "");
+      setCategory(task.category || "1회성");
+      setPriority(task.priority || "중");
+      setStartDate(
+        task.startDate
+          ? format(new Date(task.startDate), "yyyy/MM/dd")
+          : format(new Date(), "yyyy/MM/dd")
+      );
+      setEndDate(
+        task.endDate
+          ? format(new Date(task.endDate), "yyyy/MM/dd")
+          : format(new Date(), "yyyy/MM/dd")
+      );
+    } else {
+      // 새 업무 추가 모드일 경우 빈 값으로 초기화
+      setSelectedDays([]);
+      setSelectedCycle("매일");
+      setTitle("");
+      setWriter("");
+      setAssignee("");
+      setCategory("1회성");
+      setPriority("중");
+      setStartDate(format(new Date(), "yyyy/MM/dd"));
+      setEndDate(format(new Date(), "yyyy/MM/dd"));
+    }
+  };
+
+  // 모달 닫기 핸들러
+  const handleCloseModal = () => {
+    // 모달이 닫힐 때 입력 필드 초기화
+    resetFields();
+    setIsVisible(false);
+  };
 
   // 업무 분류 변경 시 날짜 설정 로직
   useEffect(() => {
@@ -127,14 +170,14 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
     <>
       <ModalTemplate
         isVisible={isVisible}
-        setIsVisible={setIsVisible}
+        setIsVisible={handleCloseModal}
         showCancel={false}
       >
         <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
           <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
             <span className="text-[34px] font-bold">업무</span>
             <img
-              onClick={() => setIsVisible(false)}
+              onClick={handleCloseModal}
               className="w-[30px]"
               src={cancel}
               alt="닫기"
@@ -168,24 +211,21 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                     <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
                       작성자:
                     </label>
-                    <input
-                      type="text"
+                    <DepartmentRoleSelector
                       value={writer}
-                      onChange={(e) => setWriter(e.target.value)}
-                      placeholder="작성자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+                      onChange={setWriter}
+                      label="작성자 선택"
+                      onlyLeaders={true}
                     />
                   </div>
                   <div className="flex flex-row">
                     <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
                       담당자:
                     </label>
-                    <input
-                      type="text"
+                    <DepartmentRoleSelector
                       value={assignee}
-                      onChange={(e) => setAssignee(e.target.value)}
-                      placeholder="담당자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+                      onChange={setAssignee}
+                      label="담당 선택"
                     />
                   </div>
                 </InfoRow>
