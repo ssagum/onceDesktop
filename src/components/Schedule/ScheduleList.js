@@ -11,6 +11,7 @@ import {
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
+import { useToast } from "../../contexts/ToastContext";
 
 const ScheduleList = ({
   currentDate,
@@ -22,6 +23,9 @@ const ScheduleList = ({
 }) => {
   const [filteredSchedules, setFilteredSchedules] = useState([]);
   const [activeMember, setActiveMember] = useState(null);
+
+  // useToast 훅 사용
+  const { showToast } = useToast();
 
   // 선택된 날짜가 변경될 때 필터링된 일정 업데이트
   useEffect(() => {
@@ -58,7 +62,7 @@ const ScheduleList = ({
     if (onAddSchedule) {
       onAddSchedule(memberId);
     } else {
-      alert("일정 추가 기능이 아직 구현되지 않았습니다.");
+      showToast("일정 추가 기능이 아직 구현되지 않았습니다.", "info");
     }
   };
 
@@ -67,7 +71,7 @@ const ScheduleList = ({
     if (onEditSchedule) {
       onEditSchedule(scheduleId);
     } else {
-      alert("일정 수정 기능이 아직 구현되지 않았습니다.");
+      showToast("일정 수정 기능이 아직 구현되지 않았습니다.", "info");
     }
   };
 
@@ -76,7 +80,7 @@ const ScheduleList = ({
     if (onDeleteSchedule) {
       onDeleteSchedule(scheduleId);
     } else {
-      alert("일정 삭제 기능이 아직 구현되지 않았습니다.");
+      showToast("일정 삭제 기능이 아직 구현되지 않았습니다.", "info");
     }
   };
 
@@ -106,8 +110,7 @@ const ScheduleList = ({
             id={`member-${member.id}`}
             className={`mb-8 ${
               activeMember && activeMember !== member.id ? "opacity-50" : ""
-            }`}
-          >
+            }`}>
             <div className="border-2 border-[#002D5D] rounded-[4px] p-2 mb-4 w-full text-center">
               <h3 className="font-medium">{member.name}</h3>
             </div>
@@ -119,8 +122,7 @@ const ScheduleList = ({
                   <div
                     key={schedule.id}
                     className="w-full rounded-[7px] p-2 relative"
-                    style={{ backgroundColor: typeColors[schedule.type] }}
-                  >
+                    style={{ backgroundColor: typeColors[schedule.type] }}>
                     <div className="flex items-center justify-between">
                       <span className="text-white font-medium">
                         {schedule.title}
@@ -128,15 +130,13 @@ const ScheduleList = ({
                       <div className="flex space-x-1">
                         <button
                           onClick={() => handleEditSchedule(schedule.id)}
-                          className="text-white hover:text-gray-200"
-                        >
+                          className="text-white hover:text-gray-200">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             className="h-4 w-4"
                             fill="none"
                             viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
+                            stroke="currentColor">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -147,15 +147,13 @@ const ScheduleList = ({
                         </button>
                         <button
                           onClick={() => handleDeleteSchedule(schedule.id)}
-                          className="text-white hover:text-gray-200"
-                        >
+                          className="text-white hover:text-gray-200">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             className="h-4 w-4"
                             fill="none"
                             viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
+                            stroke="currentColor">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -190,8 +188,7 @@ const ScheduleList = ({
 
               <div
                 className="w-full h-[32px] border border-[#002D5D] rounded-[8px] flex items-center justify-center cursor-pointer hover:bg-gray-50"
-                onClick={() => handleAddSchedule(member.id)}
-              >
+                onClick={() => handleAddSchedule(member.id)}>
                 <span className="text-[#002D5D] text-xs">추가하기 +</span>
               </div>
             </div>

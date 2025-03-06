@@ -22,6 +22,8 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { notification } from "./assets/sound";
+// Toast Provider 추가
+import { ToastProvider } from "./contexts/ToastContext";
 // TODO: Add SDKs for Firebase products that you want to use
 
 const App = () => {
@@ -50,22 +52,24 @@ const App = () => {
   // }, []);
 
   return (
-    <div className="bg-primary w-full overflow-hidden bg-onceBackground">
-      {/* 헤더부분 */}
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/Notice" element={<Notice />} />
-        <Route path="/Education" element={<Education />} />
-        <Route path="/Warehouse" element={<Warehouse />} />
-        <Route path="/write" element={<Write />} />
-        <Route path="/Call" element={<Call />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/task" element={<Task />} />
-        <Route path="/schedule" element={<Schedule />} />
-        <Route path="/vacation" element={<Vacation />} />
-      </Routes>
-      {/* <ChatBot /> */}
-    </div>
+    <ToastProvider>
+      <div className="bg-primary w-full overflow-hidden bg-onceBackground">
+        {/* 헤더부분 */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/Notice" element={<Notice />} />
+          <Route path="/Education" element={<Education />} />
+          <Route path="/Warehouse" element={<Warehouse />} />
+          <Route path="/write" element={<Write />} />
+          <Route path="/Call" element={<Call />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/task" element={<Task />} />
+          <Route path="/schedule" element={<Schedule />} />
+          <Route path="/vacation" element={<Vacation />} />
+        </Routes>
+        {/* <ChatBot /> */}
+      </div>
+    </ToastProvider>
   );
 };
 

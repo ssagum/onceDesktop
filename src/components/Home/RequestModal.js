@@ -11,6 +11,7 @@ import { db } from "../../firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import WhereSelector from "../common/WhereSelector.js";
 import PriorityToggle from "../common/PriorityToggle";
+import { useToast } from "../../contexts/ToastContext";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -25,6 +26,9 @@ export default function RequestModal({ isVisible, setIsVisible }) {
   const [priority, setPriority] = useState("중");
   const [title, setTitle] = useState("");
 
+  // useToast 훅 사용
+  const { showToast } = useToast();
+
   // 호출 메시지 전송 함수
   const sendCallMessage = async () => {
     console.log("호출 시작:", {
@@ -34,7 +38,7 @@ export default function RequestModal({ isVisible, setIsVisible }) {
     });
 
     if (!receiverId) {
-      alert("수신 부서를 선택해주세요.");
+      showToast("수신 부서를 선택해주세요.", "error");
       return;
     }
 
@@ -62,13 +66,13 @@ export default function RequestModal({ isVisible, setIsVisible }) {
       await addDoc(collection(db, "calls"), callData);
       console.log("호출 메시지 저장 성공");
 
-      alert(`${receiverId} 호출하였습니다.`);
+      showToast(`${receiverId} 호출하였습니다.`, "success");
       setIsVisible(false);
       setMessage("");
       setTitle("");
     } catch (error) {
       console.error("호출 에러 상세 정보:", error);
-      alert("호출 전송에 실패했습니다.");
+      showToast("호출 전송에 실패했습니다.", "error");
     }
   };
 
@@ -81,8 +85,7 @@ export default function RequestModal({ isVisible, setIsVisible }) {
       isVisible={isVisible}
       setIsVisible={setIsVisible}
       showCancel={false}
-      modalClassName="rounded-xl"
-    >
+      modalClassName="rounded-xl">
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <span className="text-[34px] font-bold">요청</span>

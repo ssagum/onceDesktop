@@ -257,13 +257,11 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
           <svg
             className="absolute right-3 top-3 w-5 h-5 text-[#9D9D9C]"
             fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+            viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M12.9 14.32a8 8 0 111.414-1.414l4.387 4.387a1 1 0 01-1.414 1.414l-4.387-4.387zM14 8a6 6 0 11-12 0 6 6 0 0112 0z"
-              clipRule="evenodd"
-            ></path>
+              clipRule="evenodd"></path>
           </svg>
         </div>
         <span className="text-once16 font-semibold">
@@ -287,7 +285,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
       <JcyTable
         columns={columns}
         columnWidths="grid-cols-7"
-        data={sortedData.slice((currentPage - 1) * 10, currentPage * 10)}
+        data={sortedData}
         rowClassName={(index) => (index % 2 === 0 ? "bg-gray-100" : "bg-white")}
         renderRow={(row, index) => (
           <StockRow
@@ -301,8 +299,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
       <ModalTemplate
         isVisible={isFilterModalOn}
         setIsVisible={setIsFilterModalOn}
-        showCancel={false}
-      >
+        showCancel={false}>
         <div className="flex flex-col w-[700px] h-[600px] items-center py-[40px] justify-between">
           {/* 분류 선택 */}
           <SectionZone className="flex flex-col">
@@ -326,8 +323,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("사무용 소모품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   사무용 소모품
                 </button>
                 <button
@@ -336,8 +332,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("사무용품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   사무용품
                 </button>
                 <button
@@ -346,8 +341,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("의료용 소모품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   의료용 소모품
                 </button>
                 <button
@@ -356,8 +350,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("의료용품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   의료용품
                 </button>
                 <button
@@ -366,8 +359,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("마케탕용품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   마케탕용품
                 </button>
               </div>
@@ -378,8 +370,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("마케팅 소모품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   마케팅 소모품
                 </button>
                 <button
@@ -388,8 +379,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("기타용품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   기타용품
                 </button>
                 <button
@@ -398,8 +388,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedCategoryFilters.includes("기타 소모품")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   기타 소모품
                 </button>
               </div>
@@ -419,8 +408,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedDepartmentFilters.includes("진료")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   진료
                 </button>
                 <button
@@ -429,8 +417,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedDepartmentFilters.includes("물리치료")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   물리치료
                 </button>
                 <button
@@ -439,8 +426,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedDepartmentFilters.includes("원장님")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   원장님
                 </button>
                 <button
@@ -449,8 +435,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedDepartmentFilters.includes("간호")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   간호
                 </button>
                 <button
@@ -459,8 +444,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedDepartmentFilters.includes("방사선")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   방사선
                 </button>
               </div>
@@ -480,8 +464,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedStatusFilters.includes("주문 필요")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   주문 필요
                 </button>
                 <button
@@ -490,8 +473,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedStatusFilters.includes("승인")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   승인
                 </button>
                 <button
@@ -500,8 +482,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedStatusFilters.includes("주문 완료")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   주문 완료
                 </button>
                 <button
@@ -510,8 +491,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedStatusFilters.includes("입고 중")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   입고 중
                 </button>
                 <button
@@ -520,8 +500,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                     selectedStatusFilters.includes("입고 완료")
                       ? "bg-blue-200 border-blue-500"
                       : "border-gray-400"
-                  }`}
-                >
+                  }`}>
                   입고 완료
                 </button>
               </div>

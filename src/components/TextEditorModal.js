@@ -18,6 +18,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import UserChipText from "./common/UserChipText";
 import { useUserLevel } from "../utils/UserLevelContext";
+import { useToast } from "../contexts/ToastContext";
 
 const COLORS = [
   { label: "검정", value: "#000000" },
@@ -91,6 +92,9 @@ const TextEditorModal = ({
   const [selectedDepartment, setSelectedDepartment] = useState(
     DEPARTMENTS[0].value
   );
+
+  // useToast 훅 사용
+  const { showToast } = useToast();
 
   // 초기 제목과 내용 설정
   useEffect(() => {
@@ -255,53 +259,53 @@ const TextEditorModal = ({
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        // 10MB 제한
-        alert("파일 크기는 10MB를 초과할 수 없습니다.");
-        return;
-      }
+    if (!file) return;
 
-      try {
-        const fileRef = ref(storage, `files/${Date.now()}_${file.name}`);
-        await uploadBytes(fileRef, file);
-        const downloadURL = await getDownloadURL(fileRef);
+    if (file.size > 10 * 1024 * 1024) {
+      // 10MB
+      showToast("파일 크기는 10MB를 초과할 수 없습니다.", "error");
+      return;
+    }
 
-        // 파일 링크 생성
-        const fileElement = document.createElement("div");
-        fileElement.style.cssText = `
-          display: flex;
-          align-items: center;
-          padding: 10px;
-          margin: 5px 0;
-          background-color: #f8f9fa;
-          border-radius: 4px;
-          border: 1px solid #dee2e6;
-        `;
+    try {
+      const fileRef = ref(storage, `files/${Date.now()}_${file.name}`);
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
 
-        const fileIcon = document.createElement("span");
-        fileIcon.innerHTML = "📎";
-        fileIcon.style.marginRight = "8px";
+      // 파일 링크 생성
+      const fileElement = document.createElement("div");
+      fileElement.style.cssText = `
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        margin: 5px 0;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+      `;
 
-        const fileLink = document.createElement("a");
-        fileLink.href = downloadURL;
-        fileLink.textContent = file.name;
-        fileLink.target = "_blank";
-        fileLink.style.color = "#007bff";
-        fileLink.style.textDecoration = "none";
+      const fileIcon = document.createElement("span");
+      fileIcon.innerHTML = "📎";
+      fileIcon.style.marginRight = "8px";
 
-        fileElement.appendChild(fileIcon);
-        fileElement.appendChild(fileLink);
+      const fileLink = document.createElement("a");
+      fileLink.href = downloadURL;
+      fileLink.textContent = file.name;
+      fileLink.target = "_blank";
+      fileLink.style.color = "#007bff";
+      fileLink.style.textDecoration = "none";
 
-        document.execCommand("insertHTML", false, fileElement.outerHTML);
+      fileElement.appendChild(fileIcon);
+      fileElement.appendChild(fileLink);
 
-        requestAnimationFrame(() => {
-          setContent(editorRef.current.innerHTML);
-        });
-      } catch (error) {
-        console.error("파일 업로드 실패:", error);
-        alert("파일 업로드에 실패했습니다.");
-      }
+      document.execCommand("insertHTML", false, fileElement.outerHTML);
+
+      requestAnimationFrame(() => {
+        setContent(editorRef.current.innerHTML);
+      });
+    } catch (error) {
+      console.error("File upload error:", error);
+      showToast("파일 업로드에 실패했습니다.", "error");
     }
   };
 
@@ -388,7 +392,7 @@ const TextEditorModal = ({
 
   const handleSaveContent = async () => {
     if (!title.trim()) {
-      alert("제목을 입력해주세요.");
+      showToast("제목을 입력해주세요.", "error");
       return;
     }
 
@@ -410,9 +414,11 @@ const TextEditorModal = ({
       await addDoc(collection(db, "notices"), noticeData);
       setTitle("");
       handleSave();
+
+      showToast("공지사항이 저장되었습니다.", "success");
     } catch (error) {
       console.error("공지사항 저장 실패:", error);
-      alert("공지사항 저장에 실패했습니다.");
+      showToast("공지사항 저장에 실패했습니다.", "error");
     }
   };
 
@@ -439,8 +445,7 @@ const TextEditorModal = ({
             <select
               value={selectedDepartment}
               onChange={(e) => setSelectedDepartment(e.target.value)}
-              style={selectStyle}
-            >
+              style={selectStyle}>
               {DEPARTMENTS.map((department) => (
                 <option key={department.value} value={department.value}>
                   {department.label}
@@ -453,29 +458,25 @@ const TextEditorModal = ({
               <button
                 onClick={() => execCommand("bold")}
                 style={buttonStyle}
-                title="굵게"
-              >
+                title="굵게">
                 <FaBold />
               </button>
               <button
                 onClick={() => execCommand("italic")}
                 style={buttonStyle}
-                title="기울임"
-              >
+                title="기울임">
                 <FaItalic />
               </button>
               <button
                 onClick={() => execCommand("underline")}
                 style={buttonStyle}
-                title="밑줄"
-              >
+                title="밑줄">
                 <FaUnderline />
               </button>
               <button
                 onClick={() => execCommand("strikeThrough")}
                 style={buttonStyle}
-                title="취소선"
-              >
+                title="취소선">
                 <FaStrikethrough />
               </button>
             </div>
@@ -483,22 +484,19 @@ const TextEditorModal = ({
               <button
                 onClick={() => execCommand("justifyLeft")}
                 style={buttonStyle}
-                title="왼쪽 정렬"
-              >
+                title="왼쪽 정렬">
                 <FaAlignLeft />
               </button>
               <button
                 onClick={() => execCommand("justifyCenter")}
                 style={buttonStyle}
-                title="가운데 정렬"
-              >
+                title="가운데 정렬">
                 <FaAlignCenter />
               </button>
               <button
                 onClick={() => execCommand("justifyRight")}
                 style={buttonStyle}
-                title="오른쪽 정렬"
-              >
+                title="오른쪽 정렬">
                 <FaAlignRight />
               </button>
             </div>
@@ -519,8 +517,7 @@ const TextEditorModal = ({
               <button
                 onClick={() => document.getElementById("imageUpload").click()}
                 style={buttonStyle}
-                title="이미지 삽입"
-              >
+                title="이미지 삽입">
                 <FaImage />
               </button>
             </div>

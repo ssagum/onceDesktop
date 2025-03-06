@@ -1,6 +1,12 @@
 import React from "react";
 
-const SelectableButton = ({ field, value, onChange, className = "" }) => {
+const SelectableButton = ({
+  field,
+  value,
+  onChange,
+  className = "",
+  disabled = false,
+}) => {
   const isSelected = field === value;
 
   return (
@@ -9,9 +15,11 @@ const SelectableButton = ({ field, value, onChange, className = "" }) => {
         isSelected
           ? "bg-onceBlue text-white border-onceBlue"
           : "border-gray-400 bg-white text-black"
-      } ${className}`}
-      onClick={() => onChange(value)}
-    >
+      } ${disabled ? "opacity-60 cursor-not-allowed" : ""} ${className}`}
+      onClick={() => {
+        if (!disabled) onChange(value);
+      }}
+      disabled={disabled}>
       {value}
     </button>
   );

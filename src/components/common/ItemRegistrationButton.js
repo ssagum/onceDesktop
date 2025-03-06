@@ -5,10 +5,11 @@ export default function ItemRegistrationButton({
   formData,
   requiredFields,
   onClick,
+  showToast,
 }) {
   const getMissingFields = () => {
     return requiredFields.filter((field) => {
-      if (field === "writer" || field === "requester") {
+      if (field === "writer") {
         return !formData[field] || formData[field].length === 0;
       }
       return !formData[field];
@@ -22,19 +23,25 @@ export default function ItemRegistrationButton({
         itemName: "품명",
         category: "분류",
         price: "단가",
-        stock: "현재재고",
+        quantity: "현재재고",
         writer: "작성자",
-        requester: "요청자",
         department: "부서",
+        location: "위치",
       };
 
-      alert(
-        `다음 필수 항목을 입력하세요: ${missingFields
-          .map((f) => fieldNames[f])
-          .join(", ")}`
-      );
-      return;
+      const missingFieldsString = missingFields
+        .map((field) => fieldNames[field] || field)
+        .join(", ");
+
+      if (showToast) {
+        showToast(
+          `필수 입력 필드를 모두 입력해주세요: ${missingFieldsString}`,
+          "error"
+        );
+      }
+      turn;
     }
+
     onClick();
   };
 
@@ -47,8 +54,7 @@ export default function ItemRegistrationButton({
         isValid
           ? "bg-onceBlue text-white border-onceBlue"
           : "bg-onceWhite text-onceBlue border-onceBlue"
-      }`}
-    >
+      }`}>
       {mode === "신규" ? "등록하기" : "수정하기"}
     </button>
   );

@@ -10,6 +10,7 @@ import ModeToggle from "../ModeToggle";
 import { db } from "../../firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import WhereSelector from "../common/WhereSelector.js";
+import { useToast } from "../../contexts/ToastContext";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -22,6 +23,9 @@ export default function CallModal({ isVisible, setIsVisible }) {
   const [receiverId, setReceiverId] = useState("");
   const [message, setMessage] = useState("");
 
+  // useToast 훅 사용
+  const { showToast } = useToast();
+
   // 호출 메시지 전송 함수
   const sendCallMessage = async () => {
     console.log("호출 시작:", {
@@ -31,7 +35,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
     });
 
     if (!receiverId) {
-      alert("수신 부서를 선택해주세요.");
+      showToast("수신 부서를 선택해주세요.", "error");
       return;
     }
 
@@ -54,15 +58,16 @@ export default function CallModal({ isVisible, setIsVisible }) {
 
       console.log("저장할 데이터:", callData);
 
-      await addDoc(collection(db, "calls"), callData);
-      console.log("호출 메시지 저장 성공");
+      const docRef = await addDoc(collection(db, "calls"), callData);
+      console.log("호출 메시지 저장 성공:", docRef.id);
 
-      alert(`${receiverId} 호출하였습니다.`);
       setIsVisible(false);
       setMessage("");
+      setReceiverId("");
+      showToast(`${receiverId} 호출하였습니다.`, "success");
     } catch (error) {
       console.error("호출 에러 상세 정보:", error);
-      alert("호출 전송에 실패했습니다.");
+      showToast("호출 전송에 실패했습니다.", "error");
     }
   };
 
@@ -75,8 +80,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
       isVisible={isVisible}
       setIsVisible={setIsVisible}
       showCancel={false}
-      modalClassName="rounded-xl"
-    >
+      modalClassName="rounded-xl">
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <span className="text-[34px] font-bold">호출</span>

@@ -16,65 +16,73 @@ import {
   doc,
   serverTimestamp,
   setDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { useToast } from "../../contexts/ToastContext";
 
 const TopZone = styled.div``;
 const SortZone = styled.div``;
 const TeamZone = styled.div``;
 
 const ItemRegistrationZone = ({ onRegister, item }) => {
+  // 개별 상태로 관리
   const [mode, setMode] = useState(item ? "정정" : "신규");
-  const emptyFormData = {
-    id: "",
-    category: "",
-    itemName: "",
-    department: "",
-    price: "",
-    vat: true,
-    quantity: "",
-    safeStock: "",
-    vendor: "",
-    location: "",
-    writer: [],
-    requester: [],
-    measure: "",
-    state: "입고 완료",
-  };
+  const [itemName, setItemName] = useState(item?.itemName || "");
+  const [category, setCategory] = useState(item?.category || "");
+  const [department, setDepartment] = useState(item?.department || "");
+  const [price, setPrice] = useState(item?.price || "");
+  const [vat, setVat] = useState(item?.vat !== undefined ? item.vat : true);
+  const [quantity, setQuantity] = useState(item?.quantity || "");
+  const [safeStock, setSafeStock] = useState(item?.safeStock || "");
+  const [vendor, setVendor] = useState(item?.vendor || "");
+  const [location, setLocation] = useState(item?.location || "");
+  const [writer, setWriter] = useState(item?.writer || []);
+  const [measure, setMeasure] = useState(item?.measure || "");
+  const [state, setState] = useState(item?.state || "입고 완료");
+  const [locationImage, setLocationImage] = useState(item?.locationImage || "");
 
-  const [formData, setFormData] = useState(
-    item
-      ? {
-          ...item,
-          quantity: item.quantity || "",
-          location: item.location || "",
-          writer: item.writer || [],
-          requester: item.requester || [],
-        }
-      : emptyFormData
-  );
+  const { showToast } = useToast();
 
+  // 아이템이 변경될 때 상태 초기화
   useEffect(() => {
     if (item) {
       setMode("정정");
-      setFormData({
-        ...item,
-        quantity: item.quantity || "",
-        location: item.location || "",
-        writer: item.writer || [],
-        requester: item.requester || [],
-      });
+      setItemName(item.itemName || "");
+      setCategory(item.category || "");
+      setDepartment(item.department || "");
+      setPrice(item.price || "");
+      setVat(item.vat !== undefined ? item.vat : true);
+      setQuantity(item.quantity || "");
+      setSafeStock(item.safeStock || "");
+      setVendor(item.vendor || "");
+      setLocation(item.location || "");
+      setWriter(item.writer || []);
+      setMeasure(item.measure || "");
+      setState(item.state || "입고 완료");
+      setLocationImage(item.locationImage || "");
     } else {
       setMode("신규");
-      setFormData(emptyFormData);
+      setItemName("");
+      setCategory("");
+      setDepartment("");
+      setPrice("");
+      setVat(true);
+      setQuantity("");
+      setSafeStock("");
+      setVendor("");
+      setLocation("");
+      setWriter([]);
+      setMeasure("");
+      setState("입고 완료");
+      setLocationImage("");
     }
   }, [item]);
 
   useEffect(() => {
     console.log("ItemRegistrationZone - Current item:", item);
-    console.log("ItemRegistrationZone - Current formData:", formData);
     console.log("ItemRegistrationZone - Current mode:", mode);
-  }, [item, formData, mode]);
+  }, [item, mode]);
 
   const requiredFields = [
     "itemName",
@@ -82,46 +90,138 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     "price",
     "quantity",
     "writer",
-    "requester",
     "department",
     "location",
   ];
 
   const isFormValid = () => {
-    return requiredFields.every((field) => !!formData[field]);
+    // 필수 필드 유효성 검사
+    return (
+      itemName &&
+      category &&
+      price &&
+      quantity &&
+      writer.length > 0 &&
+      department &&
+      location
+    );
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+
+    // 정정 모드일 때 품명, 부서, 단위, 분류 필드의 변경 방지
+    if (
+      mode === "정정" &&
+      ["itemName", "department", "measure", "category"].includes(name)
+    ) {
+      return;
+    }
+
+    // 각 필드별 상태 업데이트
+    switch (name) {
+      case "itemName":
+        setItemName(value);
+        break;
+      case "price":
+        setPrice(value);
+        break;
+      case "quantity":
+        setQuantity(value);
+        break;
+      case "safeStock":
+        setSafeStock(value);
+        break;
+      case "vendor":
+        setVendor(value);
+        break;
+      case "location":
+        setLocation(value);
+        break;
+      case "measure":
+        setMeasure(value);
+        break;
+      case "vat":
+        setVat(checked);
+        break;
+      case "locationImage":
+        setLocationImage(value);
+        break;
+      default:
+        break;
+    }
   };
 
   const handleCategoryChange = (value) => {
-    setFormData((prev) => ({ ...prev, category: value }));
+    if (mode === "정정") return;
+    setCategory(value);
   };
 
   const handleModeChange = (newMode) => {
     if (newMode === "정정" && !item) {
-      alert("정정은 비품현황을 통해서만 가능합니다.");
+      showToast("정정은 비품현황을 통해서만 가능합니다.", "error");
       return;
     }
 
     if (newMode === "신규" && mode === "정정") {
-      if (
-        window.confirm(
-          "정정 모드에서 신규 모드로 전환하시겠습니까?\n입력된 데이터가 초기화됩니다."
-        )
-      ) {
-        setMode("신규");
-        setFormData(emptyFormData);
-      }
+      setMode("신규");
+      setItemName("");
+      setCategory("");
+      setDepartment("");
+      setPrice("");
+      setVat(true);
+      setQuantity("");
+      setSafeStock("");
+      setVendor("");
+      setLocation("");
+      setWriter([]);
+      setMeasure("");
+      setState("입고 완료");
+      setLocationImage("");
+
+      showToast("신규 모드로 변경되었습니다.", "success");
+      return;
+    }
+
+    if (newMode === "정정" && item) {
+      setMode("정정");
+      setItemName(item.itemName || "");
+      setCategory(item.category || "");
+      setDepartment(item.department || "");
+      setPrice(item.price || "");
+      setVat(item.vat !== undefined ? item.vat : true);
+      setQuantity(item.quantity || "");
+      setSafeStock(item.safeStock || "");
+      setVendor(item.vendor || "");
+      setLocation(item.location || "");
+      setWriter(item.writer || []);
+      setMeasure(item.measure || "");
+      setState(item.state || "입고 완료");
+      setLocationImage(item.locationImage || "");
       return;
     }
 
     setMode(newMode);
+  };
+
+  // 현재 상태들을 formData 객체로 합치는 함수
+  const getFormData = () => {
+    return {
+      id: item?.id || "",
+      itemName,
+      category,
+      department,
+      price,
+      vat,
+      quantity,
+      safeStock,
+      vendor,
+      location,
+      writer,
+      measure,
+      state,
+      locationImage,
+    };
   };
 
   // 재고 히스토리 생성을 위한 함수 추가
@@ -136,8 +236,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       previousStock: Number(previousStock) || 0,
       currentStock: Number(currentStock) || 0,
       date: serverTimestamp(),
-      writer: formData.writer || [],
-      requester: formData.requester || [],
+      writer: writer || [],
       reason: reason || "미지정",
       status: "완료",
     };
@@ -157,10 +256,13 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     console.log("현재 mode:", mode);
     console.log("받은 item:", item);
 
+    // 현재 상태들을 formData 객체로 합침
+    const formData = getFormData();
+
     const generateItemId = () => {
-      const baseParts = [formData.department, formData.itemName];
-      if (formData.measure) {
-        baseParts.push(formData.measure);
+      const baseParts = [department, itemName];
+      if (measure) {
+        baseParts.push(measure);
       }
       return `${baseParts.join("_")}`;
     };
@@ -170,14 +272,20 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         const generatedId = generateItemId();
         const newDocRef = doc(db, "stocks", generatedId);
 
+        // 문서가 이미 존재하는지 확인
+        const docSnap = await getDoc(newDocRef);
+        if (docSnap.exists()) {
+          showToast("중복된 ID가 있어, 신규로 등록할 수 없습니다.", "error");
+          return;
+        }
+
         // 수량을 숫자로 변환하여 저장
-        const quantity = Number(formData.quantity) || 0;
+        const quantityNum = Number(quantity) || 0;
 
         const newItemData = {
           ...formData,
           id: generatedId,
-          quantity: quantity,
-          location: formData.location,
+          quantity: quantityNum,
           lastUpdated: serverTimestamp(),
         };
 
@@ -190,9 +298,9 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           await createStockHistory({
             itemId: generatedId,
             type: "입고",
-            quantity: quantity,
+            quantity: quantityNum,
             previousStock: 0,
-            currentStock: quantity,
+            currentStock: quantityNum,
             reason: "초기 등록",
           });
           console.log("3. 초기 재고 히스토리 생성 완료");
@@ -209,9 +317,14 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         const itemRef = doc(db, "stocks", item.id);
         console.log("4. Firestore 문서 참조 생성:", itemRef);
 
+        // 정정 모드에서는 품명, 부서, 단위를 변경하지 못하도록 원본 값 유지
         const updateData = {
           ...formData,
           id: item.id,
+          itemName: item.itemName, // 원본 값 유지
+          department: item.department, // 원본 값 유지
+          measure: item.measure, // 원본 값 유지
+          category: item.category, // 원본 값 유지
         };
         console.log("5. 업데이트할 데이터:", updateData);
 
@@ -220,22 +333,17 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         console.log("6. Firestore 문서 업데이트 완료");
 
         // 재고 수량이 변경된 경우 히스토리 기록
-        if (Number(item.quantity) !== Number(formData.quantity)) {
+        if (Number(item.quantity) !== Number(quantity)) {
           console.log("7. 재고 수량 변경 감지");
           console.log("이전 수량:", item.quantity);
-          console.log("새로운 수량:", formData.quantity);
+          console.log("새로운 수량:", quantity);
 
           await createStockHistory({
             itemId: item.id,
-            type:
-              Number(formData.quantity) > Number(item.quantity)
-                ? "입고"
-                : "출고",
-            quantity: Math.abs(
-              Number(formData.quantity) - Number(item.quantity)
-            ),
+            type: Number(quantity) > Number(item.quantity) ? "입고" : "출고",
+            quantity: Math.abs(Number(quantity) - Number(item.quantity)),
             previousStock: Number(item.quantity),
-            currentStock: Number(formData.quantity),
+            currentStock: Number(quantity),
             reason: "수량 정정",
           });
           console.log("8. 재고 히스토리 기록 완료");
@@ -246,30 +354,45 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         onRegister({ type: "update", data: finalData });
       }
 
-      console.log("10. 수정 완료, 알림 표시");
-      alert(mode === "신규" ? "등록 완료!" : "수정 완료!");
+      showToast(mode === "신규" ? "등록 완료!" : "수정 완료!", "success");
 
-      // 폼 초기화
-      setFormData({
-        id: "",
-        category: "",
-        itemName: "",
-        department: "",
-        price: "",
-        vat: true,
-        quantity: "",
-        safeStock: "",
-        vendor: "",
-        location: "",
-        writer: [],
-        requester: [],
-        measure: "",
-        state: "입고 완료",
-      });
+      // 폼 초기화 및 모드 재설정
+      if (mode === "신규") {
+        // 신규 등록 후 필드 초기화
+        setItemName("");
+        setCategory("");
+        setDepartment("");
+        setPrice("");
+        setVat(true);
+        setQuantity("");
+        setSafeStock("");
+        setVendor("");
+        setLocation("");
+        setWriter([]);
+        setMeasure("");
+        setState("입고 완료");
+        setLocationImage("");
+      } else {
+        // 정정 모드였던 경우 신규 모드로 변경하고 초기화
+        setMode("신규");
+        setItemName("");
+        setCategory("");
+        setDepartment("");
+        setPrice("");
+        setVat(true);
+        setQuantity("");
+        setSafeStock("");
+        setVendor("");
+        setLocation("");
+        setWriter([]);
+        setMeasure("");
+        setState("입고 완료");
+        setLocationImage("");
+      }
       console.log("11. 폼 초기화 완료");
     } catch (error) {
       console.error("Error in handleRegister:", error);
-      alert("저장 중 오류가 발생했습니다: " + error.message);
+      showToast("저장 중 오류가 발생했습니다: " + error.message, "error");
     }
   };
 
@@ -289,15 +412,14 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   };
 
   const handleDepartmentChange = (value) => {
-    setFormData((prev) => ({ ...prev, department: value }));
+    // 정정 모드에서는 변경 무시
+    if (mode === "정정") return;
+    setDepartment(value);
   };
 
   // WhoSelector 변경 핸들러 추가
   const handlePeopleChange = (type) => (selectedPeople) => {
-    setFormData((prev) => ({
-      ...prev,
-      [type]: selectedPeople,
-    }));
+    setWriter(selectedPeople);
   };
 
   return (
@@ -330,18 +452,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
             </label>
             <WhoSelector
               who={"작성자"}
-              selectedPeople={formData.writer}
+              selectedPeople={writer}
               onPeopleChange={handlePeopleChange("writer")}
-            />
-          </div>
-          <div className="flex items-center space-x-4 ml-[20px]">
-            <label className="text-black font-semibold">
-              요청자:<span className="text-red-500">*</span>
-            </label>
-            <WhoSelector
-              who={"요청자"}
-              selectedPeople={formData.requester}
-              onPeopleChange={handlePeopleChange("requester")}
             />
           </div>
         </div>
@@ -358,10 +470,15 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <input
             type="text"
             name="itemName"
-            value={formData.itemName}
+            value={itemName}
             onChange={handleChange}
             placeholder="품명"
-            className="w-[630px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+            disabled={mode === "정정"}
+            className={`w-[630px] border border-gray-400 rounded-md h-[40px] px-4 ${
+              mode === "정정"
+                ? "bg-gray-200 cursor-not-allowed"
+                : "bg-textBackground"
+            }`}
           />
         </div>
         {/* 분류 */}
@@ -374,46 +491,54 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <div className="flex flex-col">
             <div className="flex flex-row mb-[20px]">
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="사무용 소모품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="사무용품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="의료용 소모품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="의료용품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="마케팅용품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
             </div>
             <div className="flex flex-row mb-[20px]">
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="마케팅 소모품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="기타용품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.category}
+                field={category}
                 value="기타 소모품"
                 onChange={handleCategoryChange}
+                disabled={mode === "정정"}
               />
             </div>
           </div>
@@ -428,29 +553,34 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <div className="flex flex-col">
             <div className="flex flex-row mb-[20px]">
               <SelectableButton
-                field={formData.department}
+                field={department}
                 value="진료"
                 onChange={handleDepartmentChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.department}
+                field={department}
                 value="간호"
                 onChange={handleDepartmentChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.department}
+                field={department}
                 value="물리치료"
                 onChange={handleDepartmentChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.department}
+                field={department}
                 value="원무"
                 onChange={handleDepartmentChange}
+                disabled={mode === "정정"}
               />
               <SelectableButton
-                field={formData.department}
+                field={department}
                 value="방사선"
                 onChange={handleDepartmentChange}
+                disabled={mode === "정정"}
               />
             </div>
           </div>
@@ -465,10 +595,15 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <input
             type="text"
             name="measure"
-            value={formData.measure}
+            value={measure}
             onChange={handleChange}
             placeholder="단위"
-            className="border border-gray-400 rounded-md h-[40px] px-4 w-[280px] bg-textBackground mr-[40px]"
+            disabled={mode === "정정"}
+            className={`border border-gray-400 rounded-md h-[40px] px-4 w-[280px] ${
+              mode === "정정"
+                ? "bg-gray-200 cursor-not-allowed"
+                : "bg-textBackground"
+            } mr-[40px]`}
           />
           <FormLabel
             label={"단가"}
@@ -477,7 +612,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           />
           <CurrencyInput
             name="price"
-            value={formData.price}
+            value={price}
             onChange={(value) =>
               handleChange({ target: { name: "price", value } })
             }
@@ -488,7 +623,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
             <input
               type="checkbox"
               name="vat"
-              checked={formData.vat}
+              checked={vat}
               onChange={(e) =>
                 handleChange({
                   target: { name: "vat", value: e.target.checked },
@@ -508,12 +643,12 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <input
             type="text"
             name="quantity"
-            value={formData.quantity}
+            value={quantity}
             onChange={handleChange}
             placeholder="현재재고 수량"
             className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground mr-[40px]"
           />
-          {isConsumableCategory(formData.category) && (
+          {isConsumableCategory(category) && (
             <>
               <FormLabel
                 label={"안전재고"}
@@ -523,7 +658,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               <input
                 type="text"
                 name="safeStock"
-                value={formData.safeStock}
+                value={safeStock}
                 onChange={handleChange}
                 placeholder="안전재고 수량"
                 className="w-[280px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
@@ -533,7 +668,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         </div>
 
         {/* 안전재고 알림 문구 - 소모품일 때만 표시 */}
-        {isConsumableCategory(formData.category) && (
+        {isConsumableCategory(category) && (
           <p className="text-red-500 text-sm mt-4">
             * 안전재고 이하로 수량이 떨어지면 알림이 갑니다.
           </p>
@@ -547,7 +682,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <input
             type="text"
             name="vendor"
-            value={formData.vendor}
+            value={vendor}
             onChange={handleChange}
             placeholder="URL을 입력해주세요"
             className="w-[600px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
@@ -570,7 +705,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <input
             type="text"
             name="location"
-            value={formData.location}
+            value={location}
             onChange={handleChange}
             placeholder="위치를 입력해주세요"
             className="w-[600px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
@@ -578,7 +713,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
           <div className="ml-[20px]">
             <ImageUploader
               name="locationImage"
-              value={formData.locationImage}
+              value={locationImage}
               onChange={(file) =>
                 handleChange({ target: { name: "locationImage", value: file } })
               }
@@ -591,9 +726,10 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
       <div className="absolute bottom-0 w-full">
         <ItemRegistrationButton
           mode={mode}
-          formData={formData}
+          formData={getFormData()}
           requiredFields={requiredFields}
           onClick={handleRegister}
+          showToast={showToast}
         />
       </div>
     </div>

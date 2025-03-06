@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 import SideBar from "../components/SideBar";
+import { useToast } from "../contexts/ToastContext";
 
 const MainZone = styled.div``;
 
@@ -12,11 +13,14 @@ const Vacation = () => {
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
 
+  // useToast 훅 사용
+  const { showToast } = useToast();
+
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("휴가 신청:", { vacationType, fromDate, toDate, reason });
     // 여기에 데이터 저장 로직 추가 예정
-    alert("휴가 신청이 완료되었습니다.");
+    showToast("휴가 신청이 완료되었습니다.", "success");
   };
 
   return (
@@ -36,16 +40,14 @@ const Vacation = () => {
               className={`py-3 px-8 rounded-sm ${
                 vacationType === "진료 휴일" ? "bg-gray-200" : "bg-white"
               }`}
-              onClick={() => setVacationType("진료 휴일")}
-            >
+              onClick={() => setVacationType("진료 휴일")}>
               진료 휴일
             </button>
             <button
               className={`py-3 px-8 rounded-sm ${
                 vacationType === "사용 N일" ? "bg-gray-200" : "bg-white"
               }`}
-              onClick={() => setVacationType("사용 N일")}
-            >
+              onClick={() => setVacationType("사용 N일")}>
               사용 N일
             </button>
           </div>
@@ -95,15 +97,13 @@ const Vacation = () => {
                 className="w-full border p-3 rounded h-32 resize-none"
                 placeholder="도수치료,"
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              ></textarea>
+                onChange={(e) => setReason(e.target.value)}></textarea>
             </div>
 
             <div className="flex justify-center">
               <button
                 type="submit"
-                className="bg-gray-200 py-3 px-20 rounded-md text-xl font-medium"
-              >
+                className="bg-gray-200 py-3 px-20 rounded-md text-xl font-medium">
                 신청하기
               </button>
             </div>

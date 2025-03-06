@@ -7,6 +7,7 @@ import ScheduleList from "../components/Schedule/ScheduleList";
 import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import WhoSelector from "../components/common/WhoSelector";
+import { useToast } from "../contexts/ToastContext";
 
 const MainZone = styled.div``;
 const LeftZone = styled.div``;
@@ -135,6 +136,9 @@ const Schedule = () => {
     휴가: "#FF762D", // 오렌지색
   };
 
+  // useToast 훅 사용
+  const { showToast } = useToast();
+
   // 팀 변경 시 첫 번째 멤버로 자동 선택
   useEffect(() => {
     if (selectedTeam && selectedTeam.members.length > 0) {
@@ -189,7 +193,7 @@ const Schedule = () => {
     e.preventDefault();
 
     if (!scheduleForm.title.trim()) {
-      alert("일정 제목을 입력해주세요.");
+      showToast("일정 제목을 입력해주세요.", "error");
       return;
     }
 
@@ -337,8 +341,9 @@ const Schedule = () => {
                   ? "bg-[#002D5D] text-white"
                   : "border border-[#9D9D9C] text-[#9D9D9C]"
               }`}
-              onClick={() => setScheduleForm({ ...scheduleForm, type: "예약" })}
-            >
+              onClick={() =>
+                setScheduleForm({ ...scheduleForm, type: "예약" })
+              }>
               예약
             </button>
             <button
@@ -347,8 +352,9 @@ const Schedule = () => {
                   ? "bg-onceOrange text-white"
                   : "border border-[#9D9D9C] text-[#9D9D9C]"
               }`}
-              onClick={() => setScheduleForm({ ...scheduleForm, type: "휴가" })}
-            >
+              onClick={() =>
+                setScheduleForm({ ...scheduleForm, type: "휴가" })
+              }>
               휴가
             </button>
           </div>
@@ -356,8 +362,7 @@ const Schedule = () => {
           {/* 일정 추가 폼 */}
           <FormZone
             id="schedule-form"
-            className="bg-white rounded-lg mt-4 px-1"
-          >
+            className="bg-white rounded-lg mt-4 px-1">
             <form onSubmit={handleAddSchedule} className="space-y-4">
               <div className="mb-4 flex flex-row items-center">
                 <label className="mr-2">
@@ -386,8 +391,7 @@ const Schedule = () => {
                           vacationType: "휴가",
                           title: "휴가",
                         })
-                      }
-                    >
+                      }>
                       휴가
                     </button>
                     <button
@@ -403,8 +407,7 @@ const Schedule = () => {
                           vacationType: "반차",
                           title: "반차",
                         })
-                      }
-                    >
+                      }>
                       반차
                     </button>
                     <button
@@ -420,8 +423,7 @@ const Schedule = () => {
                           vacationType: "경조사",
                           title: "경조사",
                         })
-                      }
-                    >
+                      }>
                       경조사
                     </button>
                   </div>
@@ -511,14 +513,12 @@ const Schedule = () => {
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
+                            xmlns="http://www.w3.org/2000/svg">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth="2"
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            ></path>
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                           </svg>
                         </div>
                       </div>
@@ -570,14 +570,12 @@ const Schedule = () => {
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
+                            xmlns="http://www.w3.org/2000/svg">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth="2"
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            ></path>
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                           </svg>
                         </div>
                       </div>
@@ -609,14 +607,12 @@ const Schedule = () => {
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
+                          xmlns="http://www.w3.org/2000/svg">
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          ></path>
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                       </div>
                     </div>
@@ -645,14 +641,12 @@ const Schedule = () => {
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
+                          xmlns="http://www.w3.org/2000/svg">
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          ></path>
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                       </div>
                     </div>
@@ -673,8 +667,7 @@ const Schedule = () => {
                         ...scheduleForm,
                         note: e.target.value,
                       })
-                    }
-                  ></textarea>
+                    }></textarea>
                 </div>
               )}
 
@@ -684,8 +677,7 @@ const Schedule = () => {
                     <button
                       type="button"
                       className="w-[162px] h-[40px] border-2 border-[#002D5D] text-[#002D5D] rounded-[5px] font-normal"
-                      onClick={handleCancelEdit}
-                    >
+                      onClick={handleCancelEdit}>
                       취소하기
                     </button>
                     <button
@@ -695,8 +687,7 @@ const Schedule = () => {
                           ? "bg-gray-400 cursor-not-allowed"
                           : "bg-[#002D5D]"
                       } text-white rounded-[5px] font-normal`}
-                      disabled={scheduleForm.type === "휴가"}
-                    >
+                      disabled={scheduleForm.type === "휴가"}>
                       {scheduleForm.type === "휴가" ? "수정 불가" : "수정하기"}
                     </button>
                   </>
@@ -708,8 +699,7 @@ const Schedule = () => {
                         ? "bg-gray-400 cursor-not-allowed"
                         : "bg-[#002D5D]"
                     } text-white rounded-[5px] font-normal`}
-                    disabled={scheduleForm.type === "휴가"}
-                  >
+                    disabled={scheduleForm.type === "휴가"}>
                     {scheduleForm.type === "휴가" ? "읽기 전용" : "등록하기"}
                   </button>
                 )}
@@ -737,8 +727,7 @@ const Schedule = () => {
                     ? "border-b-2 border-[#002D5D] text-[#002D5D] font-semibold"
                     : "text-[#9D9D9C]"
                 }`}
-                onClick={() => setSelectedTeam(team)}
-              >
+                onClick={() => setSelectedTeam(team)}>
                 {team.name}
               </button>
             ))}

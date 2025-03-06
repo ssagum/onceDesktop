@@ -15,6 +15,7 @@ import {
 import { db } from "../../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../../firebase";
+import { useToast } from "../../contexts/ToastContext";
 
 const OneLine = styled.div``;
 const Half = styled.div``;
@@ -27,6 +28,8 @@ const VendorModal = ({
   onUpdate,
   mode = "view",
 }) => {
+  const { showToast } = useToast();
+
   const [formData, setFormData] = useState({
     clientName: vendor?.clientName || "",
     manager: vendor?.manager || "",
@@ -72,7 +75,7 @@ const VendorModal = ({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
-      alert("필수 항목을 모두 입력해주세요.");
+      showToast("필수 항목을 모두 입력해주세요.", "error");
       return false;
     }
     return true;
@@ -211,6 +214,12 @@ const VendorModal = ({
         }
       });
 
+      showToast(
+        mode === "create"
+          ? "거래처가 등록되었습니다."
+          : "거래처가 수정되었습니다.",
+        "success"
+      );
       setIsVisible(false);
     } catch (error) {
       console.error("거래처 저장 실패:", error);
@@ -219,7 +228,7 @@ const VendorModal = ({
         code: error.code,
         stack: error.stack,
       });
-      alert(`저장 중 오류가 발생했습니다: ${error.message}`);
+      showToast(`저장 중 오류가 발생했습니다: ${error.message}`, "error");
     }
   };
 
@@ -234,10 +243,11 @@ const VendorModal = ({
       });
 
       onUpdate((prevVendors) => prevVendors.filter((v) => v.id !== vendor.id));
+      showToast("거래처가 삭제되었습니다.", "success");
       setIsVisible(false);
     } catch (error) {
       console.error("거래처 삭제 실패:", error);
-      alert("삭제 중 오류가 발생했습니다.");
+      showToast("삭제 중 오류가 발생했습니다.", "error");
     }
   };
 

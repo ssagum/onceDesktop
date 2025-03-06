@@ -33,8 +33,7 @@ const RenderIndex = ({ indexValue, nowURL }) => {
     <div className="mb-[50px] w-full">
       <p
         className="text-[16px] color-[#162D66] font-semibold"
-        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}
-      >
+        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}>
         {indexValue}
       </p>
     </div>
@@ -66,48 +65,9 @@ export default function SideBar() {
     setVerificationCode(e.target.value);
   };
 
-  const handleVerifyCode = () => {
-    if (verificationCode === correctCode) {
-      setIsModalOpen(false);
-      navigate("/DataSilo");
-    } else {
-      alert("Incorrect verification code.");
-    }
-  };
-
   const handleDataSiloClick = (e) => {
     e.preventDefault();
     setIsModalOpen(true);
-  };
-
-  const sendCallMessage = async (location) => {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const formattedTime = `${hours}:${minutes}`;
-    try {
-      await addDoc(collection(db, "calls"), {
-        message: `개발1 호출`,
-        receiverId: "개발2",
-        senderId: "개발1",
-        formattedTime,
-        createdAt: Date.now(), // 생성 시각 저장
-        [location]: true,
-        개발2: true,
-      });
-      alert(`${location} 호출하였습니다.`);
-    } catch (error) {
-      console.error("Error sending call message:", error);
-    }
-  };
-
-  const checkSound = async () => {
-    try {
-      // 소리 재생 (public 폴더 내에 sounds 폴더를 만들고 success.mp3 파일을 넣어두세요)
-      const audio = new Audio(notification);
-      sendCallMessage("개발1");
-      audio.play();
-    } catch (error) {}
   };
 
   return (

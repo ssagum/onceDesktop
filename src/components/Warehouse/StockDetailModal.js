@@ -25,6 +25,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { IoPrintOutline } from "react-icons/io5";
 import { PDFDocument } from "pdf-lib";
 import html2canvas from "html2canvas";
+import { useToast } from "../../contexts/ToastContext";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -44,6 +45,7 @@ export default function StockDetailModal({
   onUpdate,
   setWarehouseMode,
 }) {
+  const { showToast } = useToast();
   const [isPlusPurchaseModalOn, setIsPlusPurchaseModalOn] = useState(false);
   const [isRegistrationModalOn, setIsRegistrationModalOn] = useState(false);
   const [formData, setFormData] = useState({
@@ -190,17 +192,17 @@ export default function StockDetailModal({
 
       // 모달 닫기
       setIsVisible(false);
-      alert("품목이 삭제되었습니다.");
+      showToast("품목이 삭제되었습니다.", "success");
     } catch (error) {
       console.error("Error deleting item:", error);
-      alert("품목 삭제 중 오류가 발생했습니다.");
+      showToast("품목 삭제 중 오류가 발생했습니다.", "error");
     }
   };
 
   const handlePurchaseRequest = async () => {
     try {
       if (!formData.writer.length) {
-        alert("작성자를 선택해주세요.");
+        showToast("작성자를 선택해주세요.", "error");
         return;
       }
 
@@ -229,10 +231,10 @@ export default function StockDetailModal({
         orderReason: "",
       }));
       setIsPlusPurchaseModalOn(false);
-      alert("주문 요청이 등록되었습니다.");
+      showToast("주문 요청이 등록되었습니다.", "success");
     } catch (error) {
       console.error("Error creating purchase request:", error);
-      alert("주문 요청 등록 중 오류가 발생했습니다.");
+      showToast("주문 요청 등록 중 오류가 발생했습니다.", "error");
     }
   };
 
@@ -270,61 +272,70 @@ export default function StockDetailModal({
   const handleSimpleStockUpdate = async () => {
     try {
       if (!simpleStockData.writer.length) {
-        alert("작성자를 선택해주세요.");
-        return;
-      }
-      if (!simpleStockData.quantity) {
-        alert("수량을 입력해주세요.");
+        showToast("작성자를 선택해주세요.", "error");
         return;
       }
 
-      const currentStock = Number(item.quantity) || 0;
-      const changeAmount = Number(simpleStockData.quantity) || 0;
-      const newStock =
-        stockAction === "입고"
-          ? currentStock + changeAmount
-          : currentStock - changeAmount;
-
-      if (newStock < 0) {
-        alert("출고 수량이 현재 재고보다 많습니다.");
+      if (!simpleStockData.quantity || simpleStockData.quantity === "0") {
+        showToast("수량을 입력해주세요.", "error");
         return;
       }
 
-      // 재고 수량 업데이트
-      const itemRef = doc(db, "stocks", item.id);
-      await updateDoc(itemRef, {
-        quantity: newStock,
-        lastUpdated: serverTimestamp(),
-      });
+      let newQuantity = Number(item.quantity);
+      const changeQuantity = Number(simpleStockData.quantity);
 
-      // 재고 히스토리 생성
+      // 입고/출고에 따라 수량 계산
+      if (stockAction === "입고") {
+        newQuantity += changeQuantity;
+      } else {
+        // 출고일 경우 재고 체크
+        if (changeQuantity > newQuantity) {
+          showToast("출고 수량이 현재 재고보다 많습니다.", "error");
+          return;
+        }
+        newQuantity -= changeQuantity;
+      }
+
+      // 재고 히스토리 추가
       await addDoc(collection(db, "stockHistory"), {
         itemId: item.id,
+        itemName: item.itemName,
         type: stockAction,
-        quantity: changeAmount,
-        previousStock: currentStock,
-        currentStock: newStock,
+        quantity: changeQuantity,
+        previousStock: Number(item.quantity),
+        currentStock: newQuantity,
         date: serverTimestamp(),
         writer: simpleStockData.writer,
-        requester: simpleStockData.writer,
-        reason: simpleStockData.reason || "단순 " + stockAction,
+        requester: simpleStockData.requester,
+        reason: simpleStockData.reason,
+        department: item.department,
+        measure: item.measure,
         status: "완료",
       });
 
-      // 상태 업데이트
-      onUpdate({ ...item, quantity: newStock });
+      // 실제 재고 업데이트
+      const itemRef = doc(db, "stocks", item.id);
+      await updateDoc(itemRef, {
+        quantity: newQuantity,
+        lastUpdated: serverTimestamp(),
+      });
 
-      setIsSimpleStockModalOn(false);
+      // 현재 표시된 아이템 정보 업데이트
+      const updatedItem = { ...item, quantity: newQuantity };
+      onUpdate(updatedItem);
+
+      // 폼 초기화 및 모달 닫기
       setSimpleStockData({
         writer: [],
         requester: [],
         quantity: "",
         reason: "",
       });
-      alert(`${stockAction} 처리가 완료되었습니다.`);
+      setIsSimpleStockModalOn(false);
+      showToast(`${stockAction} 처리가 완료되었습니다.`, "success");
     } catch (error) {
       console.error("Error updating stock:", error);
-      alert(`${stockAction} 처리 중 오류가 발생했습니다.`);
+      showToast(`${stockAction} 처리 중 오류가 발생했습니다.`, "error");
     }
   };
 
@@ -341,8 +352,7 @@ export default function StockDetailModal({
       isVisible={isVisible}
       setIsVisible={setIsVisible}
       showCancel={false}
-      modalClassName="rounded-xl"
-    >
+      modalClassName="rounded-xl">
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <div></div>
@@ -521,8 +531,7 @@ export default function StockDetailModal({
                     key={index}
                     className={`grid grid-cols-7 gap-4 py-3 ${
                       index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                    } hover:bg-gray-100 transition-colors`}
-                  >
+                    } hover:bg-gray-100 transition-colors`}>
                     <div className="text-center">{row.date}</div>
                     <div className="text-center">
                       <span
@@ -530,8 +539,7 @@ export default function StockDetailModal({
                           row.type === "입고"
                             ? "bg-blue-100 text-blue-800"
                             : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                        }`}>
                         {row.type}
                       </span>
                     </div>
@@ -606,8 +614,7 @@ export default function StockDetailModal({
         isVisible={isPlusPurchaseModalOn}
         setIsVisible={setIsPlusPurchaseModalOn}
         showCancel={false}
-        modalClassName="rounded-xl"
-      >
+        modalClassName="rounded-xl">
         <div className="flex flex-col items-center w-[500px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">추가 주문</span>
@@ -695,8 +702,7 @@ export default function StockDetailModal({
                 formData.orderReason
                   ? "bg-onceBlue hover:bg-onceBlue text-white"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
-            >
+              }`}>
               주문 요청
             </button>
           </div>
@@ -708,8 +714,7 @@ export default function StockDetailModal({
         isVisible={isQRModalOn}
         setIsVisible={setIsQRModalOn}
         showCancel={false}
-        modalClassName="rounded-xl"
-      >
+        modalClassName="rounded-xl">
         <div className="flex flex-col items-center w-[400px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">QR 코드</span>
@@ -737,8 +742,7 @@ export default function StockDetailModal({
             <div
               ref={printRef}
               className="flex flex-col items-center p-4 border rounded-md bg-white w-full"
-              style={{ pageBreakInside: "avoid" }}
-            >
+              style={{ pageBreakInside: "avoid" }}>
               <QRCodeCanvas
                 id={`qr-${item?.id}`}
                 value={item?.id || ""}
@@ -750,14 +754,12 @@ export default function StockDetailModal({
             <div className="flex gap-4 mt-6">
               <button
                 onClick={handlePrint}
-                className="px-4 py-2 bg-onceBlue text-white rounded-md flex items-center gap-2"
-              >
+                className="px-4 py-2 bg-onceBlue text-white rounded-md flex items-center gap-2">
                 <IoPrintOutline size={20} /> 인쇄
               </button>
               <button
                 onClick={handleDownloadPDF}
-                className="px-4 py-2 bg-green-600 text-white rounded-md"
-              >
+                className="px-4 py-2 bg-green-600 text-white rounded-md">
                 PDF 다운로드
               </button>
             </div>
@@ -770,8 +772,7 @@ export default function StockDetailModal({
         isVisible={isSimpleStockModalOn}
         setIsVisible={setIsSimpleStockModalOn}
         showCancel={false}
-        modalClassName="rounded-xl"
-      >
+        modalClassName="rounded-xl">
         <div className="flex flex-col items-center w-[500px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">단순 입출고</span>
@@ -804,8 +805,7 @@ export default function StockDetailModal({
                     ? "border-onceBlue bg-onceBlue text-white"
                     : "border-gray-400 text-gray-600"
                 }`}
-                onClick={() => setStockAction("입고")}
-              >
+                onClick={() => setStockAction("입고")}>
                 입고
               </button>
               <div className="w-[20px]" />
@@ -815,8 +815,7 @@ export default function StockDetailModal({
                     ? "border-onceBlue bg-onceBlue text-white"
                     : "border-gray-400 text-gray-600"
                 }`}
-                onClick={() => setStockAction("출고")}
-              >
+                onClick={() => setStockAction("출고")}>
                 출고
               </button>
             </div>
@@ -873,8 +872,7 @@ export default function StockDetailModal({
                 simpleStockData.writer.length && simpleStockData.quantity
                   ? "bg-onceBlue hover:bg-onceBlue text-white"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
-            >
+              }`}>
               {stockAction} 처리
             </button>
           </div>
