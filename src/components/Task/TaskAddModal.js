@@ -34,6 +34,73 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
       ? format(new Date(task.endDate), "yyyy/MM/dd")
       : format(new Date(), "yyyy/MM/dd")
   );
+  // 무한 종료일 (반복성 업무용)
+  const INFINITE_END_DATE = "2099/12/31";
+
+  // 업무 분류 변경 시 날짜 설정 로직
+  useEffect(() => {
+    const currentStartDate = startDate;
+
+    if (category === "1회성") {
+      // 1회성 업무는 시작일과 종료일이 같아야 함
+      setEndDate(currentStartDate);
+    } else if (category === "반복성") {
+      // 반복성 업무는 종료일을 2099년 12월 31일로 설정
+      setEndDate(INFINITE_END_DATE);
+    } else if (category === "이벤트성") {
+      // 이벤트성 업무에서 다른 업무로 변경했다가 다시 이벤트성으로 돌아왔을 때
+      // 시작일이 종료일보다 이후라면 종료일을 시작일로 설정
+      const startDateObj = new Date(currentStartDate);
+      const endDateObj = new Date(endDate);
+
+      if (endDate === INFINITE_END_DATE || startDateObj > endDateObj) {
+        setEndDate(currentStartDate);
+      }
+    }
+  }, [category, startDate, endDate, INFINITE_END_DATE]);
+
+  // 시작 날짜 변경 시, 업무 유형에 따라 종료 날짜도 함께 변경
+  const handleStartDateChange = (date) => {
+    setStartDate(date);
+
+    // 1회성 업무는 시작일 = 종료일
+    if (category === "1회성") {
+      setEndDate(date);
+    }
+
+    // 반복성 업무는 종료일을 무기한으로 유지
+    if (category === "반복성") {
+      setEndDate(INFINITE_END_DATE);
+    }
+
+    // 이벤트성 업무일 때 시작일이 종료일보다 이후라면 종료일도 시작일로 설정
+    if (category === "이벤트성") {
+      const startDateObj = new Date(date);
+      const endDateObj = new Date(endDate);
+
+      if (startDateObj > endDateObj) {
+        setEndDate(date);
+      }
+    }
+  };
+
+  // 종료 날짜 변경 핸들러
+  const handleEndDateChange = (date) => {
+    // 1회성 또는 반복성 업무는 종료일 변경 불가
+    if (category === "1회성" || category === "반복성") {
+      return;
+    }
+
+    // 이벤트성 업무일 때 종료일이 시작일보다 이전이면 시작일도 종료일로 설정
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(date);
+
+    if (endDateObj < startDateObj) {
+      setStartDate(date);
+    }
+
+    setEndDate(date);
+  };
 
   // 주기 변경 시 요일 자동 선택
   const handleCycleChange = (cycle) => {
@@ -80,9 +147,11 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                 <JcyCalendar
                   preStartDay={startDate}
                   preEndDay={endDate}
-                  setTargetStartDay={setStartDate}
-                  setTargetEndDay={setEndDate}
+                  setTargetStartDay={handleStartDateChange}
+                  setTargetEndDay={handleEndDateChange}
                   lockDates={false}
+                  singleDateMode={category === "1회성"}
+                  startDayOnlyMode={category === "반복성"}
                   isEdit={true}
                 />
               </div>
@@ -173,13 +242,17 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                         placeholder="시작일 (YYYY/MM/DD)"
                         className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
                       />
-                      <span>부터</span>
+                      <span className="w-[60px]">부터</span>
                       <input
                         type="text"
-                        value={endDate}
+                        value={category === "반복성" ? "계속 반복" : endDate}
                         readOnly
                         placeholder="종료일 (YYYY/MM/DD)"
-                        className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+                        className={`w-[200px] border border-gray-400 rounded-md h-[40px] px-4 ${
+                          category === "반복성"
+                            ? "bg-gray-200 text-gray-500"
+                            : "bg-textBackground"
+                        }`}
                       />
                     </div>
                   </div>
@@ -328,7 +401,21 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                 )}
               </InforationZone>
             </div>
-            <div className="flex-[4] flex border my-[20px] bg-textBackground rounded-lg"></div>
+            <div className="flex-[4] flex border my-[20px] bg-textBackground rounded-lg">
+              <div className="p-6 w-full">
+                <div className="mb-4 font-semibold text-lg">업무 내용</div>
+                <textarea
+                  className="w-full h-[150px] p-4 border border-gray-300 rounded-md bg-white"
+                  placeholder={
+                    category === "1회성"
+                      ? "1회성 업무: 하루 동안만 진행되는 업무입니다. 시작일과 종료일이 동일하게 설정됩니다."
+                      : category === "반복성"
+                      ? "반복성 업무: 정해진 주기에 따라 반복되는 업무입니다. 시작일 이후부터 계속 진행되며, 종료일은 지정할 수 없습니다."
+                      : "이벤트성 업무: 특정 기간 동안 진행되는 업무입니다. 시작일과 종료일을 각각 설정할 수 있습니다."
+                  }
+                ></textarea>
+              </div>
+            </div>
             <ThreeButton className="flex flex-row w-full gap-x-[20px]">
               <OnceOnOffButton text={"업무삭제"} />
               <OnceOnOffButton text="수정하기" />
