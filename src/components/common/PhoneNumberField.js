@@ -6,6 +6,7 @@ const PhoneNumberField = ({
   isEditing = true,
   value = "",
   setValue = () => {},
+  readOnly = false,
 }) => {
   // 전화번호 포맷팅 함수
   // 입력된 숫자 문자열을 받아서 3-4-4 패턴으로 포맷팅합니다.
@@ -51,7 +52,10 @@ const PhoneNumberField = ({
           placeholder={placeholder}
           value={value}
           onChange={handleChange}
-          className={`bg-textBackground border border-gray-300 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 ${className}`}
+          readOnly={readOnly}
+          className={`${
+            readOnly ? "bg-gray-100 cursor-default" : "bg-textBackground"
+          } border border-gray-300 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 ${className}`}
         />
       ) : (
         <p

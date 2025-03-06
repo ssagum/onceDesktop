@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const ImageUploader = ({ value, onChange }) => {
+const ImageUploader = ({ value, onChange, readOnly = false }) => {
   const [preview, setPreview] = useState(value || null); // 이미지 상태
   const [isModalOpen, setIsModalOpen] = useState(false); // 모달 상태
 
@@ -79,34 +79,50 @@ const ImageUploader = ({ value, onChange }) => {
     <div>
       {/* 이미지가 없을 때: 클릭하면 파일 업로드 */}
       {!preview ? (
-        <label className="flex flex-col items-center justify-center h-[42px] w-[120px] cursor-pointer border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+        <label
+          className={`flex flex-col items-center justify-center h-[42px] w-[120px] ${
+            readOnly
+              ? "cursor-not-allowed border-gray-200 bg-gray-100"
+              : "cursor-pointer border-gray-300 hover:bg-gray-50"
+          } border rounded-md transition-colors`}
+        >
           <div className="flex items-center space-x-2">
             <svg
               className="w-4 h-4 text-gray-500"
               fill="none"
               strokeWidth="2"
               viewBox="0 0 24 24"
-              stroke="currentColor">
+              stroke="currentColor"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            <span className="text-sm text-gray-500">사진 추가</span>
+            <span className="text-sm text-gray-500">
+              {readOnly ? "사진 없음" : "사진 추가"}
+            </span>
           </div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          {!readOnly && (
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          )}
         </label>
       ) : (
         // 이미지가 있을 때: 클릭하면 모달 오픈
         <div
-          onClick={() => setIsModalOpen(true)}
-          className="relative h-[42px] w-[120px] border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer overflow-hidden group">
+          onClick={() => !readOnly && setIsModalOpen(true)}
+          className={`relative h-[42px] w-[120px] border ${
+            readOnly
+              ? "border-gray-200"
+              : "border-gray-300 cursor-pointer hover:bg-gray-50"
+          } rounded-md transition-colors overflow-hidden group`}
+        >
           <img
             src={preview}
             alt="Preview"
@@ -118,11 +134,13 @@ const ImageUploader = ({ value, onChange }) => {
                 "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath fill='%23ccc' d='M5 11.1l2-2 5.5 5.5 3.5-3.5 3 3V5H5v6.1zM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm11.5 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z'/%3E%3C/svg%3E";
             }}
           />
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
-            <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-              사진 보기
-            </span>
-          </div>
+          {!readOnly && (
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+              <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                사진 보기
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -143,24 +161,30 @@ const ImageUploader = ({ value, onChange }) => {
               />
             </div>
             <div className="flex justify-end space-x-3 mt-6">
-              <label className="cursor-pointer px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors">
-                <span className="text-sm text-gray-700">변경</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </label>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-50 transition-colors text-sm">
-                삭제
-              </button>
+              {!readOnly && (
+                <>
+                  <label className="cursor-pointer px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors">
+                    <span className="text-sm text-gray-700">변경</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={handleDelete}
+                    className="px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-50 transition-colors text-sm"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm">
-                닫기
+                className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm"
+              >
+                {readOnly ? "확인" : "닫기"}
               </button>
             </div>
           </div>

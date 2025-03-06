@@ -18,6 +18,7 @@ import {
   onSnapshot,
   doc,
   updateDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import PropTypes from "prop-types";
@@ -26,6 +27,7 @@ import { IoPrintOutline } from "react-icons/io5";
 import { PDFDocument } from "pdf-lib";
 import html2canvas from "html2canvas";
 import { useToast } from "../../contexts/ToastContext";
+import VendorModal from "./VendorModal";
 
 const ModalHeaderZone = styled.div``;
 const WhoZone = styled.div``;
@@ -63,6 +65,9 @@ export default function StockDetailModal({
     quantity: "",
     reason: "",
   });
+  const [isVendorModalVisible, setIsVendorModalVisible] = useState(false);
+  const [vendorData, setVendorData] = useState(null);
+  const [vendorModalMode, setVendorModalMode] = useState("view");
 
   const {
     id,
@@ -347,6 +352,37 @@ export default function StockDetailModal({
     }));
   };
 
+  // 거래처 정보 가져오기 함수
+  const fetchVendorInfo = async (vendorName) => {
+    if (!vendorName) return;
+
+    try {
+      const vendorsRef = query(
+        collection(db, "vendors"),
+        where("clientName", "==", vendorName)
+      );
+
+      const querySnapshot = await getDocs(vendorsRef);
+      if (!querySnapshot.empty) {
+        const vendorDoc = querySnapshot.docs[0];
+        setVendorData({ id: vendorDoc.id, ...vendorDoc.data() });
+        setIsVendorModalVisible(true);
+      } else {
+        showToast("해당 거래처 정보를 찾을 수 없습니다.", "error");
+      }
+    } catch (error) {
+      console.error("거래처 정보 조회 오류:", error);
+      showToast("거래처 정보를 불러오는 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  // 거래처 클릭 핸들러
+  const handleVendorClick = () => {
+    if (vendor) {
+      fetchVendorInfo(vendor);
+    }
+  };
+
   return (
     <ModalTemplate
       isVisible={isVisible}
@@ -356,7 +392,7 @@ export default function StockDetailModal({
     >
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
-          <div></div>
+          <span className="text-[34px] font-bold">물품 상세</span>
           <img
             onClick={() => setIsVisible(false)}
             className="w-[30px] cursor-pointer"
@@ -483,13 +519,40 @@ export default function StockDetailModal({
               <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[70px]">
                 거래처:
               </label>
-              <input
-                type="text"
-                value={vendor || ""}
-                readOnly
-                placeholder="거래처"
-                className="w-[490px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-              />
+              <div className="relative w-[490px]">
+                <input
+                  type="text"
+                  value={vendor || ""}
+                  readOnly
+                  placeholder="거래처 정보 없음"
+                  className={`w-full border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground ${
+                    vendor ? "cursor-pointer hover:bg-gray-100" : ""
+                  }`}
+                  onClick={handleVendorClick}
+                />
+                {vendor && (
+                  <div
+                    onClick={handleVendorClick}
+                    className="absolute right-3 top-[10px] text-blue-500 flex items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-1"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span className="text-once14">상세보기</span>
+                  </div>
+                )}
+              </div>
             </Zone>
           </TopLeftZone>
           <TopRightZone className="flex-[2] flex flex-col pr-[30px] py-[20px] h-[380px]">
@@ -609,6 +672,18 @@ export default function StockDetailModal({
             docId: item?.firestoreId, // Firestore document ID 추가
           }}
           onRegister={handleItemUpdate}
+        />
+      )}
+
+      {/* 거래처 정보 모달 */}
+      {isVendorModalVisible && vendorData && (
+        <VendorModal
+          isVisible={isVendorModalVisible}
+          setIsVisible={setIsVendorModalVisible}
+          vendor={vendorData}
+          mode="view"
+          onUpdate={() => {}}
+          viewOnly={true} // 확인 버튼만 표시하기 위한 속성 추가
         />
       )}
 

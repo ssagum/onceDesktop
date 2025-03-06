@@ -26,6 +26,169 @@ const TopZone = styled.div``;
 const SortZone = styled.div``;
 const TeamZone = styled.div``;
 
+// 거래처 모달 스타일 컴포넌트 추가
+const VendorModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
+
+const ModalContent = styled.div`
+  background-color: white;
+  border-radius: 12px;
+  width: 650px;
+  max-width: 95vw;
+  height: 600px; /* 고정 높이 설정 */
+  padding: 28px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+  overflow-x: hidden;
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #edf2f7;
+  padding-bottom: 16px;
+  flex-shrink: 0; /* 헤더 크기 고정 */
+`;
+
+const SearchBar = styled.div`
+  position: relative;
+  margin-bottom: 20px;
+  display: flex;
+  flex-shrink: 0; /* 검색바 크기 고정 */
+`;
+
+const VendorList = styled.div`
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1; /* 남은 공간 모두 차지 */
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+`;
+
+const VendorItem = styled.div`
+  padding: 14px 18px;
+  border-bottom: 1px solid #edf2f7;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-all;
+
+  &:hover {
+    background-color: #f8fafc;
+    transform: translateX(5px);
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const VendorName = styled.div`
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const VendorUrl = styled.div`
+  font-size: 0.875rem;
+  color: #718096;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #718096;
+  transition: color 0.2s;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+
+  &:hover {
+    color: #2d3748;
+    background-color: #f7fafc;
+  }
+`;
+
+const SearchIcon = styled.div`
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #718096;
+  pointer-events: none;
+`;
+
+const SelectVendorButton = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: #4299e1;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    background-color: #3182ce;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+`;
+
 const ItemRegistrationZone = ({ onRegister, item }) => {
   // 개별 상태로 관리
   const [mode, setMode] = useState(item ? "정정" : "신규");
@@ -47,6 +210,10 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   const [vendors, setVendors] = useState([]);
   const [filteredVendors, setFilteredVendors] = useState([]);
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
+  // 거래처 모달 상태 추가
+  const [showVendorModal, setShowVendorModal] = useState(false);
+  const [vendorSearchTerm, setVendorSearchTerm] = useState("");
+  const [modalFilteredVendors, setModalFilteredVendors] = useState([]);
 
   const { showToast } = useToast();
 
@@ -54,12 +221,260 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   useEffect(() => {
     const fetchVendors = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "vendors"));
-        const vendorList = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setVendors(vendorList.filter((vendor) => !vendor.isHidden));
+        // 로컬 더미 데이터 사용 (Firebase 데이터 대신)
+        const dummyVendors = [
+          {
+            id: "1",
+            clientName: "메디컬 서플라이",
+            url: "medicalsupply.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "2",
+            clientName: "의료기기마트",
+            url: "medicalmart.com",
+            isHidden: false,
+          },
+          {
+            id: "3",
+            clientName: "헬스케어솔루션",
+            url: "healthcare-solution.kr",
+            isHidden: false,
+          },
+          {
+            id: "4",
+            clientName: "삼성메디컬",
+            url: "samsungmedical.com",
+            isHidden: false,
+          },
+          {
+            id: "5",
+            clientName: "메디칼 원스톱",
+            url: "medical-onestop.com",
+            isHidden: false,
+          },
+          {
+            id: "6",
+            clientName: "병원용품센터",
+            url: "hospitalstore.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "7",
+            clientName: "의약품유통센터",
+            url: "medi-distri.com",
+            isHidden: false,
+          },
+          {
+            id: "8",
+            clientName: "LG헬스케어",
+            url: "lghealthcare.com",
+            isHidden: false,
+          },
+          {
+            id: "9",
+            clientName: "한국의료기기",
+            url: "koreamedical.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "10",
+            clientName: "메디컬솔루션",
+            url: "medicalsolution.kr",
+            isHidden: false,
+          },
+          {
+            id: "11",
+            clientName: "스마트헬스케어",
+            url: "smarthealthcare.kr",
+            isHidden: false,
+          },
+          {
+            id: "12",
+            clientName: "의료장비유통",
+            url: "medicaldistribution.com",
+            isHidden: false,
+          },
+          {
+            id: "13",
+            clientName: "코스트코 메디컬",
+            url: "costcomedical.com",
+            isHidden: false,
+          },
+          {
+            id: "14",
+            clientName: "크린메디칼",
+            url: "cleanmedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "15",
+            clientName: "신세계 의료용품",
+            url: "shinsegaemedical.com",
+            isHidden: false,
+          },
+          {
+            id: "16",
+            clientName: "메디컬익스프레스",
+            url: "medicalexpress.kr",
+            isHidden: false,
+          },
+          {
+            id: "17",
+            clientName: "의료기기 다이렉트",
+            url: "medicaldirect.com",
+            isHidden: false,
+          },
+          {
+            id: "18",
+            clientName: "헬스케어파트너",
+            url: "healthcarepartner.kr",
+            isHidden: false,
+          },
+          {
+            id: "19",
+            clientName: "메디컬 유통센터",
+            url: "medicaldistri.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "20",
+            clientName: "한국의료용품",
+            url: "koreamedicals.com",
+            isHidden: false,
+          },
+          {
+            id: "21",
+            clientName: "닥터메디컬",
+            url: "drmedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "22",
+            clientName: "헬스케어몰",
+            url: "healthcaremall.com",
+            isHidden: false,
+          },
+          {
+            id: "23",
+            clientName: "메디컬랩",
+            url: "medicallab.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "24",
+            clientName: "한국의료장비",
+            url: "koreamedequip.com",
+            isHidden: false,
+          },
+          {
+            id: "25",
+            clientName: "바이오메디컬",
+            url: "biomedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "26",
+            clientName: "스마트의료기기",
+            url: "smartmedical.com",
+            isHidden: false,
+          },
+          {
+            id: "27",
+            clientName: "뉴메디컬",
+            url: "newmedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "28",
+            clientName: "메디컬월드",
+            url: "medicalworld.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "29",
+            clientName: "건강의료기기",
+            url: "healthmedical.com",
+            isHidden: false,
+          },
+          {
+            id: "30",
+            clientName: "테크메디칼",
+            url: "techmedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "31",
+            clientName: "의료기기마켓",
+            url: "medicalmarket.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "32",
+            clientName: "프리미엄 의료용품",
+            url: "premium-medical.com",
+            isHidden: false,
+          },
+          {
+            id: "33",
+            clientName: "메디컬 허브",
+            url: "medicalhub.kr",
+            isHidden: false,
+          },
+          {
+            id: "34",
+            clientName: "헬스케어 익스프레스",
+            url: "healthcare-express.com",
+            isHidden: false,
+          },
+          {
+            id: "35",
+            clientName: "메디컬 네트워크",
+            url: "medicalnetwork.kr",
+            isHidden: false,
+          },
+          {
+            id: "36",
+            clientName: "웰니스메디컬",
+            url: "wellnessmedical.co.kr",
+            isHidden: false,
+          },
+          {
+            id: "37",
+            clientName: "한국 의료 솔루션",
+            url: "koreamedsolution.com",
+            isHidden: false,
+          },
+          {
+            id: "38",
+            clientName: "베스트메디컬",
+            url: "bestmedical.kr",
+            isHidden: false,
+          },
+          {
+            id: "39",
+            clientName: "메디칼 쇼핑",
+            url: "medicalshopping.com",
+            isHidden: false,
+          },
+          {
+            id: "40",
+            clientName: "건강플러스",
+            url: "healthplus.kr",
+            isHidden: false,
+          },
+        ];
+
+        setVendors(dummyVendors);
+        setModalFilteredVendors(dummyVendors);
+
+        // 주석 처리 - Firebase 데이터 가져오기 방식
+        // const querySnapshot = await getDocs(collection(db, "vendors"));
+        // const vendorList = querySnapshot.docs.map((doc) => ({
+        //   id: doc.id,
+        //   ...doc.data(),
+        // }));
+        // setVendors(vendorList.filter((vendor) => !vendor.isHidden));
       } catch (error) {
         console.error("거래처 데이터 로딩 실패:", error);
       }
@@ -114,6 +529,33 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     setFilteredVendors(normalizedVendors);
     setShowVendorDropdown(normalizedVendors.length > 0);
   }, [vendor, vendors]);
+
+  // 모달 내 거래처 검색
+  useEffect(() => {
+    if (vendors.length > 0) {
+      if (vendorSearchTerm.trim() === "") {
+        setModalFilteredVendors(vendors);
+      } else {
+        const normalizedInput = vendorSearchTerm.toLowerCase();
+        const filtered = vendors.filter((v) => {
+          return (
+            (v.clientName &&
+              v.clientName.toLowerCase().includes(normalizedInput)) ||
+            (v.url &&
+              normalizeUrl(v.url).includes(normalizeUrl(normalizedInput)))
+          );
+        });
+        setModalFilteredVendors(filtered);
+      }
+    }
+  }, [vendorSearchTerm, vendors]);
+
+  // 거래처 데이터 초기화
+  useEffect(() => {
+    if (vendors.length > 0) {
+      setModalFilteredVendors(vendors);
+    }
+  }, [vendors]);
 
   // 아이템이 변경될 때 상태 초기화
   useEffect(() => {
@@ -500,6 +942,23 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     setShowVendorDropdown(false);
   };
 
+  // 모달에서 거래처 선택
+  const handleSelectVendorFromModal = (selectedVendor) => {
+    setVendor(selectedVendor.clientName);
+    setShowVendorModal(false);
+  };
+
+  // 모달 토글
+  const toggleVendorModal = () => {
+    setShowVendorModal(!showVendorModal);
+    setVendorSearchTerm(""); // 모달 열 때 검색어 초기화
+  };
+
+  // 모달에서 검색어 변경 핸들러
+  const handleVendorSearchChange = (e) => {
+    setVendorSearchTerm(e.target.value);
+  };
+
   return (
     <div className="w-full flex flex-col relative h-full">
       <TopZone className="w-full flex flex-row justify-between">
@@ -797,18 +1256,88 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               </div>
             )}
           </div>
-          {/* <div className="w-[80px] flex justify-center h-[40px]">
-            <div
-              className="flex w-[40px] h-[40px] justify-center items-center bg-slate-400 rounded-md cursor-pointer"
-              onClick={() => setShowVendorDropdown(true)}
-            >
-              <img src={search} alt="Logo" className="w-[30px] h-[30px]" />
-            </div>
+          <div className="w-[80px] flex justify-center h-[40px]">
+            <SelectVendorButton onClick={toggleVendorModal}>
+              <img src={search} alt="검색" className="w-[24px] h-[24px]" />
+            </SelectVendorButton>
           </div>
-          <span className="w-[200px] text-once14">
-            기존 거래처의 경우 검색하세요
-          </span> */}
+          <span className="text-gray-600 text-sm">목록보기</span>
         </div>
+
+        {/* 거래처 선택 모달 */}
+        {showVendorModal && (
+          <VendorModal onClick={() => setShowVendorModal(false)}>
+            <ModalContent onClick={(e) => e.stopPropagation()}>
+              <ModalHeader>
+                <h2 className="text-xl font-bold text-gray-800">거래처 목록</h2>
+                <CloseButton onClick={() => setShowVendorModal(false)}>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M18 6L6 18M6 6L18 18"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </CloseButton>
+              </ModalHeader>
+
+              <SearchBar>
+                <input
+                  type="text"
+                  value={vendorSearchTerm}
+                  onChange={handleVendorSearchChange}
+                  placeholder="거래처 검색..."
+                  className="w-full border border-gray-300 rounded-lg h-[44px] px-4 bg-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+                <SearchIcon>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </SearchIcon>
+              </SearchBar>
+
+              <VendorList>
+                {modalFilteredVendors.length > 0 ? (
+                  modalFilteredVendors.map((vendor) => (
+                    <VendorItem
+                      key={vendor.id}
+                      onClick={() => handleSelectVendorFromModal(vendor)}
+                    >
+                      <VendorName>{vendor.clientName}</VendorName>
+                      {vendor.url && <VendorUrl>{vendor.url}</VendorUrl>}
+                    </VendorItem>
+                  ))
+                ) : (
+                  <div className="p-6 text-center text-gray-500">
+                    {vendors.length === 0
+                      ? "등록된 거래처가 없습니다."
+                      : "검색 결과가 없습니다."}
+                  </div>
+                )}
+              </VendorList>
+            </ModalContent>
+          </VendorModal>
+        )}
 
         {/* 위치 - 필수 표시 추가 */}
         <div className="flex flex-row items-center">

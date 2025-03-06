@@ -27,6 +27,7 @@ const VendorModal = ({
   vendor = null,
   onUpdate,
   mode = "view",
+  viewOnly = false,
 }) => {
   const { showToast } = useToast();
 
@@ -328,8 +329,11 @@ const VendorModal = ({
                     clientName: e.target.value,
                   }))
                 }
+                readOnly={viewOnly}
                 placeholder="거래처명"
-                className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground text-center"
+                className={`w-[200px] border border-gray-400 rounded-md h-[40px] px-4 ${
+                  viewOnly ? "bg-gray-100" : "bg-textBackground"
+                } text-center`}
               />
             </Half>
             <Half className="w-1/2 flex flex-row items-center">
@@ -342,8 +346,11 @@ const VendorModal = ({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, manager: e.target.value }))
                 }
+                readOnly={viewOnly}
                 placeholder="담당자"
-                className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground text-center"
+                className={`w-[200px] border border-gray-400 rounded-md h-[40px] px-4 ${
+                  viewOnly ? "bg-gray-100" : "bg-textBackground"
+                } text-center`}
               />
             </Half>
           </OneLine>
@@ -361,8 +368,10 @@ const VendorModal = ({
                     key={industry}
                     field={selectedIndustry}
                     value={industry}
-                    onChange={setSelectedIndustry}
-                    className="w-[32%]"
+                    onChange={viewOnly ? () => {} : setSelectedIndustry}
+                    className={`w-[32%] ${
+                      viewOnly ? "pointer-events-none" : ""
+                    }`}
                   />
                 ))}
               </div>
@@ -372,8 +381,10 @@ const VendorModal = ({
                     key={industry}
                     field={selectedIndustry}
                     value={industry}
-                    onChange={setSelectedIndustry}
-                    className="w-[32%]"
+                    onChange={viewOnly ? () => {} : setSelectedIndustry}
+                    className={`w-[32%] ${
+                      viewOnly ? "pointer-events-none" : ""
+                    }`}
                   />
                 ))}
               </div>
@@ -392,7 +403,10 @@ const VendorModal = ({
               setValue={(value) =>
                 setFormData((prev) => ({ ...prev, contact: value }))
               }
-              className="h-[40px] w-full text-center"
+              readOnly={viewOnly}
+              className={`h-[40px] w-full text-center ${
+                viewOnly ? "bg-gray-100" : ""
+              }`}
               placeholder="031-372-3300"
             />
           </OneLine>
@@ -407,36 +421,36 @@ const VendorModal = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, email: e.target.value }))
               }
-              placeholder="once@once.com"
-              className="w-full border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground text-center"
+              readOnly={viewOnly}
+              placeholder="example@once.com"
+              className={`h-[40px] w-full border border-gray-400 rounded-md px-4 ${
+                viewOnly ? "bg-gray-100" : "bg-textBackground"
+              } text-center`}
             />
           </OneLine>
 
           <OneLine className="flex flex-row w-full items-center mt-[30px]">
             <label className="flex font-semibold text-black w-[120px] h-[40px] items-center">
-              <span className="text-once16">웹사이트</span>
+              <span className="text-once16">URL</span>
             </label>
-            <div className="w-full">
-              <input
-                type="url"
-                value={formData.url}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, url: e.target.value }))
-                }
-                placeholder="https://www.example.com"
-                className={`w-full border ${
-                  errors.url ? "border-red-500" : "border-gray-400"
-                } rounded-md h-[40px] px-4 bg-textBackground text-center`}
-              />
-            </div>
-          </OneLine>
-          {errors.url && (
-            <div className="pl-[100px] mt-1">
+            <input
+              type="text"
+              value={formData.url}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, url: e.target.value }))
+              }
+              readOnly={viewOnly}
+              placeholder="https://www.once.com"
+              className={`h-[40px] w-full border border-gray-400 rounded-md px-4 ${
+                viewOnly ? "bg-gray-100" : "bg-textBackground"
+              } text-center`}
+            />
+            {errors.url && (
               <span className="text-red-500 text-sm">{errors.url}</span>
-            </div>
-          )}
+            )}
+          </OneLine>
 
-          <OneLine className="flex flex-row w-full gap-x-[20px] mt-[30px] mb-[30px]">
+          <OneLine className="flex flex-row w-full items-center mt-[30px] justify-between">
             <Half className="w-1/2 flex flex-row items-center">
               <label className="flex font-semibold text-black w-[100px] h-[40px] items-center">
                 <span className="text-once16">사업자등록증</span>
@@ -444,6 +458,7 @@ const VendorModal = ({
               <ImageUploader
                 value={formData.documents.businessRegistration}
                 onChange={(value) => {
+                  if (viewOnly) return;
                   setFormData((prev) => ({
                     ...prev,
                     documents: {
@@ -452,6 +467,7 @@ const VendorModal = ({
                     },
                   }));
                 }}
+                readOnly={viewOnly}
               />
             </Half>
             <Half className="w-1/2 flex flex-row items-center">
@@ -461,6 +477,7 @@ const VendorModal = ({
               <ImageUploader
                 value={formData.documents.businessCard}
                 onChange={(value) => {
+                  if (viewOnly) return;
                   setFormData((prev) => ({
                     ...prev,
                     documents: {
@@ -469,37 +486,49 @@ const VendorModal = ({
                     },
                   }));
                 }}
+                readOnly={viewOnly}
               />
             </Half>
           </OneLine>
         </SectionZone>
 
         <div className="w-full px-[30px] flex flex-row justify-between gap-x-[20px]">
-          <button
-            onClick={() => setIsVisible(false)}
-            className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors"
-          >
-            취소
-          </button>
-          {mode !== "create" && (
+          {viewOnly ? (
             <button
-              onClick={handleDelete}
-              className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors"
+              onClick={() => setIsVisible(false)}
+              className="w-full h-[40px] bg-onceBlue text-white rounded-md font-semibold hover:bg-blue-600 transition-colors"
             >
-              삭제
+              확인
             </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setIsVisible(false)}
+                className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors"
+              >
+                취소
+              </button>
+              {mode !== "create" && (
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors"
+                >
+                  삭제
+                </button>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={!isFormValid()}
+                className={`flex-1 h-[40px] text-white rounded-md font-semibold transition-colors ${
+                  isFormValid()
+                    ? "bg-onceBlue hover:bg-blue-600"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
+              >
+                {mode === "create" ? "등록" : "수정"}
+              </button>
+            </>
           )}
-          <button
-            onClick={handleSave}
-            disabled={!isFormValid()}
-            className={`flex-1 h-[40px] text-white rounded-md font-semibold transition-colors ${
-              isFormValid()
-                ? "bg-onceBlue hover:bg-blue-600"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-          >
-            {mode === "create" ? "등록" : "수정"}
-          </button>
         </div>
       </div>
     </ModalTemplate>
