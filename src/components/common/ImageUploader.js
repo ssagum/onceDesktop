@@ -64,7 +64,7 @@ const ImageUploader = ({ value, onChange }) => {
   const handleDelete = () => {
     console.log("Image deleted");
     setPreview(null);
-    onChange(null);
+    onChange(null); // 부모 컴포넌트에 null 전달
     setIsModalOpen(false);
   };
 
@@ -86,8 +86,7 @@ const ImageUploader = ({ value, onChange }) => {
               fill="none"
               strokeWidth="2"
               viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+              stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -107,12 +106,17 @@ const ImageUploader = ({ value, onChange }) => {
         // 이미지가 있을 때: 클릭하면 모달 오픈
         <div
           onClick={() => setIsModalOpen(true)}
-          className="relative h-[42px] w-[120px] border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer overflow-hidden group"
-        >
+          className="relative h-[42px] w-[120px] border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer overflow-hidden group">
           <img
             src={preview}
             alt="Preview"
             className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => {
+              console.error("이미지 로드 오류:", e);
+              // 이미지 로드 실패 시 기본 이미지나 처리 방법 추가
+              e.target.src =
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath fill='%23ccc' d='M5 11.1l2-2 5.5 5.5 3.5-3.5 3 3V5H5v6.1zM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm11.5 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z'/%3E%3C/svg%3E";
+            }}
           />
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
             <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
@@ -131,6 +135,11 @@ const ImageUploader = ({ value, onChange }) => {
                 src={preview}
                 alt="Uploaded Preview"
                 className="max-w-[600px] max-h-[600px] object-contain"
+                onError={(e) => {
+                  console.error("모달 이미지 로드 오류:", e);
+                  e.target.src =
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath fill='%23ccc' d='M5 11.1l2-2 5.5 5.5 3.5-3.5 3 3V5H5v6.1zM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm11.5 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z'/%3E%3C/svg%3E";
+                }}
               />
             </div>
             <div className="flex justify-end space-x-3 mt-6">
@@ -145,14 +154,12 @@ const ImageUploader = ({ value, onChange }) => {
               </label>
               <button
                 onClick={handleDelete}
-                className="px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-50 transition-colors text-sm"
-              >
+                className="px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-50 transition-colors text-sm">
                 삭제
               </button>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm"
-              >
+                className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm">
                 닫기
               </button>
             </div>

@@ -86,12 +86,26 @@ const VendorModal = ({
   // 이미지 업로드 함수
   const uploadImage = async (file, path) => {
     if (!file) return null;
-    const storageRef = ref(
-      storage,
-      `vendors/${path}/${Date.now()}_${file.name}`
-    );
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    try {
+      const storageRef = ref(
+        storage,
+        `vendors/${path}/${Date.now()}_${file.name}`
+      );
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      console.log(
+        `성공적으로 업로드됨: ${path}, URL: ${downloadUrl.substring(0, 50)}...`
+      );
+      return downloadUrl;
+    } catch (error) {
+      console.error(`이미지 업로드 실패 (${path}):`, error);
+      console.error("파일 정보:", {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      });
+      throw new Error(`이미지 업로드 실패: ${error.message}`);
+    }
   };
 
   // 저장 처리
@@ -99,48 +113,113 @@ const VendorModal = ({
     if (!validateForm()) return;
 
     try {
-      // 이미지 업로드 처리
-      const [businessRegistrationUrl, businessCardUrl] = await Promise.all([
-        formData.documents.businessRegistration instanceof File
-          ? uploadImage(
-              formData.documents.businessRegistration,
-              "business-registration"
-            )
-          : formData.documents.businessRegistration,
-        formData.documents.businessCard instanceof File
-          ? uploadImage(formData.documents.businessCard, "business-cards")
-          : formData.documents.businessCard,
-      ]);
+      // 이미지 업로드 처리 개선
+      let businessRegistrationUrl = null;
+      let businessCardUrl = null;
 
+      // 사업자등록증 처리
+      if (formData.documents.businessRegistration instanceof File) {
+        businessRegistrationUrl = await uploadImage(
+          formData.documents.businessRegistration,
+          "business-registration"
+        );
+      } else if (formData.documents.businessRegistration) {
+        // 기존 URL이 있고 변경되지 않은 경우
+        businessRegistrationUrl = formData.documents.businessRegistration;
+      }
+
+      // 명함 처리
+      if (formData.documents.businessCard instanceof File) {
+        businessCardUrl = await uploadImage(
+          formData.documents.businessCard,
+          "business-cards"
+        );
+      } else if (formData.documents.businessCard) {
+        // 기존 URL이 있고 변경되지 않은 경우
+        businessCardUrl = formData.documents.businessCard;
+      }
+
+      // 최종 데이터 생성
       const vendorData = {
-        ...formData,
+        clientName: formData.clientName,
+        manager: formData.manager,
         industry: selectedIndustry,
-        documents: {
-          businessRegistration: businessRegistrationUrl,
-          businessCard: businessCardUrl,
-        },
+        contact: formData.contact,
+        email: formData.email,
+        documents: {},
         updatedAt: new Date(),
       };
 
-      if (mode === "create") {
-        const docRef = await addDoc(collection(db, "vendors"), vendorData);
-        vendorData.id = docRef.id;
+      // 문서 필드를 명시적으로 처리
+      if (businessRegistrationUrl) {
+        vendorData.documents.businessRegistration = businessRegistrationUrl;
       } else {
-        await updateDoc(doc(db, "vendors", vendor.id), vendorData);
+        // null이나 undefined인 경우 Firebase에 직접 null 저장
+        vendorData.documents.businessRegistration = null;
       }
 
+      if (businessCardUrl) {
+        vendorData.documents.businessCard = businessCardUrl;
+      } else {
+        // null이나 undefined인 경우 Firebase에 직접 null 저장
+        vendorData.documents.businessCard = null;
+      }
+
+      console.log("Firestore에 저장할 데이터:", {
+        clientName: vendorData.clientName,
+        manager: vendorData.manager,
+        industry: vendorData.industry,
+        contact: vendorData.contact,
+        email: vendorData.email,
+        "documents.businessRegistration": vendorData.documents
+          .businessRegistration
+          ? "(URL 있음)"
+          : "(NULL)",
+        "documents.businessCard": vendorData.documents.businessCard
+          ? "(URL 있음)"
+          : "(NULL)",
+      });
+
+      if (mode === "create") {
+        try {
+          const docRef = await addDoc(collection(db, "vendors"), vendorData);
+          vendorData.id = docRef.id;
+          console.log("새 거래처 생성 성공:", docRef.id);
+        } catch (error) {
+          console.error("거래처 생성 실패:", error);
+          throw error;
+        }
+      } else {
+        try {
+          console.log("기존 거래처 업데이트:", vendor.id);
+          await updateDoc(doc(db, "vendors", vendor.id), vendorData);
+          vendorData.id = vendor.id;
+        } catch (error) {
+          console.error("거래처 업데이트 실패:", error);
+          throw error;
+        }
+      }
+
+      console.log("저장 성공!");
       onUpdate((prevVendors) => {
         if (mode === "create") {
           return [...prevVendors, vendorData];
         } else {
-          return prevVendors.map((v) => (v.id === vendor.id ? vendorData : v));
+          return prevVendors.map((v) =>
+            v.id === vendor.id ? { ...v, ...vendorData, id: vendor.id } : v
+          );
         }
       });
 
       setIsVisible(false);
     } catch (error) {
       console.error("거래처 저장 실패:", error);
-      alert("저장 중 오류가 발생했습니다.");
+      console.error("에러 세부 정보:", {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
+      alert(`저장 중 오류가 발생했습니다: ${error.message}`);
     }
   };
 
@@ -166,12 +245,11 @@ const VendorModal = ({
     <ModalTemplate
       isVisible={isVisible}
       setIsVisible={setIsVisible}
-      showCancel={false}
-    >
+      showCancel={false}>
       <div className="flex flex-col w-[700px] h-[580px] items-center py-[40px] justify-between">
         <SectionZone className="flex flex-col w-full px-[30px]">
-          <label className="flex font-semibold text-black mb-2 w-[100px] h-[40px]">
-            <span className="text-once20 w-[200px]">거래처 상세</span>
+          <label className="flex font-semibold text-black mb-2 w-[300px] h-[40px]">
+            <div className="text-once20 w-[300px]">거래처 상세</div>
           </label>
           <OneLine className="flex flex-row w-full gap-x-[20px] mt-[20px]">
             <Half className="w-1/2 flex flex-row items-center">
@@ -314,15 +392,13 @@ const VendorModal = ({
         <div className="w-full px-[30px] flex flex-row justify-between gap-x-[20px]">
           <button
             onClick={() => setIsVisible(false)}
-            className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors"
-          >
+            className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors">
             취소
           </button>
           {mode !== "create" && (
             <button
               onClick={handleDelete}
-              className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors"
-            >
+              className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors">
               삭제
             </button>
           )}
@@ -333,8 +409,7 @@ const VendorModal = ({
               isFormValid()
                 ? "bg-onceBlue hover:bg-blue-600"
                 : "bg-gray-300 cursor-not-allowed"
-            }`}
-          >
+            }`}>
             {mode === "create" ? "등록" : "수정"}
           </button>
         </div>
