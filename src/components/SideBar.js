@@ -33,7 +33,8 @@ const RenderIndex = ({ indexValue, nowURL }) => {
     <div className="mb-[50px] w-full">
       <p
         className="text-[16px] color-[#162D66] font-semibold"
-        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}>
+        style={{ color: indexValue === nowURL ? "#162D66" : "#888888" }}
+      >
         {indexValue}
       </p>
     </div>
@@ -111,8 +112,8 @@ export default function SideBar() {
           </Link>
           <Link to="/notice">
             <RenderIndex
-              indexValue="공지사항"
-              nowURL={nowURL === "/notice" ? "공지사항" : nowURL}
+              indexValue="게시판"
+              nowURL={nowURL === "/notice" ? "게시판" : nowURL}
             />
           </Link>
           {/* <Link to="/education">

@@ -65,7 +65,9 @@ export default function JcyTable({
         {columns.map(({ label, key }) => (
           <div
             key={key}
-            className="text-center text-gray-700 cursor-pointer"
+            className={`flex items-center cursor-pointer text-gray-700 ${
+              key === "title" ? "justify-start px-[20px]" : "justify-center"
+            }`}
             onClick={() => handleSort(key)}
           >
             {label}{" "}

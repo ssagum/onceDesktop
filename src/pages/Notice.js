@@ -6,6 +6,9 @@ import TextEditorModal from "../components/TextEditorModal";
 import HomeMainCanvas from "../components/Home/HomeMainCanvas";
 import HomeTimerCanvas from "../components/Home/HomeTimerCanvas";
 import NoticeMainCanvas from "../components/Notice.js/NoticeMainCanvas";
+import { collection, addDoc } from "firebase/firestore";
+import { db } from "../firebase";
+import { useToast } from "../contexts/ToastContext";
 
 const MainZone = styled.div``;
 
@@ -15,15 +18,24 @@ const Notice = () => {
   const [editorContent, setEditorContent] = useState("");
   const [noticeType, setNoticeType] = useState("regular");
   const [classification, setClassification] = useState("전체");
+  const { showToast } = useToast();
 
   const handleCloseEditor = () => {
     setShowEditor(false);
     setEditorContent("");
   };
 
-  const handleSaveContent = () => {
-    setShowEditor(false);
-    setEditorContent("");
+  const handleSaveContent = async (postData) => {
+    try {
+      // Firestore에 게시글 저장
+      await addDoc(collection(db, "notices"), postData);
+      showToast("게시글이 성공적으로 저장되었습니다", "success");
+      setShowEditor(false);
+      setEditorContent("");
+    } catch (error) {
+      console.error("게시글 저장 실패:", error);
+      showToast("게시글 저장에 실패했습니다", "error");
+    }
   };
 
   return (

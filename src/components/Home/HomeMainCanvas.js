@@ -15,7 +15,6 @@ import {
 } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import { Link } from "react-router-dom";
-import NoticeModal from "../Notice.js/NoticeModal";
 import DayChanger from "../common/DayChanger";
 import ChatHistory from "../common/ChatHistory";
 import CallModal from "../call/CallModal";
@@ -171,10 +170,20 @@ export default function HomeMainCanvas() {
             </Link>
           </InsideHeaderZone>
 
-          {/* 상위 4개의 공지사항만 표시 */}
-          {notices.slice(0, 4).map((notice) => (
-            <RenderTitlePart key={notice.id} row={notice} />
-          ))}
+          {/* pinned 상태인 공지사항만 표시 (최대 4개) */}
+          {notices
+            .filter((notice) => notice.pinned)
+            .slice(0, 4)
+            .map((notice) => (
+              <RenderTitlePart key={notice.id} row={notice} isHomeMode={true} />
+            ))}
+
+          {/* pinned 상태인 공지가 없을 경우 안내 메시지 표시 */}
+          {notices.filter((notice) => notice.pinned).length === 0 && (
+            <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
+              등록된 공지사항이 없습니다.
+            </div>
+          )}
         </div>
       </TopZone>
       {/* 아래 영역 */}
@@ -245,10 +254,6 @@ export default function HomeMainCanvas() {
                   <span className="text-once18">호 출</span>
                 </button>
                 <div className="w-[240px] h-[240px] flex-col flex justify-between">
-                  {/* <NoticeModal
-                    isVisible={isVisible}
-                    setIsVisible={setIsVisible}
-                  /> */}
                   {false ? (
                     <div className="w-[240px] flex flex-row justify-between">
                       <Square title={"공지등록"} />

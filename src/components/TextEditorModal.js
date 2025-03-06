@@ -92,6 +92,7 @@ const TextEditorModal = ({
   const [selectedDepartment, setSelectedDepartment] = useState(
     DEPARTMENTS[0].value
   );
+  const [isPinned, setIsPinned] = useState(false);
 
   // useToast 훅 사용
   const { showToast } = useToast();
@@ -99,18 +100,19 @@ const TextEditorModal = ({
   // 초기 제목과 내용 설정
   useEffect(() => {
     if (show) {
-      setTitle("모바일/PC 프로그램 연동 관련 안내");
-      setContent(`
-        <div style="line-height: 1.6; font-size: 15px;">
-          <p>안녕하세요.</p>
-          <p>모바일 앱과 PC용 프로그램을 동시에 개발하여 연결하는 과정에서 일시적으로 일부 기능이 제한되었습니다.</p>
-          <p>공지사항에 희망하시는 기능이나 불편한 부분을 댓글로 남겨주시면, 빠른 시일 내에 개선하여 찾아뵙도록 하겠습니다.</p>
-          <p>이용에 불편을 드려 죄송합니다.</p>
-          <p>감사합니다.</p>
-        </div>
-      `);
+      setTitle("");
+      setIsPinned(false);
+      setSelectedDepartment(DEPARTMENTS[0].value);
+      setContent("");
+
+      // 다음 렌더링 사이클에서 에디터 내용 초기화
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.innerHTML = "";
+        }
+      }, 0);
     }
-  }, [show]);
+  }, [show, setContent]);
 
   const execCommand = useCallback((command, value = null) => {
     if (command === "fontSize") {
@@ -392,33 +394,36 @@ const TextEditorModal = ({
 
   const handleSaveContent = async () => {
     if (!title.trim()) {
-      showToast("제목을 입력해주세요.", "error");
+      showToast("제목을 입력해주세요", "error");
+      return;
+    }
+
+    if (!editorRef.current.textContent.trim()) {
+      showToast("내용을 입력해주세요", "error");
       return;
     }
 
     try {
-      const noticeData = {
-        title: title.trim(),
-        content: content,
-        classification: selectedDepartment,
-        noticeType: noticeType,
-        author: `${userLevelData.role}`,
+      const postData = {
+        title,
+        content: editorRef.current.innerHTML,
         createdAt: Date.now(),
-        createdAt2: serverTimestamp(),
+        author: userLevelData?.name || "익명",
+        classification: selectedDepartment,
+        pinned: isPinned,
+        noticeType: isPinned ? "notice" : "regular",
       };
 
-      // createdAt을 상대적인 시간으로 변환하여 사용
-      const relativeTime = formatRelativeTime(noticeData.createdAt);
-      console.log(relativeTime);
-
-      await addDoc(collection(db, "notices"), noticeData);
-      setTitle("");
-      handleSave();
-
-      showToast("공지사항이 저장되었습니다.", "success");
+      if (handleSave) {
+        await handleSave(postData);
+        handleClose();
+      } else {
+        console.error("handleSave 함수가 전달되지 않았습니다.");
+        showToast("게시글 저장에 실패했습니다", "error");
+      }
     } catch (error) {
-      console.error("공지사항 저장 실패:", error);
-      showToast("공지사항 저장에 실패했습니다.", "error");
+      console.error("게시글 저장 실패:", error);
+      showToast("게시글 저장에 실패했습니다", "error");
     }
   };
 
@@ -426,7 +431,7 @@ const TextEditorModal = ({
     <div className="modal-overlay" style={overlayStyle}>
       <div className="modal-content" style={modalStyle}>
         <div className="modal-header" style={headerStyle}>
-          <h2 style={titleStyle}>공지사항 작성</h2>
+          <h2 style={titleStyle}>게시글 작성</h2>
           <button onClick={handleClose} style={closeButtonStyle}>
             ×
           </button>
@@ -441,42 +446,59 @@ const TextEditorModal = ({
               style={titleInputStyle}
             />
           </div>
-          <div>
+          <div className="flex items-center space-x-2 mb-3">
             <select
               value={selectedDepartment}
               onChange={(e) => setSelectedDepartment(e.target.value)}
-              style={selectStyle}>
-              {DEPARTMENTS.map((department) => (
-                <option key={department.value} value={department.value}>
-                  {department.label}
+              style={selectStyle}
+            >
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept.value} value={dept.value}>
+                  {dept.label}
                 </option>
               ))}
             </select>
+            <div className="flex items-center ml-4">
+              <input
+                type="checkbox"
+                id="isPinned"
+                checked={isPinned}
+                onChange={(e) => setIsPinned(e.target.checked)}
+                className="h-4 w-4 mr-2"
+              />
+              <label htmlFor="isPinned" className="text-sm font-medium">
+                공지사항으로 등록 (상단에 고정됩니다)
+              </label>
+            </div>
           </div>
           <div className="editor-toolbar" style={toolbarStyle}>
             <div style={toolGroupStyle}>
               <button
                 onClick={() => execCommand("bold")}
                 style={buttonStyle}
-                title="굵게">
+                title="굵게"
+              >
                 <FaBold />
               </button>
               <button
                 onClick={() => execCommand("italic")}
                 style={buttonStyle}
-                title="기울임">
+                title="기울임"
+              >
                 <FaItalic />
               </button>
               <button
                 onClick={() => execCommand("underline")}
                 style={buttonStyle}
-                title="밑줄">
+                title="밑줄"
+              >
                 <FaUnderline />
               </button>
               <button
                 onClick={() => execCommand("strikeThrough")}
                 style={buttonStyle}
-                title="취소선">
+                title="취소선"
+              >
                 <FaStrikethrough />
               </button>
             </div>
@@ -484,19 +506,22 @@ const TextEditorModal = ({
               <button
                 onClick={() => execCommand("justifyLeft")}
                 style={buttonStyle}
-                title="왼쪽 정렬">
+                title="왼쪽 정렬"
+              >
                 <FaAlignLeft />
               </button>
               <button
                 onClick={() => execCommand("justifyCenter")}
                 style={buttonStyle}
-                title="가운데 정렬">
+                title="가운데 정렬"
+              >
                 <FaAlignCenter />
               </button>
               <button
                 onClick={() => execCommand("justifyRight")}
                 style={buttonStyle}
-                title="오른쪽 정렬">
+                title="오른쪽 정렬"
+              >
                 <FaAlignRight />
               </button>
             </div>
@@ -517,7 +542,8 @@ const TextEditorModal = ({
               <button
                 onClick={() => document.getElementById("imageUpload").click()}
                 style={buttonStyle}
-                title="이미지 삽입">
+                title="이미지 삽입"
+              >
                 <FaImage />
               </button>
             </div>

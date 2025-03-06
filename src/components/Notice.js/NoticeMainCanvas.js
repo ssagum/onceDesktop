@@ -34,20 +34,38 @@ function NoticeMainCanvas({ onCreatePost }) {
     return () => unsubscribe();
   }, []);
 
-  // pinned(중요공지) 항목은 상단에 정렬
-  const sortedNotices = [...notices].sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    return 0;
-  });
-
   // JcyTable에 필요한 데이터 포맷
   const columns = [
+    { label: "번호", key: "number" },
     { label: "분류", key: "classification" },
     { label: "제목", key: "title" },
     { label: "작성자", key: "author" },
     { label: "작성일", key: "createdAt" },
   ];
+
+  // pinned(중요공지) 항목은 상단에 정렬하고, 일반 게시글에는 번호 부여
+  const sortedNotices = [...notices]
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      // 공지가 아닌 경우 createdAt 기준으로 내림차순 정렬 (최신글이 위로)
+      return b.createdAt - a.createdAt;
+    })
+    .map((notice, index) => {
+      // 공지사항인 경우 "공지"로 표시, 아닌 경우 일련번호 부여
+      const number = notice.pinned
+        ? "공지"
+        : notices.filter((n) => n.pinned).length +
+          index -
+          notices.filter((n) => n.pinned).length +
+          1;
+
+      return {
+        ...notice,
+        number,
+        noticeType: notice.pinned ? "notice" : "regular",
+      };
+    });
 
   const renderRow = (row) => <RenderTitlePart row={row} />;
 
@@ -59,24 +77,26 @@ function NoticeMainCanvas({ onCreatePost }) {
   return (
     <div className="w-full flex flex-col h-full bg-white rounded-xl p-4">
       <TitleZone className="w-full mb-[20px] flex flex-row justify-between items-center">
-        <span className="text-[34px] font-semibold">공지사항</span>
+        <span className="text-[34px] font-semibold">게시판</span>
         <button
           onClick={onCreatePost}
           className="px-4 py-2 bg-[#002D5D] text-white rounded-lg"
         >
-          공지사항 작성
+          게시글 작성
         </button>
       </TitleZone>
-
       {/* JcyTable 사용 */}
-      <JcyTable
-        columns={columns}
-        columnWidths="grid-cols-[1fr,6fr,1fr,1fr]"
-        data={sortedNotices}
-        renderRow={renderRow}
-        rowClassName={(index) => (index % 2 === 0 ? "bg-gray-100" : "bg-white")}
-      />
-
+      <div className="flex flex-col w-full mb-10 border border-gray-300 rounded-md bg-white">
+        <JcyTable
+          columns={columns}
+          columnWidths="grid-cols-[0.8fr,1.2fr,5fr,1fr,1fr]"
+          data={sortedNotices}
+          renderRow={renderRow}
+          rowClassName={(index) =>
+            index % 2 === 0 ? "bg-gray-100" : "bg-white"
+          }
+        />
+      </div>
       <NoticeShowModal
         show={showNoticeModal}
         handleClose={() => setShowNoticeModal(false)}
