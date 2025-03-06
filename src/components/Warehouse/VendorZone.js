@@ -34,9 +34,10 @@ const VendorZone = () => {
   const [vendors, setVendors] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(7);
-  const [isFilterModalOn, setIsFilterModalOn] = useState(true);
   const [phoneN, setPhoneN] = useState("");
   const [isNewVendorModalOpen, setIsNewVendorModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredVendors, setFilteredVendors] = useState([]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
 
@@ -56,6 +57,29 @@ const VendorZone = () => {
     };
     fetchVendors();
   }, []);
+
+  // 검색어 변경 시 거래처 데이터 필터링
+  useEffect(() => {
+    // 숨겨진 거래처 필터링
+    let filtered = vendors.filter((vendor) => !vendor.isHidden);
+
+    // 검색어 필터
+    if (searchTerm) {
+      const cleanedSearchTerm = searchTerm.replace(/\s+/g, "").toLowerCase();
+      filtered = filtered.filter((vendor) => {
+        const clientName =
+          vendor.clientName?.replace(/\s+/g, "").toLowerCase() || "";
+        const manager = vendor.manager?.replace(/\s+/g, "").toLowerCase() || "";
+        return (
+          clientName.includes(cleanedSearchTerm) ||
+          manager.includes(cleanedSearchTerm)
+        );
+      });
+    }
+
+    setFilteredVendors(filtered);
+    setTotalPages(Math.ceil(filtered.length / 10)); // 페이지당 10개 아이템
+  }, [searchTerm, vendors]);
 
   // 거래처 데이터 업데이트 핸들러
   const handleVendorUpdate = (updatedVendors) => {
@@ -82,7 +106,9 @@ const VendorZone = () => {
         <div className="relative w-[400px]">
           <input
             type="text"
-            placeholder="거래처를 입력해주세요."
+            placeholder="거래처명 또는 담당자를 입력해주세요."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full border border-[#9D9D9C] bg-[#FCFAFA] rounded px-4 py-2"
           />
           <svg
@@ -107,7 +133,7 @@ const VendorZone = () => {
       <JcyTable
         columns={vendorColumns}
         columnWidths="grid-cols-6"
-        data={vendors}
+        data={searchTerm ? filteredVendors : vendors}
         renderRow={(row, index) => (
           <VendorRow
             partner={row}

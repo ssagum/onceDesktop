@@ -352,7 +352,8 @@ export default function StockDetailModal({
       isVisible={isVisible}
       setIsVisible={setIsVisible}
       showCancel={false}
-      modalClassName="rounded-xl">
+      modalClassName="rounded-xl"
+    >
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <div></div>
@@ -376,14 +377,14 @@ export default function StockDetailModal({
                   onPeopleChange={handlePeopleChange("writer")}
                 />
               </div>
-              <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[70px] ml-[20px]">
+              {/* <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[70px] ml-[20px]">
                 요청자:
               </label>
               <WhoSelector
                 who={"요청자"}
                 selectedPeople={formData.requester}
                 onPeopleChange={handlePeopleChange("requester")}
-              />
+              /> */}
               <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[70px] ml-[20px]">
                 부서:
               </label>
@@ -531,7 +532,8 @@ export default function StockDetailModal({
                     key={index}
                     className={`grid grid-cols-7 gap-4 py-3 ${
                       index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                    } hover:bg-gray-100 transition-colors`}>
+                    } hover:bg-gray-100 transition-colors`}
+                  >
                     <div className="text-center">{row.date}</div>
                     <div className="text-center">
                       <span
@@ -539,7 +541,8 @@ export default function StockDetailModal({
                           row.type === "입고"
                             ? "bg-blue-100 text-blue-800"
                             : "bg-red-100 text-red-800"
-                        }`}>
+                        }`}
+                      >
                         {row.type}
                       </span>
                     </div>
@@ -614,7 +617,8 @@ export default function StockDetailModal({
         isVisible={isPlusPurchaseModalOn}
         setIsVisible={setIsPlusPurchaseModalOn}
         showCancel={false}
-        modalClassName="rounded-xl">
+        modalClassName="rounded-xl"
+      >
         <div className="flex flex-col items-center w-[500px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">추가 주문</span>
@@ -702,7 +706,8 @@ export default function StockDetailModal({
                 formData.orderReason
                   ? "bg-onceBlue hover:bg-onceBlue text-white"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}>
+              }`}
+            >
               주문 요청
             </button>
           </div>
@@ -714,7 +719,8 @@ export default function StockDetailModal({
         isVisible={isQRModalOn}
         setIsVisible={setIsQRModalOn}
         showCancel={false}
-        modalClassName="rounded-xl">
+        modalClassName="rounded-xl"
+      >
         <div className="flex flex-col items-center w-[400px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">QR 코드</span>
@@ -742,7 +748,8 @@ export default function StockDetailModal({
             <div
               ref={printRef}
               className="flex flex-col items-center p-4 border rounded-md bg-white w-full"
-              style={{ pageBreakInside: "avoid" }}>
+              style={{ pageBreakInside: "avoid" }}
+            >
               <QRCodeCanvas
                 id={`qr-${item?.id}`}
                 value={item?.id || ""}
@@ -754,12 +761,14 @@ export default function StockDetailModal({
             <div className="flex gap-4 mt-6">
               <button
                 onClick={handlePrint}
-                className="px-4 py-2 bg-onceBlue text-white rounded-md flex items-center gap-2">
+                className="px-4 py-2 bg-onceBlue text-white rounded-md flex items-center gap-2"
+              >
                 <IoPrintOutline size={20} /> 인쇄
               </button>
               <button
                 onClick={handleDownloadPDF}
-                className="px-4 py-2 bg-green-600 text-white rounded-md">
+                className="px-4 py-2 bg-green-600 text-white rounded-md"
+              >
                 PDF 다운로드
               </button>
             </div>
@@ -772,7 +781,8 @@ export default function StockDetailModal({
         isVisible={isSimpleStockModalOn}
         setIsVisible={setIsSimpleStockModalOn}
         showCancel={false}
-        modalClassName="rounded-xl">
+        modalClassName="rounded-xl"
+      >
         <div className="flex flex-col items-center w-[500px] bg-white p-[30px] rounded-xl">
           <div className="flex justify-between items-center w-full mb-6">
             <span className="text-2xl font-bold">단순 입출고</span>
@@ -805,7 +815,8 @@ export default function StockDetailModal({
                     ? "border-onceBlue bg-onceBlue text-white"
                     : "border-gray-400 text-gray-600"
                 }`}
-                onClick={() => setStockAction("입고")}>
+                onClick={() => setStockAction("입고")}
+              >
                 입고
               </button>
               <div className="w-[20px]" />
@@ -815,7 +826,8 @@ export default function StockDetailModal({
                     ? "border-onceBlue bg-onceBlue text-white"
                     : "border-gray-400 text-gray-600"
                 }`}
-                onClick={() => setStockAction("출고")}>
+                onClick={() => setStockAction("출고")}
+              >
                 출고
               </button>
             </div>
@@ -872,7 +884,8 @@ export default function StockDetailModal({
                 simpleStockData.writer.length && simpleStockData.quantity
                   ? "bg-onceBlue hover:bg-onceBlue text-white"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}>
+              }`}
+            >
               {stockAction} 처리
             </button>
           </div>

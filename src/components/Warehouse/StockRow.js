@@ -20,18 +20,30 @@ const StockRow = ({ index, item, onClick }) => {
 
   return (
     <div
-      className={`grid grid-cols-7 gap-4 py-3 cursor-pointer hover:bg-gray-200`}
+      className={`grid grid-cols-7 gap-4 py-3 cursor-pointer hover:bg-gray-200 items-center`}
       onClick={onClick}
     >
-      <div className="text-center text-black">{category}</div>
-      <div className="text-center text-black">{department}</div>
-      <div className="text-center text-black">{itemName}</div>
-      <div className="flex justify-center">
+      <div className="flex items-center justify-center text-black">
+        {category}
+      </div>
+      <div className="flex items-center justify-center text-black">
+        {department}
+      </div>
+      <div className="flex items-center justify-center text-black">
+        {itemName}
+      </div>
+      <div className="flex justify-center items-center">
         <ChipText text={state} />
       </div>
-      <div className="text-center text-black">{quantity}</div>
-      <div className="text-center text-black">{measure}</div>
-      <div className="text-center text-black">{location}</div>
+      <div className="flex items-center justify-center text-black">
+        {quantity}
+      </div>
+      <div className="flex items-center justify-center text-black">
+        {measure}
+      </div>
+      <div className="flex items-center justify-center text-black">
+        {location}
+      </div>
       <StockDetailModal
         isVisible={isDetailModalOn}
         setIsVisible={setIsDetailModalOn}

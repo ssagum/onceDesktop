@@ -17,6 +17,7 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useToast } from "../../contexts/ToastContext";
@@ -42,7 +43,77 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   const [state, setState] = useState(item?.state || "입고 완료");
   const [locationImage, setLocationImage] = useState(item?.locationImage || "");
 
+  // 거래처 자동완성 관련 상태
+  const [vendors, setVendors] = useState([]);
+  const [filteredVendors, setFilteredVendors] = useState([]);
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false);
+
   const { showToast } = useToast();
+
+  // 거래처 목록 가져오기
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "vendors"));
+        const vendorList = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setVendors(vendorList.filter((vendor) => !vendor.isHidden));
+      } catch (error) {
+        console.error("거래처 데이터 로딩 실패:", error);
+      }
+    };
+    fetchVendors();
+  }, []);
+
+  // URL 정규화 함수 (https://, www. 등을 고려)
+  const normalizeUrl = (url) => {
+    if (!url) return "";
+
+    // 공백 제거 및 소문자 변환
+    url = url.trim().toLowerCase();
+
+    // 프로토콜 제거
+    url = url.replace(/^https?:\/\//, "");
+
+    // www. 제거
+    url = url.replace(/^www\./, "");
+
+    return url;
+  };
+
+  // 거래처 검색 필터링
+  useEffect(() => {
+    if (vendor.trim() === "") {
+      setFilteredVendors([]);
+      setShowVendorDropdown(false);
+      return;
+    }
+
+    const normalizedInput = vendor.toLowerCase();
+    const normalizedVendors = vendors.filter((v) => {
+      // clientName에서 검색
+      if (
+        v.clientName &&
+        v.clientName.toLowerCase().includes(normalizedInput)
+      ) {
+        return true;
+      }
+
+      // URL에서 검색 (정규화 후)
+      if (v.url) {
+        const normalizedVendorUrl = normalizeUrl(v.url);
+        const normalizedSearchUrl = normalizeUrl(normalizedInput);
+        return normalizedVendorUrl.includes(normalizedSearchUrl);
+      }
+
+      return false;
+    });
+
+    setFilteredVendors(normalizedVendors);
+    setShowVendorDropdown(normalizedVendors.length > 0);
+  }, [vendor, vendors]);
 
   // 아이템이 변경될 때 상태 초기화
   useEffect(() => {
@@ -134,6 +205,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         break;
       case "vendor":
         setVendor(value);
+        setShowVendorDropdown(true);
         break;
       case "location":
         setLocation(value);
@@ -422,6 +494,12 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     setWriter(selectedPeople);
   };
 
+  // 거래처 선택 핸들러
+  const handleVendorSelect = (selectedVendor) => {
+    setVendor(selectedVendor.clientName);
+    setShowVendorDropdown(false);
+  };
+
   return (
     <div className="w-full flex flex-col relative h-full">
       <TopZone className="w-full flex flex-row justify-between">
@@ -432,7 +510,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
             }`}
-            onClick={() => handleModeChange("신규")}>
+            onClick={() => handleModeChange("신규")}
+          >
             신규
           </button>
           <button
@@ -441,7 +520,8 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
             }`}
-            onClick={() => handleModeChange("정정")}>
+            onClick={() => handleModeChange("정정")}
+          >
             정정
           </button>
         </div>
@@ -675,26 +755,59 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         )}
 
         {/* 거래처 */}
-        <div className="flex flex-row items-center">
+        <div className="flex flex-row items-center relative">
           <label className="h-[40px] flex items-center font-semibold text-black w-[80px]">
             거래처:
           </label>
-          <input
-            type="text"
-            name="vendor"
-            value={vendor}
-            onChange={handleChange}
-            placeholder="URL을 입력해주세요"
-            className="w-[600px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-          />
-          <div className="w-[80px] flex justify-center h-[40px]">
-            <div className="flex w-[40px] h-[40px] justify-center items-center bg-slate-400 rounded-md">
+          <div className="relative w-[600px]">
+            <input
+              type="text"
+              name="vendor"
+              value={vendor}
+              onChange={handleChange}
+              onFocus={() =>
+                setShowVendorDropdown(
+                  vendor.trim() !== "" && filteredVendors.length > 0
+                )
+              }
+              onBlur={() => setTimeout(() => setShowVendorDropdown(false), 200)}
+              placeholder="거래처명 또는 URL을 입력해주세요"
+              className="w-full border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
+            />
+            {showVendorDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {filteredVendors.length > 0 ? (
+                  filteredVendors.map((v) => (
+                    <div
+                      key={v.id}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={() => handleVendorSelect(v)}
+                    >
+                      <div className="font-semibold">{v.clientName}</div>
+                      {v.url && (
+                        <div className="text-sm text-gray-600">{v.url}</div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-4 py-2 text-gray-500">
+                    검색 결과가 없습니다
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* <div className="w-[80px] flex justify-center h-[40px]">
+            <div
+              className="flex w-[40px] h-[40px] justify-center items-center bg-slate-400 rounded-md cursor-pointer"
+              onClick={() => setShowVendorDropdown(true)}
+            >
               <img src={search} alt="Logo" className="w-[30px] h-[30px]" />
             </div>
           </div>
           <span className="w-[200px] text-once14">
             기존 거래처의 경우 검색하세요
-          </span>
+          </span> */}
         </div>
 
         {/* 위치 - 필수 표시 추가 */}

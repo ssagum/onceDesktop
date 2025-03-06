@@ -6,7 +6,7 @@ export default function JcyTable({
   data,
   rowClassName,
   renderRow,
-  itemsPerPage = 8,
+  itemsPerPage = 7,
 }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);

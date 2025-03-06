@@ -36,6 +36,7 @@ const VendorModal = ({
     industry: vendor?.industry || "",
     contact: vendor?.contact || "",
     email: vendor?.email || "",
+    url: vendor?.url || "",
     documents: {
       businessRegistration: vendor?.documents?.businessRegistration || null,
       businessCard: vendor?.documents?.businessCard || null,
@@ -54,6 +55,7 @@ const VendorModal = ({
         industry: vendor.industry || "",
         contact: vendor.contact || "",
         email: vendor.email || "",
+        url: vendor.url || "",
         documents: {
           businessRegistration: vendor?.documents?.businessRegistration || null,
           businessCard: vendor?.documents?.businessCard || null,
@@ -72,6 +74,12 @@ const VendorModal = ({
     if (!selectedIndustry) {
       newErrors.industry = "업종을 선택해주세요";
     }
+
+    // URL 형식 검증
+    if (formData.url && !isValidUrl(formData.url)) {
+      newErrors.url = "유효한 URL 형식이 아닙니다";
+    }
+
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
@@ -79,6 +87,47 @@ const VendorModal = ({
       return false;
     }
     return true;
+  };
+
+  // URL 유효성 검사 함수
+  const isValidUrl = (urlString) => {
+    if (!urlString) return false;
+
+    // 공백 제거
+    urlString = urlString.trim();
+
+    // 도메인 형식 확인을 위한 정규식
+    const domainRegex =
+      /^(www\.)?[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(\.[a-zA-Z]{2,})?$/;
+
+    // 프로토콜이 없는 경우 추가
+    if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
+      // 도메인 형식인 경우 (예: www.naver.com)
+      if (domainRegex.test(urlString)) {
+        urlString = "https://" + urlString;
+      }
+    }
+
+    try {
+      new URL(urlString);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // URL 형식에 프로토콜 추가 (필요시)
+  const formatUrl = (urlString) => {
+    if (!urlString) return "";
+
+    urlString = urlString.trim();
+
+    // 프로토콜이 없는 경우 추가
+    if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
+      urlString = "https://" + urlString;
+    }
+
+    return urlString;
   };
 
   // isFormValid 함수 추가
@@ -149,6 +198,7 @@ const VendorModal = ({
         industry: selectedIndustry,
         contact: formData.contact,
         email: formData.email,
+        url: formData.url,
         documents: {},
         updatedAt: new Date(),
       };
@@ -255,8 +305,9 @@ const VendorModal = ({
     <ModalTemplate
       isVisible={isVisible}
       setIsVisible={setIsVisible}
-      showCancel={false}>
-      <div className="flex flex-col w-[700px] h-[580px] items-center py-[40px] justify-between">
+      showCancel={false}
+    >
+      <div className="flex flex-col w-[700px] h-[660px] items-center py-[40px] justify-between">
         <SectionZone className="flex flex-col w-full px-[30px]">
           <label className="flex font-semibold text-black mb-2 w-[300px] h-[40px]">
             <div className="text-once20 w-[300px]">거래처 상세</div>
@@ -361,6 +412,30 @@ const VendorModal = ({
             />
           </OneLine>
 
+          <OneLine className="flex flex-row w-full items-center mt-[30px]">
+            <label className="flex font-semibold text-black w-[120px] h-[40px] items-center">
+              <span className="text-once16">웹사이트</span>
+            </label>
+            <div className="w-full">
+              <input
+                type="url"
+                value={formData.url}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, url: e.target.value }))
+                }
+                placeholder="https://www.example.com"
+                className={`w-full border ${
+                  errors.url ? "border-red-500" : "border-gray-400"
+                } rounded-md h-[40px] px-4 bg-textBackground text-center`}
+              />
+            </div>
+          </OneLine>
+          {errors.url && (
+            <div className="pl-[100px] mt-1">
+              <span className="text-red-500 text-sm">{errors.url}</span>
+            </div>
+          )}
+
           <OneLine className="flex flex-row w-full gap-x-[20px] mt-[30px] mb-[30px]">
             <Half className="w-1/2 flex flex-row items-center">
               <label className="flex font-semibold text-black w-[100px] h-[40px] items-center">
@@ -402,13 +477,15 @@ const VendorModal = ({
         <div className="w-full px-[30px] flex flex-row justify-between gap-x-[20px]">
           <button
             onClick={() => setIsVisible(false)}
-            className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors">
+            className="flex-1 h-[40px] bg-gray-500 text-white rounded-md font-semibold hover:bg-gray-600 transition-colors"
+          >
             취소
           </button>
           {mode !== "create" && (
             <button
               onClick={handleDelete}
-              className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors">
+              className="flex-1 h-[40px] bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors"
+            >
               삭제
             </button>
           )}
@@ -419,7 +496,8 @@ const VendorModal = ({
               isFormValid()
                 ? "bg-onceBlue hover:bg-blue-600"
                 : "bg-gray-300 cursor-not-allowed"
-            }`}>
+            }`}
+          >
             {mode === "create" ? "등록" : "수정"}
           </button>
         </div>
