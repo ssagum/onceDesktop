@@ -16,7 +16,13 @@ const InforationZone = styled.div``;
 const InfoRow = styled.div``;
 const ThreeButton = styled.div``;
 
-function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
+function TaskAddModal({
+  isVisible,
+  setIsVisible,
+  task,
+  isEdit = false,
+  onTaskAdd,
+}) {
   const [recordModalOn, setRecordModalOn] = useState(false);
   const [selectedDays, setSelectedDays] = useState(task?.days || []);
   const [selectedCycle, setSelectedCycle] = useState(task?.cycle || "매일");
@@ -37,6 +43,8 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
   );
   // 무한 종료일 (반복성 업무용)
   const INFINITE_END_DATE = "2099/12/31";
+  // 업무 내용 상태 추가
+  const [content, setContent] = useState(task?.content || "");
 
   // 입력 필드 초기화 함수
   const resetFields = () => {
@@ -164,6 +172,43 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
     } else {
       setSelectedDays([...selectedDays, day]);
     }
+  };
+
+  // 업무 저장 핸들러
+  const handleSaveTask = () => {
+    // 필수 입력 필드 검증
+    if (!title) {
+      alert("업무 제목을 입력해주세요.");
+      return;
+    }
+
+    if (!writer) {
+      alert("작성자를 선택해주세요.");
+      return;
+    }
+
+    // 새 업무 객체 생성
+    const newTask = {
+      id: isEdit && task ? task.id : Date.now().toString(), // 편집 시 기존 ID 유지, 새 업무는 새 ID 생성
+      title,
+      writer,
+      assignee, // 담당자가 없을 수 있음
+      category,
+      priority,
+      startDate,
+      endDate: category === "반복성" ? INFINITE_END_DATE : endDate,
+      cycle: selectedCycle,
+      days: selectedDays,
+      content,
+      createdAt: isEdit && task ? task.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 부모 컴포넌트로 업무 데이터 전달
+    onTaskAdd(newTask);
+
+    // 모달 닫기
+    handleCloseModal();
   };
 
   return (
@@ -453,12 +498,18 @@ function TaskAddModal({ isVisible, setIsVisible, task, isEdit = false }) {
                       ? "반복성 업무: 정해진 주기에 따라 반복되는 업무입니다. 시작일 이후부터 계속 진행되며, 종료일은 지정할 수 없습니다."
                       : "이벤트성 업무: 특정 기간 동안 진행되는 업무입니다. 시작일과 종료일을 각각 설정할 수 있습니다."
                   }
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
                 ></textarea>
               </div>
             </div>
             <ThreeButton className="flex flex-row w-full gap-x-[20px]">
-              <OnceOnOffButton text={"업무삭제"} />
-              <OnceOnOffButton text="수정하기" />
+              {isEdit && <OnceOnOffButton text={"업무삭제"} />}
+              <OnceOnOffButton
+                text={isEdit ? "수정하기" : "저장하기"}
+                on={true}
+                onClick={handleSaveTask}
+              />
               <OnceOnOffButton
                 on={true}
                 text="업무일지"

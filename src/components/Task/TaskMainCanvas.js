@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -6,6 +6,8 @@ import {
   useSensor,
   useSensors,
   useDroppable,
+  useDraggable,
+  closestCenter,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -23,6 +25,7 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import { JcyCalendar } from "../common/JcyCalendar";
 import NameCoin from "../common/NameCoin";
 import TaskAddModal from "./TaskAddModal";
+import ToDo from "../common/ToDo";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -148,13 +151,24 @@ const columnOrder = [
 /* ==============================================
    내부 ToDoItem 컴포넌트 (기존 UI)
 ============================================== */
-function ToDoItem({ content }) {
+// 중요도에 따른 색상 매핑
+const priorityColors = {
+  상: "bg-red-400",
+  중: "bg-yellow-400",
+  하: "bg-green-400",
+};
+
+function ToDoItem({ task }) {
   const [whoModalOpen, setWhoModalOpen] = useState(false);
+
+  // 중요도 기본값 설정
+  const priority = task?.priority || "중";
+
   return (
     <div className="h-[56px] flex flex-row w-[300px] items-center bg-onceBackground mb-[4px]">
-      <ColorZone className="w-[20px] h-full bg-red-400" />
+      <ColorZone className={`w-[20px] h-full ${priorityColors[priority]}`} />
       <TextZone className="flex-1 px-[20px]">
-        <span>{content}</span>
+        <span>{task?.title || task?.content || "제목 없음"}</span>
       </TextZone>
     </div>
   );
@@ -163,18 +177,41 @@ function ToDoItem({ content }) {
 /* ==============================================
    1) SortableTask: 드래그 가능한 실제 아이템 컴포넌트
 ============================================== */
-function SortableTask({ id, content, containerId }) {
+function SortableTask({ id, task, containerId }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
       id,
-      data: { sortable: { containerId } },
+      data: {
+        type: "task",
+        sortable: { containerId },
+      },
     });
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition: "transform 250ms ease, left 250ms ease, top 250ms ease",
     width: "100%",
     height: "100%",
   };
+
+  // task가 없는 경우 빈 컴포넌트 반환
+  if (!task) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        className="cursor-grab flex items-center justify-center"
+      >
+        <div className="h-[56px] flex flex-row w-[300px] items-center bg-gray-100 mb-[4px]">
+          <div className="flex-1 px-[20px] text-gray-400">
+            <span>빈 항목</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -184,7 +221,7 @@ function SortableTask({ id, content, containerId }) {
       {...listeners}
       className="cursor-grab flex items-center justify-center"
     >
-      <ToDoItem content={content} />
+      <ToDoItem task={task} />
     </div>
   );
 }
@@ -194,8 +231,14 @@ function SortableTask({ id, content, containerId }) {
 ============================================== */
 export function ToDoDragComponent({ column, tasks }) {
   const totalSlots = 9; // 고정 셀 개수 (3×3)
+
+  // tasks가 배열 형태일 때 id를 찾아 매핑하여 사용
+  const taskIdsToUse = Array.isArray(tasks)
+    ? tasks.slice(0, totalSlots).map((task) => task.id)
+    : column.taskIds;
+
   const fixedSlots = Array.from({ length: totalSlots }, (_, index) =>
-    column.taskIds[index] ? column.taskIds[index] : `empty-${index}`
+    taskIdsToUse[index] ? taskIdsToUse[index] : `empty-${index}`
   );
 
   const { setNodeRef } = useDroppable({
@@ -222,6 +265,25 @@ export function ToDoDragComponent({ column, tasks }) {
     { left: "66.66%", top: "66.66%" },
   ];
 
+  // 태스크 데이터 가져오기 (배열 또는 객체 형태 모두 지원)
+  const getTaskData = (taskId) => {
+    if (!taskId || taskId.toString().startsWith("empty-")) return null;
+
+    // tasks가 배열인 경우 (새로운 구현)
+    if (Array.isArray(tasks)) {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) return task;
+    }
+
+    // tasks가 객체인 경우 (기존 구현)
+    if (tasks && typeof tasks === "object" && tasks[taskId]) {
+      return tasks[taskId];
+    }
+
+    // 태스크가 없으면 최소한의 내용으로 객체 생성
+    return { id: taskId, content: `업무 ${taskId}` };
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -231,6 +293,8 @@ export function ToDoDragComponent({ column, tasks }) {
         {fixedSlots.map((id, index) => {
           const pos = gridPositions[index];
           const isEmpty = id.toString().startsWith("empty-");
+          const taskData = getTaskData(id);
+
           return (
             <div
               key={id}
@@ -244,11 +308,7 @@ export function ToDoDragComponent({ column, tasks }) {
               {isEmpty ? (
                 <div className="w-full h-full rounded border border-dashed"></div>
               ) : (
-                <SortableTask
-                  id={id}
-                  content={tasks[id].content}
-                  containerId={column.id}
-                />
+                <SortableTask id={id} task={taskData} containerId={column.id} />
               )}
             </div>
           );
@@ -294,7 +354,7 @@ function PersonFolder({ column, tasks }) {
    - onDragStart, onDragEnd 이벤트에서 항목 이동 및 재정렬 처리
 ============================================== */
 function TaskMainCanvas() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState([]);
   const [columns, setColumns] = useState(initialColumns);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [totalPages] = useState(7);
@@ -311,6 +371,64 @@ function TaskMainCanvas() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
+  // 로컬 스토리지에서 업무 목록 불러오기
+  useEffect(() => {
+    const savedTasks = localStorage.getItem("tasks");
+    if (savedTasks) {
+      setTasks(JSON.parse(savedTasks));
+    }
+  }, []);
+
+  // 업무 목록 저장하기
+  useEffect(() => {
+    if (tasks.length > 0) {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+  }, [tasks]);
+
+  // 업무 추가 핸들러
+  const handleTaskAdd = (newTask) => {
+    // 새 업무 추가
+    setTasks((prevTasks) => [...prevTasks, newTask]);
+
+    // unassigned 영역에 새 업무 ID 추가
+    setColumns((prevColumns) => {
+      const unassignedColumn = prevColumns.unassigned;
+      return {
+        ...prevColumns,
+        unassigned: {
+          ...unassignedColumn,
+          taskIds: [...unassignedColumn.taskIds, newTask.id],
+        },
+      };
+    });
+  };
+
+  // 업무 업데이트 핸들러 (드래그 앤 드롭 시 담당자 정보 업데이트)
+  const updateTaskAssignee = (taskId, assignee) => {
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, assignee, updatedAt: new Date().toISOString() }
+          : task
+      )
+    );
+  };
+
+  // 담당자 없는 업무 필터링
+  const unassignedTasks = tasks.filter((task) => !task.assignee);
+
+  // 담당자별 업무 그룹화
+  const tasksByAssignee = {};
+  tasks.forEach((task) => {
+    if (task.assignee) {
+      if (!tasksByAssignee[task.assignee]) {
+        tasksByAssignee[task.assignee] = [];
+      }
+      tasksByAssignee[task.assignee].push(task);
+    }
+  });
+
   const handleDragStart = (event) => {
     setActiveTaskId(event.active.id);
   };
@@ -321,7 +439,50 @@ function TaskMainCanvas() {
       setActiveTaskId(null);
       return;
     }
-    const activeContainer = active.data.current.sortable.containerId;
+
+    // 드래그된 아이템이 task이고, 드랍 컨테이너가 담당자 폴더인 경우
+    if (
+      active.data.current?.type === "task" &&
+      over.data.current?.type === "container"
+    ) {
+      const taskId = active.id;
+      const containerId = over.id;
+
+      // 담당자 정보 업데이트 (containerId가 담당자 정보)
+      updateTaskAssignee(taskId, containerId);
+
+      // 기존 컬럼에서 제거하고 새 컬럼에 추가
+      const activeContainer = active.data.current.sortable?.containerId;
+      if (activeContainer && activeContainer !== containerId) {
+        const sourceColumn = columns[activeContainer];
+        const destinationColumn = columns[containerId];
+
+        if (sourceColumn && destinationColumn) {
+          const newSourceTaskIds = sourceColumn.taskIds.filter(
+            (id) => id !== taskId
+          );
+          const newDestinationTaskIds = [...destinationColumn.taskIds, taskId];
+
+          setColumns({
+            ...columns,
+            [activeContainer]: {
+              ...sourceColumn,
+              taskIds: newSourceTaskIds,
+            },
+            [containerId]: {
+              ...destinationColumn,
+              taskIds: newDestinationTaskIds,
+            },
+          });
+        }
+      }
+
+      setActiveTaskId(null);
+      return;
+    }
+
+    // 같은 컨테이너 내에서 순서 변경 (기존 코드)
+    const activeContainer = active.data.current?.sortable?.containerId;
     const overContainer = over.data.current?.sortable?.containerId || over.id;
     if (!activeContainer || !overContainer) {
       setActiveTaskId(null);
@@ -342,36 +503,21 @@ function TaskMainCanvas() {
       const sourceColumn = columns[activeContainer];
       const destinationColumn = columns[overContainer];
       const newSourceTaskIds = sourceColumn.taskIds.filter(
-        (taskId) => taskId !== active.id
+        (id) => id !== active.id
       );
-      const newDestinationTaskIds = [...destinationColumn.taskIds, active.id];
-
-      // 인원 폴더로 이동하면 tasks 객체에 who 속성을 추가
-      if (overContainer !== "unassigned") {
-        setTasks((prev) => ({
-          ...prev,
-          [active.id]: { ...prev[active.id], who: overContainer },
-        }));
-      } else {
-        setTasks((prev) => {
-          const updatedTask = { ...prev[active.id] };
-          delete updatedTask.who;
-          return { ...prev, [active.id]: updatedTask };
-        });
-      }
-
+      const newDestinationTaskIds = [...destinationColumn.taskIds];
+      const overIndex = newDestinationTaskIds.indexOf(over.id);
+      newDestinationTaskIds.splice(overIndex, 0, active.id);
       setColumns({
         ...columns,
-        [activeContainer]: {
-          ...sourceColumn,
-          taskIds: newSourceTaskIds,
-        },
+        [activeContainer]: { ...sourceColumn, taskIds: newSourceTaskIds },
         [overContainer]: {
           ...destinationColumn,
           taskIds: newDestinationTaskIds,
         },
       });
     }
+
     setActiveTaskId(null);
   };
 
@@ -413,6 +559,7 @@ function TaskMainCanvas() {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -423,15 +570,15 @@ function TaskMainCanvas() {
             <OnceOnOffButton
               text={"업무 추가하기 +"}
               on={true}
-              onClick={() => {
-                // alert("현재 제한된 기능입니다.");
-                setTaskAddModalOn(true); // 기존 기능 주석 처리
-              }}
+              onClick={() => setTaskAddModalOn(true)}
             />
           </div>
         </TitleZone>
         {/* 상단 할 일 목록 (9칸 고정 그리드) */}
-        <ToDoDragComponent column={columns.unassigned} tasks={tasks} />
+        <ToDoDragComponent
+          column={columns.unassigned}
+          tasks={unassignedTasks}
+        />
         {/* 페이지네이션 영역 */}
         <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
           <button
@@ -462,49 +609,62 @@ function TaskMainCanvas() {
         </PaginationZone>
         <div className="flex flex-row gap-x-[20px]">
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder column={initialColumns.원장} tasks={initialTasks} />
+            <DragGoalFolder
+              column={initialColumns.원장}
+              tasks={tasksByAssignee["원장"] || []}
+            />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
             <DragGoalFolder
               column={initialColumns.원무과장}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["원무과장"] || []}
             />
             <DragGoalFolder
               column={initialColumns.간호팀장}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["간호팀장"] || []}
             />
             <DragGoalFolder
               column={initialColumns.물리치료팀장}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["물리치료팀장"] || []}
             />
             <DragGoalFolder
               column={initialColumns.방사선팀장}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["방사선팀장"] || []}
             />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
             <DragGoalFolder
               column={initialColumns.간호팀}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["간호팀"] || []}
             />
             <DragGoalFolder
               column={initialColumns.원무팀}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["원무팀"] || []}
             />
             <DragGoalFolder
               column={initialColumns.물리치료팀}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["물리치료팀"] || []}
             />
             <DragGoalFolder
               column={initialColumns.방사선팀}
-              tasks={initialTasks}
+              tasks={tasksByAssignee["방사선팀"] || []}
             />
           </div>
         </div>
         <DragOverlay>
           {activeTaskId ? (
             <div className="p-2 bg-white rounded shadow">
-              {tasks[activeTaskId].content}
+              {(() => {
+                const activeTask = Array.isArray(tasks)
+                  ? tasks.find((task) => task.id === activeTaskId)
+                  : tasks[activeTaskId];
+
+                return (
+                  activeTask?.title ||
+                  activeTask?.content ||
+                  `업무 ${activeTaskId}`
+                );
+              })()}
             </div>
           ) : null}
         </DragOverlay>
@@ -654,6 +814,7 @@ function TaskMainCanvas() {
       <TaskAddModal
         isVisible={taskAddModalOn}
         setIsVisible={setTaskAddModalOn}
+        onTaskAdd={handleTaskAdd}
       />
     </DndContext>
   );
