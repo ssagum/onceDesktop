@@ -559,7 +559,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               <img src={search} alt="Logo" className="w-[30px] h-[30px]" />
             </div>
           </div>
-          <span>기존 거래처의 경우 검색하세요</span>
+          <span className="w-[220px]">기존 거래처의 경우 검색하세요</span>
         </div>
 
         {/* 위치 - 필수 표시 추가 */}

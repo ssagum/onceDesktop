@@ -171,7 +171,7 @@ const VendorModal = ({
       <div className="flex flex-col w-[700px] h-[580px] items-center py-[40px] justify-between">
         <SectionZone className="flex flex-col w-full px-[30px]">
           <label className="flex font-semibold text-black mb-2 w-[100px] h-[40px]">
-            <span className="text-once20">거래처 상세</span>
+            <span className="text-once20 w-[200px]">거래처 상세</span>
           </label>
           <OneLine className="flex flex-row w-full gap-x-[20px] mt-[20px]">
             <Half className="w-1/2 flex flex-row items-center">

@@ -363,7 +363,10 @@ const Schedule = () => {
                 <label className="mr-2">
                   {scheduleForm.type === "휴가" ? "휴가자" : "담당자"}
                 </label>
-                <WhoSelector disabled={scheduleForm.type === "휴가"} />
+                <WhoSelector
+                  who={"담당자"}
+                  disabled={scheduleForm.type === "휴가"}
+                />
               </div>
 
               {/* 휴가 모드일 때만 휴가 유형 선택 표시 */}

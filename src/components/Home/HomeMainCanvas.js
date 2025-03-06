@@ -28,6 +28,7 @@ import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
 import ReceivedCallList from "../call/ReceivedCallList";
 import ChatHistoryModal from "../common/ChatHistoryModal";
+import RequestModal from "./RequestModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -39,16 +40,8 @@ const InsideHeaderZone = styled.div``;
 const ToDoZone = styled.div``;
 
 const Square = ({ title }) => {
-  const handleClick = () => {
-    if (["비품신청", "휴가신청", "요청하기"].includes(title)) {
-      alert("현재 제한된 기능입니다.");
-    }
-  };
-
   return (
-    <div
-      className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer"
-      onClick={handleClick}>
+    <div className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer">
       <div className="w-[40px] h-[50px]">
         {title === "공지등록" && (
           <img src={plus} alt="Logo" className="w-[40px]" />
@@ -93,8 +86,7 @@ export default function HomeMainCanvas() {
   const [taskAddModalOn, setTaskAddModalOn] = useState(false);
   const [notices, setNotices] = useState([]);
   const [showChatHistory, setShowChatHistory] = useState(false);
-
-  console.log(userLevelData);
+  const [requestModalOn, setRequestModalOn] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
@@ -235,7 +227,8 @@ export default function HomeMainCanvas() {
                   <InsideHeader title={"알림"} />
                   <button
                     className="text-gray-600 underline"
-                    onClick={() => setShowChatHistory(true)}>
+                    onClick={() => setShowChatHistory(true)}
+                  >
                     더보기
                   </button>
                 </InsideHeaderZone>
@@ -246,7 +239,8 @@ export default function HomeMainCanvas() {
               <RightBottomZone className="w-full flex-row flex">
                 <button
                   onClick={() => setCallIsVisible(true)}
-                  className="w-full flex flex-col bg-white mr-[20px] rounded-xl h-[240px] justify-center items-center">
+                  className="w-full flex flex-col bg-white mr-[20px] rounded-xl h-[240px] justify-center items-center"
+                >
                   <img src={bell} alt="Logo" className="w-[80px] mb-[10px]" />
                   <span className="text-once18">호 출</span>
                 </button>
@@ -270,7 +264,9 @@ export default function HomeMainCanvas() {
                     <div onClick={openTimerWindow}>
                       <Square title={"타이머"} />
                     </div>
-                    <Square title={"요청하기"} />
+                    <div onClick={() => setRequestModalOn(true)}>
+                      <Square title={"요청하기"} />
+                    </div>
                   </div>
                 </div>
                 <CallModal
@@ -291,6 +287,10 @@ export default function HomeMainCanvas() {
         isVisible={showChatHistory}
         setIsVisible={setShowChatHistory}
         recentCalls={[]} // 실제 데이터를 여기에 전달
+      />
+      <RequestModal
+        isVisible={requestModalOn}
+        setIsVisible={setRequestModalOn}
       />
     </div>
   );

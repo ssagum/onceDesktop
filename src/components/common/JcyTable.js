@@ -6,10 +6,10 @@ export default function JcyTable({
   data,
   rowClassName,
   renderRow,
+  itemsPerPage = 8,
 }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // 페이지당 아이템 수
 
   // state 정렬 우선순위 설정
   const stateOrder = ["주문 필요", "승인", "주문 완료", "입고 중", "입고 완료"];
