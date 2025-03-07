@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import DayToggle from "../common/DayToggle";
 import PriorityToggle from "../common/PriorityToggle";
 import DepartmentRoleSelector from "../common/DepartmentRoleSelector";
+import { useToast } from "../../contexts/ToastContext";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div``;
@@ -45,6 +46,7 @@ function TaskAddModal({
   const INFINITE_END_DATE = "2099/12/31";
   // 업무 내용 상태 추가
   const [content, setContent] = useState(task?.content || "");
+  const { showToast } = useToast();
 
   // 입력 필드 초기화 함수
   const resetFields = () => {
@@ -176,14 +178,14 @@ function TaskAddModal({
 
   // 업무 저장 핸들러
   const handleSaveTask = () => {
-    // 필수 입력 필드 검증
+    // 기본 유효성 검증
     if (!title) {
-      alert("업무 제목을 입력해주세요.");
+      showToast("업무 제목을 입력해주세요.", "warning");
       return;
     }
 
-    if (!writer) {
-      alert("작성자를 선택해주세요.");
+    if (!assignee || assignee.length === 0) {
+      showToast("작성자를 선택해주세요.", "warning");
       return;
     }
 

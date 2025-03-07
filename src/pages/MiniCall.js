@@ -10,6 +10,7 @@ import {
   limit,
 } from "firebase/firestore";
 import logoLong from "./assets";
+import { useToast } from "../contexts/ToastContext";
 
 const MiniCall = () => {
   const [activeTab, setActiveTab] = useState("home");
@@ -21,6 +22,7 @@ const MiniCall = () => {
   const [latestCall, setLatestCall] = useState(null);
   const [isSending, setIsSending] = useState(false); // 쿨타임 상태
   const [firstTime, setFirstTime] = useState(true);
+  const { showToast } = useToast();
 
   // 📢 사운드 재생 함수
   const playSound = () => {
@@ -87,24 +89,18 @@ const MiniCall = () => {
   }, [receiverId, latestCall]);
 
   // Firestore에 호출 메시지 저장
-  const sendCallMessage = async (location) => {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const formattedTime = `${hours}:${minutes}`;
-    try {
-      await addDoc(collection(db, "calls"), {
-        message: `${location} 호출`,
-        receiverId: location,
-        senderId: receiverId,
-        formattedTime,
-        createdAt: Date.now(), // 생성 시각 저장
-        [location]: true,
-        [receiverId]: true,
+  const handleCallCreate = (location) => {
+    if (!socket) {
+      initSocket();
+    }
+
+    // 소켓 이벤트 발생
+    if (socket) {
+      socket.emit("call-create", {
+        location,
+        sender: user.name,
       });
-      alert(`${location} 호출하였습니다.`);
-    } catch (error) {
-      console.error("Error sending call message:", error);
+      showToast(`${location} 호출하였습니다.`, "success");
     }
   };
 
@@ -162,7 +158,7 @@ const MiniCall = () => {
               {receiverOptions.map((location) => (
                 <button
                   key={location}
-                  onClick={() => sendCallMessage(location)}
+                  onClick={() => handleCallCreate(location)}
                   className={`${
                     receiverId !== location ? "bg-[#1B3764]" : "bg-[#888]"
                   } text-white py-2 rounded w-[90px] text-[16px]`}

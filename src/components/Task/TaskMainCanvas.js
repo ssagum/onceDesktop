@@ -25,7 +25,19 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import { JcyCalendar } from "../common/JcyCalendar";
 import NameCoin from "../common/NameCoin";
 import TaskAddModal from "./TaskAddModal";
+import TaskHistoryModal from "./TaskHistoryModal";
+import { format } from "date-fns";
+import {
+  getAllTasks,
+  getTasksByDate,
+  addTask,
+  assignTask,
+  completeTask,
+  getTaskHistory,
+} from "./TaskService";
 import ToDo from "../common/ToDo";
+import { db } from "../../firebase";
+import { collection, query, onSnapshot, where } from "firebase/firestore";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -67,14 +79,12 @@ const initialTasks = {
   "task-9": { id: "task-9", content: "할 일 9" },
 };
 
-// 초기 컬럼 데이터
-// - unassigned: 아직 배정되지 않은 할 일
-// - 원장님, 부장님: 인원별 폴더 영역
+// 초기 컬럼 데이터 - 부서와 역할명만 유지
 const initialColumns = {
   unassigned: {
     id: "unassigned",
     title: "할 일 목록",
-    taskIds: ["task-1", "task-2", "task-3", "task-4"],
+    taskIds: [],
   },
   원장: {
     id: "원장",
@@ -158,11 +168,19 @@ const priorityColors = {
   하: "bg-green-400",
 };
 
-function ToDoItem({ task }) {
+function ToDoItem({ task, onViewHistory }) {
   const [whoModalOpen, setWhoModalOpen] = useState(false);
 
   // 중요도 기본값 설정
   const priority = task?.priority || "중";
+
+  // 업무 이력 보기 핸들러
+  const handleViewHistory = (e) => {
+    e.stopPropagation();
+    if (onViewHistory) {
+      onViewHistory(task);
+    }
+  };
 
   return (
     <div className="h-[56px] flex flex-row w-[300px] items-center bg-onceBackground mb-[4px]">
@@ -170,6 +188,16 @@ function ToDoItem({ task }) {
       <TextZone className="flex-1 px-[20px]">
         <span>{task?.title || task?.content || "제목 없음"}</span>
       </TextZone>
+
+      {/* 완료된 경우 이력 버튼 표시 */}
+      {task?.completed && onViewHistory && (
+        <button
+          className="text-blue-500 hover:text-blue-700 mr-2"
+          onClick={handleViewHistory}
+        >
+          이력
+        </button>
+      )}
     </div>
   );
 }
@@ -177,7 +205,7 @@ function ToDoItem({ task }) {
 /* ==============================================
    1) SortableTask: 드래그 가능한 실제 아이템 컴포넌트
 ============================================== */
-function SortableTask({ id, task, containerId }) {
+function SortableTask({ id, task, containerId, onViewHistory }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
       id,
@@ -221,7 +249,7 @@ function SortableTask({ id, task, containerId }) {
       {...listeners}
       className="cursor-grab flex items-center justify-center"
     >
-      <ToDoItem task={task} />
+      <ToDoItem task={task} onViewHistory={onViewHistory} />
     </div>
   );
 }
@@ -229,7 +257,7 @@ function SortableTask({ id, task, containerId }) {
 /* ==============================================
    2) ToDoDragComponent: 상단 unassigned 영역 (9칸 고정 그리드)
 ============================================== */
-export function ToDoDragComponent({ column, tasks }) {
+export function ToDoDragComponent({ column, tasks, onViewHistory }) {
   const totalSlots = 9; // 고정 셀 개수 (3×3)
 
   // tasks가 배열 형태일 때 id를 찾아 매핑하여 사용
@@ -308,7 +336,12 @@ export function ToDoDragComponent({ column, tasks }) {
               {isEmpty ? (
                 <div className="w-full h-full rounded border border-dashed"></div>
               ) : (
-                <SortableTask id={id} task={taskData} containerId={column.id} />
+                <SortableTask
+                  id={id}
+                  task={taskData}
+                  containerId={column.id}
+                  onViewHistory={onViewHistory}
+                />
               )}
             </div>
           );
@@ -357,13 +390,13 @@ function TaskMainCanvas() {
   const [tasks, setTasks] = useState([]);
   const [columns, setColumns] = useState(initialColumns);
   const [activeTaskId, setActiveTaskId] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [totalPages] = useState(7);
   const [currentPage, setCurrentPage] = useState(1);
-  const [aboutTaskModalOn, setAboutTaskModalOn] = useState(true);
-  const [aboutTaskInfoModalOn, setAboutTaskInfoModalOn] = useState(false);
-  const [aboutTaskRecordModalOn, setAboutTaskRecordModalOn] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [taskAddModalOn, setTaskAddModalOn] = useState(false);
+  const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
+  const [taskHistory, setTaskHistory] = useState([]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
@@ -371,69 +404,121 @@ function TaskMainCanvas() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  // 로컬 스토리지에서 업무 목록 불러오기
+  // Firebase에서 모든 업무 실시간 감지
   useEffect(() => {
-    const savedTasks = localStorage.getItem("tasks");
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
-    }
-  }, []);
+    // Firestore 쿼리 생성 - 현재 날짜 범위에 해당하는 업무 조회
+    const startOfDay = new Date(currentDate);
+    startOfDay.setHours(0, 0, 0, 0);
 
-  // 업무 목록 저장하기
-  useEffect(() => {
-    if (tasks.length > 0) {
-      localStorage.setItem("tasks", JSON.stringify(tasks));
-    }
-  }, [tasks]);
+    const endOfDay = new Date(currentDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const tasksQuery = query(
+      collection(db, "tasks"),
+      where("startDate", "<=", endOfDay),
+      where("endDate", ">=", startOfDay)
+    );
+
+    // 실시간 리스너 설정
+    const unsubscribe = onSnapshot(
+      tasksQuery,
+      (snapshot) => {
+        const fetchedTasks = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // 업무 목록 업데이트
+        setTasks(fetchedTasks);
+
+        // 컬럼별로 업무 분류
+        updateColumns(fetchedTasks);
+      },
+      (error) => {
+        console.error("Error fetching tasks:", error);
+      }
+    );
+
+    // 컴포넌트 언마운트 시 리스너 제거
+    return () => unsubscribe();
+  }, [currentDate]);
+
+  // 컬럼별로 업무 분류하는 함수
+  const updateColumns = (taskList) => {
+    // 모든 컬럼 초기화
+    const updatedColumns = { ...initialColumns };
+    Object.keys(updatedColumns).forEach((key) => {
+      updatedColumns[key].taskIds = [];
+    });
+
+    // 담당자별로 업무 분류
+    taskList.forEach((task) => {
+      const assignee = task.assignee || "unassigned";
+      if (updatedColumns[assignee]) {
+        updatedColumns[assignee].taskIds.push(task.id);
+      } else {
+        updatedColumns.unassigned.taskIds.push(task.id);
+      }
+    });
+
+    setColumns(updatedColumns);
+  };
 
   // 업무 추가 핸들러
-  const handleTaskAdd = (newTask) => {
-    // 새 업무 추가
-    setTasks((prevTasks) => [...prevTasks, newTask]);
+  const handleTaskAdd = async (newTask) => {
+    try {
+      // Firebase에 업무 추가
+      const addedTask = await addTask(newTask);
 
-    // unassigned 영역에 새 업무 ID 추가
-    setColumns((prevColumns) => {
-      const unassignedColumn = prevColumns.unassigned;
-      return {
-        ...prevColumns,
+      // 업무 목록과 컬럼 업데이트
+      setTasks((prev) => [...prev, addedTask]);
+
+      // unassigned 컬럼에 새 업무 추가
+      setColumns((prev) => ({
+        ...prev,
         unassigned: {
-          ...unassignedColumn,
-          taskIds: [...unassignedColumn.taskIds, newTask.id],
+          ...prev.unassigned,
+          taskIds: [...prev.unassigned.taskIds, addedTask.id],
         },
-      };
-    });
-  };
-
-  // 업무 업데이트 핸들러 (드래그 앤 드롭 시 담당자 정보 업데이트)
-  const updateTaskAssignee = (taskId, assignee) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId
-          ? { ...task, assignee, updatedAt: new Date().toISOString() }
-          : task
-      )
-    );
-  };
-
-  // 담당자 없는 업무 필터링
-  const unassignedTasks = tasks.filter((task) => !task.assignee);
-
-  // 담당자별 업무 그룹화
-  const tasksByAssignee = {};
-  tasks.forEach((task) => {
-    if (task.assignee) {
-      if (!tasksByAssignee[task.assignee]) {
-        tasksByAssignee[task.assignee] = [];
-      }
-      tasksByAssignee[task.assignee].push(task);
+      }));
+    } catch (error) {
+      console.error("Error adding task:", error);
     }
-  });
+  };
+
+  // 업무 담당자 변경 핸들러
+  const updateTaskAssignee = async (taskId, assignee) => {
+    try {
+      // Firebase에서 업무 담당자 변경 및 이력 추가
+      await assignTask(taskId, assignee, "업무분장 페이지");
+
+      // 현재 업무 목록 새로고침
+      const updatedTasks = await getTasksByDate(currentDate);
+      setTasks(updatedTasks);
+    } catch (error) {
+      console.error("Error updating task assignee:", error);
+    }
+  };
+
+  // 업무 이력 보기 핸들러
+  const handleViewTaskHistory = async (task) => {
+    setSelectedTask(task);
+
+    try {
+      // Firebase에서 업무 이력 가져오기
+      const history = await getTaskHistory(task.id);
+      setTaskHistory(history);
+      setTaskHistoryModalOn(true);
+    } catch (error) {
+      console.error("Error fetching task history:", error);
+    }
+  };
 
   const handleDragStart = (event) => {
     setActiveTaskId(event.active.id);
   };
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (!over) {
       setActiveTaskId(null);
@@ -449,7 +534,7 @@ function TaskMainCanvas() {
       const containerId = over.id;
 
       // 담당자 정보 업데이트 (containerId가 담당자 정보)
-      updateTaskAssignee(taskId, containerId);
+      await updateTaskAssignee(taskId, containerId);
 
       // 기존 컬럼에서 제거하고 새 컬럼에 추가
       const activeContainer = active.data.current.sortable?.containerId;
@@ -516,6 +601,13 @@ function TaskMainCanvas() {
           taskIds: newDestinationTaskIds,
         },
       });
+
+      // 담당자 업데이트 (unassigned가 아닌 다른 컬럼으로 이동한 경우)
+      if (overContainer !== "unassigned") {
+        await updateTaskAssignee(active.id, overContainer);
+      } else {
+        await updateTaskAssignee(active.id, null);
+      }
     }
 
     setActiveTaskId(null);
@@ -537,8 +629,6 @@ function TaskMainCanvas() {
 
   // 날짜를 원하는 형식으로 포맷합니다. (예: YYYY-MM-DD)
   const formatDate = (date) => {
-    // 아래는 간단하게 toLocaleDateString()으로 표시하는 방법입니다.
-    // 필요에 따라 원하는 포맷으로 변경할 수 있습니다.
     return date.toLocaleDateString();
   };
 
@@ -551,10 +641,6 @@ function TaskMainCanvas() {
   const handleNextDay = () => {
     setCurrentDate((prevDate) => addDays(prevDate, 1));
   };
-
-  // 현재 날짜를 기준으로 이전, 다음 날짜 계산
-  const previousDate = addDays(currentDate, -1);
-  const nextDate = addDays(currentDate, 1);
 
   return (
     <DndContext
@@ -577,7 +663,8 @@ function TaskMainCanvas() {
         {/* 상단 할 일 목록 (9칸 고정 그리드) */}
         <ToDoDragComponent
           column={columns.unassigned}
-          tasks={unassignedTasks}
+          tasks={tasks}
+          onViewHistory={handleViewTaskHistory}
         />
         {/* 페이지네이션 영역 */}
         <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
@@ -609,56 +696,28 @@ function TaskMainCanvas() {
         </PaginationZone>
         <div className="flex flex-row gap-x-[20px]">
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder
-              column={initialColumns.원장}
-              tasks={tasksByAssignee["원장"] || []}
-            />
+            <DragGoalFolder column={columns.원장} tasks={tasks} />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder
-              column={initialColumns.원무과장}
-              tasks={tasksByAssignee["원무과장"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.간호팀장}
-              tasks={tasksByAssignee["간호팀장"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.물리치료팀장}
-              tasks={tasksByAssignee["물리치료팀장"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.방사선팀장}
-              tasks={tasksByAssignee["방사선팀장"] || []}
-            />
+            <DragGoalFolder column={columns.원무과장} tasks={tasks} />
+            <DragGoalFolder column={columns.간호팀장} tasks={tasks} />
+            <DragGoalFolder column={columns.물리치료팀장} tasks={tasks} />
+            <DragGoalFolder column={columns.방사선팀장} tasks={tasks} />
           </div>
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder
-              column={initialColumns.간호팀}
-              tasks={tasksByAssignee["간호팀"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.원무팀}
-              tasks={tasksByAssignee["원무팀"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.물리치료팀}
-              tasks={tasksByAssignee["물리치료팀"] || []}
-            />
-            <DragGoalFolder
-              column={initialColumns.방사선팀}
-              tasks={tasksByAssignee["방사선팀"] || []}
-            />
+            <DragGoalFolder column={columns.간호팀} tasks={tasks} />
+            <DragGoalFolder column={columns.원무팀} tasks={tasks} />
+            <DragGoalFolder column={columns.물리치료팀} tasks={tasks} />
+            <DragGoalFolder column={columns.방사선팀} tasks={tasks} />
           </div>
         </div>
         <DragOverlay>
-          {activeTaskId ? (
+          {activeTaskId && (
             <div className="p-2 bg-white rounded shadow">
               {(() => {
-                const activeTask = Array.isArray(tasks)
-                  ? tasks.find((task) => task.id === activeTaskId)
-                  : tasks[activeTaskId];
-
+                const activeTask = tasks.find(
+                  (task) => task.id === activeTaskId
+                );
                 return (
                   activeTask?.title ||
                   activeTask?.content ||
@@ -666,155 +725,24 @@ function TaskMainCanvas() {
                 );
               })()}
             </div>
-          ) : null}
+          )}
         </DragOverlay>
       </div>
-      {/* 업무 상세 */}
-      <ModalTemplate
-        isVisible={aboutTaskInfoModalOn}
-        setIsVisible={setAboutTaskInfoModalOn}
-        showCancel={false}
-      >
-        <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
-          <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
-            <span className="text-[34px] font-bold">&lt; 업무</span>
-            <img
-              onClick={() => setAboutTaskInfoModalOn(false)}
-              className="w-[30px]"
-              src={cancel}
-              alt="닫기"
-              style={{ cursor: "pointer" }}
-            />
-          </ModalHeaderZone>
-          <ModalContentZone className="flex flex-col h-full py-[20px] w-full">
-            <div className="flex-[5] flex flex-row w-full items-center justify-center h-full">
-              <JcyCalendar />
-              <InforationZone className="w-full flex flex-col px-[20px]">
-                <input
-                  type="text"
-                  placeholder="로비 앞 정수기 관리"
-                  className="w-[630px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground mb-[20px]"
-                />
-                <InfoRow className="grid grid-cols-2 gap-4 mb-[10px]">
-                  <div className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      작성자:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="작성자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                  </div>
-                  <div className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      담당자:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="담당자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    분류:
-                  </label>
-                  <div className="flex flex-row gap-x-[10px] w-full">
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"일반"}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"이벤트"}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"기타"}
-                    />
-                    <div className="w-full" />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    중요도:
-                  </label>
-                  <div className="flex flex-row gap-x-[30px]">
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    날짜:
-                  </label>
-                  <div className="flex flex-row w-full ">
-                    <input
-                      type="text"
-                      placeholder="작성자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                    <span>부터</span>
-                    <input
-                      type="text"
-                      placeholder="작성자"
-                      className="w-[200px] border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground"
-                    />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    주기:
-                  </label>
-                  <div className="flex flex-row gap-x-[10px] w-full">
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매일"}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매주"}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"격주"}
-                    />
-                    <OnceOnOffButton
-                      className="h-[40px] w-full rounded-md"
-                      text={"매월"}
-                    />
-                  </div>
-                </InfoRow>
-                <InfoRow className="flex flex-row">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]"></label>
-                  <div className="flex flex-row gap-x-[36px] w-full">
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                    <NameCoin />
-                  </div>
-                </InfoRow>
-              </InforationZone>
-            </div>
-            <div className="flex-[4] flex border my-[20px] bg-textBackground rounded-lg"></div>
-            <ThreeButton className="flex flex-row w-full gap-x-[20px]">
-              <OnceOnOffButton text={"업무삭제"} />
-              <OnceOnOffButton text="수정하기" />
-              <OnceOnOffButton text="업무일지" />
-            </ThreeButton>
-          </ModalContentZone>
-        </div>
-      </ModalTemplate>
+
+      {/* 모달들 */}
       <TaskAddModal
         isVisible={taskAddModalOn}
         setIsVisible={setTaskAddModalOn}
         onTaskAdd={handleTaskAdd}
+        task={selectedTask}
+        isEdit={!!selectedTask}
+      />
+
+      <TaskHistoryModal
+        isVisible={taskHistoryModalOn}
+        setIsVisible={setTaskHistoryModalOn}
+        task={selectedTask}
+        history={taskHistory}
       />
     </DndContext>
   );

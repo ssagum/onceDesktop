@@ -14,13 +14,17 @@ const SelectorButton = styled.div`
   border: 1px solid #ccc;
   border-radius: 8px;
   padding: 0 10px;
-  cursor: pointer;
+  cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
+  opacity: ${(props) => (props.disabled ? 0.6 : 1)};
 `;
 
 export default function WhoSelector({
   who,
   selectedPeople = [],
   onPeopleChange,
+  onClick,
+  singleSelectMode = false,
+  disabled = false,
 }) {
   const [whoModalOpen, setWhoModalOpen] = useState(false);
 
@@ -28,8 +32,38 @@ export default function WhoSelector({
     selectedPeople.includes(staff.id)
   );
 
+  const handleClick = (e) => {
+    if (disabled) return;
+
+    if (onClick) {
+      onClick(e);
+    }
+    setWhoModalOpen(true);
+  };
+
   const handleStaffSelect = (selectedStaffIds) => {
-    onPeopleChange?.(selectedStaffIds);
+    if (disabled) return;
+
+    if (onPeopleChange) {
+      // 중복 제거
+      const uniqueStaffIds = [...new Set(selectedStaffIds)];
+      console.log("WhoSelector: 중복된 직원 ID가 제거됨", {
+        before: selectedStaffIds,
+        after: uniqueStaffIds,
+      });
+
+      onPeopleChange(uniqueStaffIds);
+    }
+  };
+
+  const handleSingleStaffSelect = (staff) => {
+    const staffId = staff.id || staff;
+
+    if (onPeopleChange) {
+      onPeopleChange([staffId]); // 배열로 전달하여 일관성 유지
+    }
+
+    setWhoModalOpen(false);
   };
 
   const renderSelectedStaff = () => {
@@ -59,16 +93,20 @@ export default function WhoSelector({
 
   return (
     <SelectorButton
-      onClick={() => setWhoModalOpen(true)}
+      onClick={handleClick}
       className="h-[40px] bg-white flex justify-center items-center border border-gray-300 rounded-md px-4 w-[120px]"
+      disabled={disabled}
     >
       {renderSelectedStaff()}
       <ModalTemplate isVisible={whoModalOpen} setIsVisible={setWhoModalOpen}>
-        <HospitalStaffSelector
-          selectedStaff={selectedPeople}
-          setSelectedStaff={handleStaffSelect}
-          onConfirm={() => setWhoModalOpen(false)}
-        />
+        <div className="p-4">
+          <HospitalStaffSelector
+            selectedStaff={selectedPeople}
+            setSelectedStaff={handleStaffSelect}
+            onConfirm={() => setWhoModalOpen(false)}
+            onSelect={singleSelectMode ? handleSingleStaffSelect : undefined}
+          />
+        </div>
       </ModalTemplate>
     </SelectorButton>
   );

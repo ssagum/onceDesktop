@@ -10,11 +10,13 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useUserLevel } from "../../utils/UserLevelContext";
+import { useToast } from "../../contexts/ToastContext";
 
 const NoticeShowModal = ({ show, handleClose, notice }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const { userLevelData, checkUserPermission } = useUserLevel();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!notice?.id) return;
@@ -52,8 +54,8 @@ const NoticeShowModal = ({ show, handleClose, notice }) => {
       });
       setNewComment("");
     } catch (error) {
-      console.error("댓글 작성 실패:", error);
-      alert("댓글 작성에 실패했습니다.");
+      console.error("Error adding comment:", error);
+      showToast("댓글 작성에 실패했습니다.", "error");
     }
   };
 

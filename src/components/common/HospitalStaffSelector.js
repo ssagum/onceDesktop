@@ -17,9 +17,10 @@ const StyledContainer = styled.div`
 `;
 
 const HospitalStaffSelector = ({
-  selectedStaff,
+  selectedStaff = [],
   setSelectedStaff,
   onConfirm,
+  onSelect,
 }) => {
   // 임시 선택 상태를 관리하기 위한 state 추가
   const [tempSelectedStaff, setTempSelectedStaff] = useState(selectedStaff);
@@ -65,17 +66,41 @@ const HospitalStaffSelector = ({
   };
 
   // 개별 직원 체크박스 클릭 시 임시 선택 상태만 변경
-  const handleStaffToggle = (staffId) => {
+  const handleStaffToggle = (staffId, staffName) => {
+    // 이미 선택된 경우 제거
     if (tempSelectedStaff.includes(staffId)) {
       setTempSelectedStaff((prev) => prev.filter((id) => id !== staffId));
     } else {
-      setTempSelectedStaff((prev) => [...prev, staffId]);
+      // 선택되지 않은 경우 추가 (중복 방지를 위해 Set 사용)
+      setTempSelectedStaff((prev) => {
+        const newSelection = [...prev, staffId];
+        const uniqueSelection = [...new Set(newSelection)];
+
+        // 중복이 있었다면 로그 출력
+        if (uniqueSelection.length !== newSelection.length) {
+          console.log("중복된 직원 ID가 제거됨", {
+            원본: newSelection,
+            중복제거: uniqueSelection,
+          });
+        }
+
+        return uniqueSelection;
+      });
+    }
+
+    // 단일 선택 모드일 때 직원 선택 후 바로 처리
+    if (onSelect) {
+      onSelect({ id: staffId, name: staffName });
     }
   };
 
   // 확인 버튼 클릭 핸들러 수정
   const handleConfirm = () => {
-    setSelectedStaff(tempSelectedStaff);
+    if (setSelectedStaff) {
+      // 중복 제거
+      const uniqueSelection = [...new Set(tempSelectedStaff)];
+      setSelectedStaff(uniqueSelection);
+    }
     onConfirm?.(); // Modal 닫기
   };
 
@@ -114,13 +139,17 @@ const HospitalStaffSelector = ({
             {/* 해당 부서에 속한 개별 직원 체크박스 목록 */}
             <div className="grid grid-cols-5 gap-2">
               {staffList.map((staff) => (
-                <div key={staff.id} className="flex items-center gap-x-2">
+                <div
+                  key={staff.id}
+                  className="flex items-center gap-x-2 cursor-pointer"
+                  onClick={() => handleStaffToggle(staff.id, staff.name)}
+                >
                   <NameCoin item={staff} />
                   <span>{staff.name}</span>
                   <input
                     type="checkbox"
                     checked={tempSelectedStaff.includes(staff.id)}
-                    onChange={() => handleStaffToggle(staff.id)}
+                    onChange={() => handleStaffToggle(staff.id, staff.name)}
                     className="form-checkbox h-4 w-4 text-blue-600"
                   />
                 </div>
@@ -129,15 +158,17 @@ const HospitalStaffSelector = ({
           </div>
         );
       })}
-      {/* 확인 버튼 영역 */}
-      <div className="flex justify-end mt-4">
-        <OnceOnOffButton
-          text="확인"
-          on={true}
-          onClick={handleConfirm}
-          className="w-[120px]"
-        />
-      </div>
+      {/* 확인 버튼 영역 - 단일 선택 모드일 때는 표시하지 않음 */}
+      {!onSelect && (
+        <div className="flex justify-end mt-4">
+          <OnceOnOffButton
+            text="확인"
+            on={true}
+            onClick={handleConfirm}
+            className="w-[120px]"
+          />
+        </div>
+      )}
     </div>
   );
 };

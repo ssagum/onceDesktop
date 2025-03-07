@@ -113,3 +113,34 @@ export const isLeaderOnly = (userLevelData) => {
 
   return hasPermission;
 };
+
+/**
+ * 사용자 접근 권한을 확인하는 함수
+ * @param {Object} userLevelData - 사용자 레벨 데이터
+ * @param {Function} showToast - 토스트 메시지 표시 함수
+ * @param {String} minLevel - 최소 필요 권한 레벨
+ * @returns {Boolean} 접근 가능 여부
+ */
+export const checkAccessPermission = (
+  userLevelData,
+  showToast,
+  minLevel = "팀장"
+) => {
+  // 사용자 정보가 없는 경우
+  if (!userLevelData) {
+    showToast("사용자 정보가 없습니다.", "error");
+    return false;
+  }
+
+  // 사용자 레벨 확인
+  const userLevel = userLevelData.level;
+  const accessibleLevels = ["대표", "팀장"];
+
+  // 팀장 이상만 접근 가능
+  if (minLevel === "팀장" && !accessibleLevels.includes(userLevel)) {
+    showToast("팀장급 이상만 접근 가능한 기능입니다.", "warning");
+    return false;
+  }
+
+  // ... existing code ...
+};

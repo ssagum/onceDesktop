@@ -22,14 +22,33 @@ import { useUserLevel } from "../../utils/UserLevelContext";
 import TaskListModal from "../Task/TaskListModal";
 import TimerModal from "../Timer/TimerModal";
 import TaskAddModal from "../Task/TaskAddModal";
-import { tasks } from "../../datas/tasks";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  where,
+} from "firebase/firestore";
 import { db } from "../../firebase";
 import ReceivedCallList from "../call/ReceivedCallList";
 import ChatHistoryModal from "../common/ChatHistoryModal";
 import RequestModal from "./RequestModal";
 import { format } from "date-fns";
 import { addDays } from "date-fns";
+import {
+  getTasksByAssignee,
+  getTasksByDate,
+  addTask,
+  completeTask,
+  updateTask,
+  deleteTask,
+  getTaskHistory,
+  debugShowAllTasks,
+  getUserTasks,
+  getAllTasks,
+} from "../Task/TaskService";
+import TaskHistoryModal from "../Task/TaskHistoryModal";
+import { useToast } from "../../contexts/ToastContext";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -90,68 +109,171 @@ export default function HomeMainCanvas() {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [requestModalOn, setRequestModalOn] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [allUserTasks, setAllUserTasks] = useState([]);
   const [userTasks, setUserTasks] = useState([]);
-
-  // 로컬 스토리지에서 업무 목록 불러오기
-  useEffect(() => {
-    const loadTasks = () => {
-      const savedTasks = localStorage.getItem("tasks");
-      if (savedTasks) {
-        const parsedTasks = JSON.parse(savedTasks);
-        // 현재 사용자 관련 업무만 필터링
-        filterUserTasks(parsedTasks);
-      }
-    };
-
-    loadTasks();
-
-    // 로컬 스토리지 변경 감지를 위한 이벤트 리스너
-    const handleStorageChange = () => {
-      loadTasks();
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [userLevelData]);
+  const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
+  const [taskHistory, setTaskHistory] = useState([]);
+  const { showToast } = useToast();
 
   // 날짜 변경 시 업무 필터링 갱신
   useEffect(() => {
-    const savedTasks = localStorage.getItem("tasks");
-    if (savedTasks) {
-      filterUserTasks(JSON.parse(savedTasks));
+    if (allUserTasks.length > 0) {
+      filterUserTasks(allUserTasks);
     }
   }, [currentDate]);
 
-  // 현재 사용자와 날짜에 맞는 업무 필터링
-  const filterUserTasks = (tasks) => {
+  // Firebase에서 업무 목록 불러오기
+  useEffect(() => {
     if (!userLevelData) return;
 
-    const filteredTasks = tasks.filter((task) => {
-      // 담당자 필터링 (현재 사용자의 부서/역할과 일치하는지)
-      const isUserAssigned =
-        task.assignee === userLevelData.department ||
-        task.assignee === userLevelData.role;
+    // 현재 사용자의 부서와 역할에 대한 업무 데이터 실시간 리스너 설정
+    const departmentQuery = query(
+      collection(db, "tasks"),
+      where("assignee", "==", userLevelData.department)
+    );
 
-      if (!isUserAssigned) return false;
+    const roleQuery = query(
+      collection(db, "tasks"),
+      where("assignee", "==", userLevelData.role)
+    );
 
-      // 날짜 필터링
-      const taskStartDate = new Date(task.startDate);
-      const taskEndDate = new Date(task.endDate);
-      const currentDateOnly = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        currentDate.getDate()
+    // 부서 업무 리스너
+    const departmentUnsubscribe = onSnapshot(
+      departmentQuery,
+      (snapshot) => {
+        const departmentTasks = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        // 역할 업무와 통합하여 필터링
+        fetchRoleTasks(departmentTasks);
+      },
+      (error) => {
+        console.error("Error fetching department tasks:", error);
+      }
+    );
+
+    // 역할 업무를 가져오고 부서 업무와 통합하는 함수
+    const fetchRoleTasks = (departmentTasks) => {
+      onSnapshot(
+        roleQuery,
+        (snapshot) => {
+          const roleTasks = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          // 중복 제거 후 배열 합치기
+          const allTasks = [...departmentTasks];
+          roleTasks.forEach((task) => {
+            if (!allTasks.some((t) => t.id === task.id)) {
+              allTasks.push(task);
+            }
+          });
+
+          // 모든 사용자 업무 상태 업데이트
+          setAllUserTasks(allTasks);
+
+          // 날짜 필터링 적용
+          filterUserTasks(allTasks);
+        },
+        (error) => {
+          console.error("Error fetching role tasks:", error);
+        }
       );
+    };
 
-      // 현재 날짜가 업무 시작일과 종료일 사이에 있는지 확인
-      return taskStartDate <= currentDateOnly && currentDateOnly <= taskEndDate;
+    // 컴포넌트 언마운트 시 리스너 제거
+    return () => {
+      departmentUnsubscribe();
+    };
+  }, [userLevelData]);
+
+  // 현재 사용자와 날짜에 맞는 업무 필터링
+  const filterUserTasks = (tasks) => {
+    if (!tasks || tasks.length === 0) {
+      setUserTasks([]);
+      console.log("필터링할 업무가 없습니다.");
+      return;
+    }
+
+    // 디버깅을 위해 모든 업무 로깅
+    console.log("필터링 전 모든 업무:", tasks);
+
+    const currentDateOnly = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate()
+    );
+
+    console.log("현재 선택된 날짜:", currentDateOnly);
+
+    const filteredTasks = tasks.filter((task) => {
+      // Firebase 타임스탬프 또는 Date 객체 처리
+      let taskStartDate, taskEndDate;
+
+      try {
+        // 타임스탬프인 경우 (seconds, nanoseconds 속성이 있음)
+        if (task.startDate && task.startDate.seconds) {
+          taskStartDate = new Date(task.startDate.seconds * 1000);
+        } else {
+          // 문자열이나 Date 객체인 경우
+          taskStartDate = new Date(task.startDate);
+        }
+
+        if (task.endDate && task.endDate.seconds) {
+          taskEndDate = new Date(task.endDate.seconds * 1000);
+        } else {
+          taskEndDate = new Date(task.endDate);
+        }
+
+        // 날짜만 비교를 위해 시간 부분 제거
+        taskStartDate = new Date(
+          taskStartDate.getFullYear(),
+          taskStartDate.getMonth(),
+          taskStartDate.getDate()
+        );
+
+        taskEndDate = new Date(
+          taskEndDate.getFullYear(),
+          taskEndDate.getMonth(),
+          taskEndDate.getDate()
+        );
+
+        // 디버깅: 각 업무의 날짜 범위와 현재 날짜 비교 결과 로깅
+        const isInDateRange =
+          taskStartDate <= currentDateOnly && currentDateOnly <= taskEndDate;
+        console.log(
+          `업무 [${task.title}]: ${taskStartDate} ~ ${taskEndDate}, 현재: ${currentDateOnly}, 포함여부: ${isInDateRange}`
+        );
+
+        // 현재 날짜가 업무 시작일과 종료일 사이에 있는지 확인
+        return isInDateRange;
+      } catch (error) {
+        console.error(
+          `업무 [${task.title || task.id}] 날짜 처리 중 오류:`,
+          error
+        );
+        console.log("문제의 업무 데이터:", task);
+        return false; // 오류가 있는 경우 필터링에서 제외
+      }
     });
 
+    console.log(
+      `총 ${tasks.length}개 업무 중 ${filteredTasks.length}개가 날짜 필터 통과`
+    );
+
     // 날짜순으로 정렬 (시작일 기준)
-    filteredTasks.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    filteredTasks.sort((a, b) => {
+      const dateA = a.startDate?.seconds
+        ? new Date(a.startDate.seconds * 1000)
+        : new Date(a.startDate);
+      const dateB = b.startDate?.seconds
+        ? new Date(b.startDate.seconds * 1000)
+        : new Date(b.startDate);
+      return dateA - dateB;
+    });
 
     setUserTasks(filteredTasks);
   };
@@ -180,46 +302,37 @@ export default function HomeMainCanvas() {
   }, []);
 
   // 업무 추가 핸들러
-  const handleTaskAdd = (newTask) => {
-    // 로컬 스토리지에서 현재 업무 목록 가져오기
-    const savedTasks = localStorage.getItem("tasks") || "[]";
-    const currentTasks = JSON.parse(savedTasks);
+  const handleTaskAdd = async (newTask) => {
+    try {
+      // Firebase에 업무 추가
+      await addTask(newTask);
 
-    // 새 업무 추가
-    const updatedTasks = [...currentTasks, newTask];
+      // 현재 사용자의 업무 목록 새로고침
+      if (userLevelData) {
+        const departmentTasks = await getTasksByAssignee(
+          userLevelData.department
+        );
+        const roleTasks = await getTasksByAssignee(userLevelData.role);
 
-    // 로컬 스토리지 업데이트
-    localStorage.setItem("tasks", JSON.stringify(updatedTasks));
+        const allTasks = [...departmentTasks];
+        roleTasks.forEach((task) => {
+          if (!allTasks.some((t) => t.id === task.id)) {
+            allTasks.push(task);
+          }
+        });
 
-    // 현재 사용자 관련 업무 필터링 갱신
-    filterUserTasks(updatedTasks);
-  };
-
-  // 업무 완료 처리 핸들러
-  const handleTaskComplete = (taskId, staffId) => {
-    // 로컬 스토리지에서 현재 업무 목록 가져오기
-    const savedTasks = localStorage.getItem("tasks") || "[]";
-    const currentTasks = JSON.parse(savedTasks);
-
-    // 해당 업무 업데이트
-    const updatedTasks = currentTasks.map((task) => {
-      if (task.id === taskId) {
-        return {
-          ...task,
-          completed: true,
-          completedBy: staffId,
-          completedAt: new Date().toISOString(),
-        };
+        filterUserTasks(allTasks);
       }
-      return task;
-    });
-
-    // 로컬 스토리지 업데이트
-    localStorage.setItem("tasks", JSON.stringify(updatedTasks));
-
-    // 현재 사용자 관련 업무 필터링 갱신
-    filterUserTasks(updatedTasks);
+    } catch (error) {
+      console.error("Error adding task:", error);
+    }
   };
+
+  /**
+   * 업무 완료 처리
+   * @param {string} taskId 업무 ID
+   * @param {Array|string} staffIds 완료자 ID 배열 또는 단일 ID
+   */
 
   // 업무 클릭 핸들러
   const handleTaskClick = (task) => {
@@ -228,32 +341,110 @@ export default function HomeMainCanvas() {
   };
 
   // 업무 수정 핸들러
-  const handleTaskEdit = (editedTask) => {
-    const savedTasks = localStorage.getItem("tasks") || "[]";
-    const currentTasks = JSON.parse(savedTasks);
+  const handleTaskEdit = async (editedTask) => {
+    try {
+      // Firebase에서 업무 업데이트
+      await updateTask(editedTask.id, editedTask);
 
-    const updatedTasks = currentTasks.map((task) =>
-      task.id === editedTask.id ? editedTask : task
-    );
+      // 현재 사용자의 업무 목록 새로고침
+      if (userLevelData) {
+        const departmentTasks = await getTasksByAssignee(
+          userLevelData.department
+        );
+        const roleTasks = await getTasksByAssignee(userLevelData.role);
 
-    localStorage.setItem("tasks", JSON.stringify(updatedTasks));
-    filterUserTasks(updatedTasks);
-    setTaskAddModalOn(false);
-    setSelectedTask(null);
+        const allTasks = [...departmentTasks];
+        roleTasks.forEach((task) => {
+          if (!allTasks.some((t) => t.id === task.id)) {
+            allTasks.push(task);
+          }
+        });
+
+        filterUserTasks(allTasks);
+      }
+
+      setTaskAddModalOn(false);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error("Error editing task:", error);
+    }
   };
 
   // 업무 삭제 핸들러
-  const handleTaskDelete = (taskId) => {
-    const savedTasks = localStorage.getItem("tasks") || "[]";
-    const currentTasks = JSON.parse(savedTasks);
+  const handleTaskDelete = async (taskId) => {
+    try {
+      // Firebase에서 업무 삭제
+      await deleteTask(taskId);
 
-    const updatedTasks = currentTasks.filter((task) => task.id !== taskId);
+      // 현재 사용자의 업무 목록 새로고침
+      if (userLevelData) {
+        const departmentTasks = await getTasksByAssignee(
+          userLevelData.department
+        );
+        const roleTasks = await getTasksByAssignee(userLevelData.role);
 
-    localStorage.setItem("tasks", JSON.stringify(updatedTasks));
-    filterUserTasks(updatedTasks);
-    setTaskAddModalOn(false);
-    setSelectedTask(null);
+        const allTasks = [...departmentTasks];
+        roleTasks.forEach((task) => {
+          if (!allTasks.some((t) => t.id === task.id)) {
+            allTasks.push(task);
+          }
+        });
+
+        filterUserTasks(allTasks);
+      }
+
+      setTaskAddModalOn(false);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error("Error deleting task:", error);
+    }
   };
+
+  // 업무 이력 보기 핸들러
+  const handleViewTaskHistory = async (task) => {
+    setSelectedTask(task);
+
+    try {
+      // Firebase에서 업무 이력 가져오기
+      const history = await getTaskHistory(task.id);
+      setTaskHistory(history);
+      setTaskHistoryModalOn(true);
+    } catch (error) {
+      console.error("Error fetching task history:", error);
+    }
+  };
+
+  // 컴포넌트 마운트 시 디버깅을 위해 모든 업무 데이터 확인
+  useEffect(() => {
+    const checkFirestoreTasks = async () => {
+      try {
+        console.log("Firestore 업무 데이터 확인 중...");
+        await debugShowAllTasks();
+      } catch (error) {
+        console.error("Firestore 데이터 확인 오류:", error);
+      }
+    };
+
+    checkFirestoreTasks();
+  }, []);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        // 데이터베이스 초기화 제거
+
+        // 기존 코드 유지
+        console.log("HomeMainCanvas: 업무 목록을 가져오는 중...");
+        const userTasksResult = await getUserTasks();
+        setAllUserTasks(userTasksResult);
+        // ... existing code ...
+      } catch (error) {
+        console.error("Error fetching tasks:", error);
+      }
+    };
+
+    fetchTasks();
+  }, []);
 
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
@@ -306,8 +497,9 @@ export default function HomeMainCanvas() {
             <ToDo
               tasks={userTasks}
               showCompleter={true}
-              onTaskComplete={handleTaskComplete}
               onTaskClick={handleTaskClick}
+              onViewHistory={handleViewTaskHistory}
+              currentDate={currentDate}
             />
           </ToDoZone>
           <div className="mt-[20px]">
@@ -388,6 +580,12 @@ export default function HomeMainCanvas() {
       <RequestModal
         isVisible={requestModalOn}
         setIsVisible={setRequestModalOn}
+      />
+      <TaskHistoryModal
+        isVisible={taskHistoryModalOn}
+        setIsVisible={setTaskHistoryModalOn}
+        task={selectedTask}
+        history={taskHistory}
       />
     </div>
   );

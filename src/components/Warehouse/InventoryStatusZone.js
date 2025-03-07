@@ -11,6 +11,7 @@ import { db } from "../../firebase.js";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import StockDetailModal from "./StockDetailModal";
 import PropTypes from "prop-types";
+import { useToast } from "../../contexts/ToastContext";
 
 const SearchZone = styled.div``;
 const BoxZone = styled.div``;
@@ -44,6 +45,8 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
   const [sortedData, setSortedData] = useState([]);
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
+
+  const { showToast } = useToast();
 
   // 이전 페이지로 이동하는 함수
   const handlePrevious = () => {
@@ -137,7 +140,10 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
     const isDuplicate = inventoryItems.some((item) => item.id === newItem.id);
 
     if (isDuplicate) {
-      alert("이미 등록된 품목입니다. 수정하시려면 정정 버튼을 이용해주세요.");
+      showToast(
+        "이미 등록된 품목입니다. 수정하시려면 정정 버튼을 이용해주세요.",
+        "warning"
+      );
       return false;
     }
 
