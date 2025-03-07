@@ -47,7 +47,7 @@ import {
   getUserTasks,
   getAllTasks,
 } from "../Task/TaskService";
-import TaskHistoryModal from "../Task/TaskHistoryModal";
+import TaskRecordModal from "../Task/TaskRecordModal";
 import { useToast } from "../../contexts/ToastContext";
 
 const TopZone = styled.div``;
@@ -328,16 +328,91 @@ export default function HomeMainCanvas() {
     }
   };
 
-  /**
-   * 업무 완료 처리
-   * @param {string} taskId 업무 ID
-   * @param {Array|string} staffIds 완료자 ID 배열 또는 단일 ID
-   */
-
   // 업무 클릭 핸들러
   const handleTaskClick = (task) => {
-    setSelectedTask(task);
-    setTaskAddModalOn(true);
+    // task가 null이거나 undefined인 경우 처리
+    if (!task) {
+      console.error("업무 정보가 없습니다.");
+      return;
+    }
+
+    try {
+      console.log("원본 task 객체:", task);
+
+      // 날짜 안전하게 처리하는 함수
+      const formatSafeDate = (dateValue) => {
+        try {
+          if (!dateValue) return format(new Date(), "yyyy/MM/dd");
+
+          let dateObj;
+
+          // 다양한 형식 처리
+          if (dateValue instanceof Date) {
+            dateObj = dateValue;
+          } else if (typeof dateValue === "object" && dateValue.seconds) {
+            // Firestore 타임스탬프 처리
+            dateObj = new Date(dateValue.seconds * 1000);
+          } else if (typeof dateValue === "string") {
+            if (dateValue.includes("년") && dateValue.includes("월")) {
+              // 한글 날짜 형식 파싱 로직 구현 필요
+              dateObj = new Date(); // 임시로 현재 날짜 사용
+            } else {
+              dateObj = new Date(dateValue);
+            }
+          } else {
+            dateObj = new Date();
+          }
+
+          if (isNaN(dateObj.getTime())) {
+            console.log(
+              `유효하지 않은 날짜 값: ${dateValue}, 현재 날짜로 대체`
+            );
+            dateObj = new Date();
+          }
+
+          return format(dateObj, "yyyy/MM/dd");
+        } catch (error) {
+          console.error("날짜 처리 중 오류:", error, dateValue);
+          return format(new Date(), "yyyy/MM/dd");
+        }
+      };
+
+      // 시작일과 종료일 안전하게 처리
+      let safeStartDate = formatSafeDate(task.startDate);
+      let safeEndDate = formatSafeDate(task.endDate);
+
+      console.log("변환된 날짜:", {
+        원본시작일: task.startDate,
+        안전시작일: safeStartDate,
+        원본종료일: task.endDate,
+        안전종료일: safeEndDate,
+      });
+
+      // 필수 필드 존재 확인
+      const safeTask = {
+        ...task,
+        // 날짜 필드 안전하게 설정
+        startDate: safeStartDate,
+        endDate: safeEndDate,
+        // 기타 필수 필드 체크
+        title: task.title || "",
+        writer: task.writer || "",
+        assignee: task.assignee || "",
+        category: task.category || "1회성",
+        priority: task.priority || "중",
+        content: task.content || "",
+        id: task.id || Date.now().toString(),
+        createdAt: task.createdAt || new Date().toISOString(),
+        updatedAt: task.updatedAt || new Date().toISOString(),
+        days: task.days || [],
+        cycle: task.cycle || "매일",
+      };
+
+      setSelectedTask(safeTask);
+      setTaskAddModalOn(true);
+    } catch (error) {
+      console.error("업무 클릭 처리 중 오류 발생:", error);
+    }
   };
 
   // 업무 수정 핸들러
@@ -402,15 +477,24 @@ export default function HomeMainCanvas() {
 
   // 업무 이력 보기 핸들러
   const handleViewTaskHistory = async (task) => {
-    setSelectedTask(task);
+    if (!task) {
+      console.error("업무 정보가 없습니다.");
+      return;
+    }
 
     try {
-      // Firebase에서 업무 이력 가져오기
-      const history = await getTaskHistory(task.id);
-      setTaskHistory(history);
+      // 안전한 task 객체 생성
+      const safeTask = {
+        ...task,
+        // 필수 필드 확인
+        id: task.id || Date.now().toString(),
+        title: task.title || "",
+      };
+
+      setSelectedTask(safeTask);
       setTaskHistoryModalOn(true);
     } catch (error) {
-      console.error("Error fetching task history:", error);
+      console.error("업무 이력 조회 중 오류 발생:", error);
     }
   };
 
@@ -570,7 +654,8 @@ export default function HomeMainCanvas() {
         onTaskAdd={handleTaskAdd}
         onTaskEdit={handleTaskEdit}
         onTaskDelete={handleTaskDelete}
-        initialTask={selectedTask}
+        task={selectedTask}
+        isEdit={false}
       />
       <ChatHistoryModal
         isVisible={showChatHistory}
@@ -581,11 +666,10 @@ export default function HomeMainCanvas() {
         isVisible={requestModalOn}
         setIsVisible={setRequestModalOn}
       />
-      <TaskHistoryModal
+      <TaskRecordModal
         isVisible={taskHistoryModalOn}
         setIsVisible={setTaskHistoryModalOn}
         task={selectedTask}
-        history={taskHistory}
       />
     </div>
   );

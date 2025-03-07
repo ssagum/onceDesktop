@@ -25,7 +25,7 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import { JcyCalendar } from "../common/JcyCalendar";
 import NameCoin from "../common/NameCoin";
 import TaskAddModal from "./TaskAddModal";
-import TaskHistoryModal from "./TaskHistoryModal";
+import TaskRecordModal from "./TaskRecordModal";
 import { format } from "date-fns";
 import {
   getAllTasks,
@@ -34,6 +34,7 @@ import {
   assignTask,
   completeTask,
   getTaskHistory,
+  deleteTask,
 } from "./TaskService";
 import ToDo from "../common/ToDo";
 import { db } from "../../firebase";
@@ -502,15 +503,56 @@ function TaskMainCanvas() {
 
   // 업무 이력 보기 핸들러
   const handleViewTaskHistory = async (task) => {
-    setSelectedTask(task);
+    if (!task) {
+      console.error("업무 정보가 없습니다.");
+      return;
+    }
 
     try {
-      // Firebase에서 업무 이력 가져오기
-      const history = await getTaskHistory(task.id);
-      setTaskHistory(history);
+      // 안전한 task 객체 생성
+      const safeTask = {
+        ...task,
+        // 필수 필드 확인
+        id: task.id || Date.now().toString(),
+        title: task.title || "",
+        // 필요한 경우 다른 필드도 확인
+      };
+
+      setSelectedTask(safeTask);
       setTaskHistoryModalOn(true);
     } catch (error) {
       console.error("Error fetching task history:", error);
+    }
+  };
+
+  // 업무 삭제 핸들러
+  const handleTaskDelete = async (taskId) => {
+    try {
+      // Firebase에서 업무 삭제
+      await deleteTask(taskId);
+
+      // 업무 목록에서 삭제된 업무 제거
+      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+
+      // 모든 컬럼에서 삭제된 업무 ID 제거
+      setColumns((prev) => {
+        const updatedColumns = { ...prev };
+        Object.keys(updatedColumns).forEach((columnId) => {
+          updatedColumns[columnId] = {
+            ...updatedColumns[columnId],
+            taskIds: updatedColumns[columnId].taskIds.filter(
+              (id) => id !== taskId
+            ),
+          };
+        });
+        return updatedColumns;
+      });
+
+      // 모달 닫기 및 선택된 업무 초기화
+      setTaskAddModalOn(false);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error("Error deleting task:", error);
     }
   };
 
@@ -734,15 +776,16 @@ function TaskMainCanvas() {
         isVisible={taskAddModalOn}
         setIsVisible={setTaskAddModalOn}
         onTaskAdd={handleTaskAdd}
+        onTaskEdit={handleTaskAdd}
+        onTaskDelete={handleTaskDelete}
         task={selectedTask}
-        isEdit={!!selectedTask}
+        isEdit={false}
       />
 
-      <TaskHistoryModal
+      <TaskRecordModal
         isVisible={taskHistoryModalOn}
         setIsVisible={setTaskHistoryModalOn}
         task={selectedTask}
-        history={taskHistory}
       />
     </DndContext>
   );

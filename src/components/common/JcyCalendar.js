@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, memo, useCallback } from "react";
 import {
   format,
   addMonths,
@@ -178,37 +178,100 @@ const RenderCells = ({
   );
 };
 
-export const JcyCalendar = ({
-  standardWidth = 300,
-  lockDates = false,
-  preStartDay = "",
-  setTargetStartDay = () => {},
-  preEndDay = "",
-  setTargetEndDay = () => {},
-  isEdit = true, // 수정 모드 여부
-  singleDateMode = false, // 날짜를 하나만 선택하는 모드 (1회성 업무용)
-  startDayOnlyMode = false, // 시작일만 선택하는 모드 (반복성 업무용)
-}) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [isSelectingStart, setIsSelectingStart] = useState(true);
-  const [currentView, setCurrentView] = useState(currentMonth); // 현재 보고 있는 월 유지
+export const JcyCalendar = memo(
+  ({
+    standardWidth = 300,
+    lockDates = false,
+    preStartDay = "",
+    setTargetStartDay = () => {},
+    preEndDay = "",
+    setTargetEndDay = () => {},
+    isEdit = true, // 수정 모드 여부
+    singleDateMode = false, // 날짜를 하나만 선택하는 모드 (1회성 업무용)
+    startDayOnlyMode = false, // 시작일만 선택하는 모드 (반복성 업무용)
+  }) => {
+    // 초기 월 설정을 위해 preStartDay가 있으면 파싱해서 사용
+    const getInitialMonth = () => {
+      if (preStartDay) {
+        try {
+          // yyyy/MM/dd 형식 파싱
+          const parsedDate = parse(preStartDay, "yyyy/MM/dd", new Date());
+          if (!isNaN(parsedDate.getTime())) {
+            console.log(`JcyCalendar: 시작일 ${preStartDay}로 달력 초기화`);
+            return parsedDate;
+          }
+        } catch (error) {
+          console.error("초기 월 설정 중 오류:", error);
+        }
+      }
+      return new Date(); // 기본값은 현재 날짜
+    };
 
-  const parseCustomDate = (dateStr) => {
-    // yyyy/MM/dd 형식으로 변경
-    const parsedDate = parse(dateStr, "yyyy/MM/dd", new Date());
+    const [currentMonth, setCurrentMonth] = useState(getInitialMonth());
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+    const [isSelectingStart, setIsSelectingStart] = useState(true);
+    const [currentView, setCurrentView] = useState(currentMonth); // 현재 보고 있는 월 유지
 
-    if (isNaN(parsedDate.getTime())) {
-      console.error(`Invalid date format: ${dateStr}`);
-      return null;
-    }
-    return parsedDate;
-  };
+    // 초기 렌더링 및 props 변경 추적을 위한 ref
+    const initializedRef = useRef(false);
+    const previousPropsRef = useRef({ preStartDay, preEndDay });
 
-  useEffect(() => {
-    if (preStartDay && preEndDay) {
+    const parseCustomDate = (dateStr) => {
+      // yyyy/MM/dd 형식으로 변경
+      const parsedDate = parse(dateStr, "yyyy/MM/dd", new Date());
+
+      if (isNaN(parsedDate.getTime())) {
+        console.error(`Invalid date format: ${dateStr}`);
+        return null;
+      }
+      return parsedDate;
+    };
+
+    // preStartDay 변경 시 최초 1회는 항상 해당 월로 이동
+    useEffect(() => {
+      if (preStartDay) {
+        try {
+          const parsedStartDate = parseCustomDate(preStartDay);
+          if (parsedStartDate) {
+            // 첫 렌더링이거나 preStartDay가 변경된 경우에만 월 변경
+            if (
+              !initializedRef.current ||
+              previousPropsRef.current.preStartDay !== preStartDay
+            ) {
+              console.log(
+                `JcyCalendar: 시작일이 바뀌어 ${preStartDay} 월로 달력 업데이트`
+              );
+              setCurrentMonth(parsedStartDate);
+              setCurrentView(parsedStartDate);
+            }
+          }
+        } catch (error) {
+          console.error("달력 월 업데이트 중 오류:", error);
+        }
+      }
+      // props 변경 기록 업데이트
+      previousPropsRef.current.preStartDay = preStartDay;
+    }, [preStartDay]);
+
+    // 날짜 변경 감지 및 설정
+    useEffect(() => {
+      // props가 변경되었고 유효한 값인 경우에만 실행
+      if (!preStartDay || !preEndDay) return;
+
+      // 이전 props와 동일하면 무시
+      if (
+        previousPropsRef.current.preStartDay === preStartDay &&
+        previousPropsRef.current.preEndDay === preEndDay &&
+        initializedRef.current
+      ) {
+        return;
+      }
+
+      // 현재 props를 기억
+      previousPropsRef.current = { preStartDay, preEndDay };
+
       const parsedStartDate = parseCustomDate(preStartDay);
       const parsedEndDate = parseCustomDate(preEndDay);
 
@@ -216,109 +279,141 @@ export const JcyCalendar = ({
         setSelectedDate(parsedStartDate);
         setStartDate(parsedStartDate);
         setEndDate(parsedEndDate);
-        // 처음 로드될 때만 시작일이 있는 달로 설정, 이후에는 변경 X
-        if (!selectedDate) {
+
+        // 처음 초기화될 때만 월 설정
+        if (!initializedRef.current) {
           setCurrentMonth(parsedStartDate);
           setCurrentView(parsedStartDate);
+          initializedRef.current = true;
         }
-        // yyyy/MM/dd 형식으로 변경
-        setTargetStartDay(format(parsedStartDate, "yyyy/MM/dd"));
-        setTargetEndDay(format(parsedEndDate, "yyyy/MM/dd"));
       }
-    }
-  }, [
-    preStartDay,
-    preEndDay,
-    setTargetStartDay,
-    setTargetEndDay,
-    selectedDate,
-  ]);
+    }, [preStartDay, preEndDay]);
 
-  const prevMonth = () => {
-    const newMonth = subMonths(currentMonth, 1);
-    setCurrentMonth(newMonth);
-    setCurrentView(newMonth);
-  };
+    // 부모 컴포넌트 콜백 함수 (메모이제이션하여 불필요한 호출 방지)
+    const updateTargetStartDay = useCallback(
+      (value) => {
+        if (value !== preStartDay) {
+          setTargetStartDay(value);
+        }
+      },
+      [preStartDay, setTargetStartDay]
+    );
 
-  const nextMonth = () => {
-    const newMonth = addMonths(currentMonth, 1);
-    setCurrentMonth(newMonth);
-    setCurrentView(newMonth);
-  };
+    const updateTargetEndDay = useCallback(
+      (value) => {
+        if (value !== preEndDay) {
+          setTargetEndDay(value);
+        }
+      },
+      [preEndDay, setTargetEndDay]
+    );
 
-  const onDateClick = (day) => {
-    if (!isEdit) return;
+    const prevMonth = () => {
+      const newMonth = subMonths(currentMonth, 1);
+      setCurrentMonth(newMonth);
+      setCurrentView(newMonth);
+    };
 
-    setSelectedDate(day);
+    const nextMonth = () => {
+      const newMonth = addMonths(currentMonth, 1);
+      setCurrentMonth(newMonth);
+      setCurrentView(newMonth);
+    };
 
-    // 단일 날짜 모드인 경우 (1회성 업무)
-    if (singleDateMode) {
-      setStartDate(day);
-      setEndDate(day);
-      setTargetStartDay(format(day, "yyyy/MM/dd"));
-      setTargetEndDay(format(day, "yyyy/MM/dd"));
-      return;
-    }
+    const onDateClick = useCallback(
+      (day) => {
+        if (!isEdit) return;
 
-    // 시작일만 선택 모드 (반복성 업무) - 시작일만 변경, 종료일은 무기한으로 유지
-    if (startDayOnlyMode) {
-      setStartDate(day);
-      setTargetStartDay(format(day, "yyyy/MM/dd"));
-      // 종료일 콜백을 호출하지 않음 - 종료일은 TaskAddModal에서 관리됨
-      return;
-    }
+        setSelectedDate(day);
 
-    // 이벤트성 업무 모드 - 시작일과 종료일 모두 선택 가능
-    if (isSelectingStart) {
-      setStartDate(day);
-      // 시작일을 선택했는데 종료일보다 이후라면 종료일도 시작일로 설정
-      if (endDate && day > endDate) {
-        setEndDate(day);
-        setTargetEndDay(format(day, "yyyy/MM/dd"));
-      }
-      setTargetStartDay(format(day, "yyyy/MM/dd"));
-      setIsSelectingStart(false);
-      setCurrentView(currentMonth); // 현재 보고 있는 월 저장
-    } else {
-      // 종료일을 선택했는데 시작일보다 이전이라면
-      if (day < startDate) {
-        setStartDate(day);
-        setEndDate(startDate);
-        setTargetStartDay(format(day, "yyyy/MM/dd"));
-        setTargetEndDay(format(startDate, "yyyy/MM/dd"));
-      } else {
-        setEndDate(day);
-        setTargetEndDay(format(day, "yyyy/MM/dd"));
-      }
-      setIsSelectingStart(true);
-      // 현재 보고 있는 월을 유지 (startDate가 있는 월로 돌아가지 않도록)
-    }
-  };
+        // 단일 날짜 모드인 경우 (1회성 업무)
+        if (singleDateMode) {
+          setStartDate(day);
+          setEndDate(day);
+          const formattedDay = format(day, "yyyy/MM/dd");
+          updateTargetStartDay(formattedDay);
+          updateTargetEndDay(formattedDay);
+          return;
+        }
 
-  return (
-    <div className="flex flex-col border border-gray-300 rounded-lg px-[20px] pt-[20px] h-[400px]">
-      <RenderHeader
-        currentMonth={currentMonth}
-        prevMonth={prevMonth}
-        nextMonth={nextMonth}
-        standardWidth={standardWidth}
-      />
-      <div className="mt-[24px]" />
-      <RenderDays standardWidth={standardWidth} />
-      <div
-        className="h-[2px] bg-onceBlue my-[24px]"
-        style={{ width: standardWidth }}
-      />
-      <RenderCells
-        currentMonth={currentMonth}
-        selectedDate={selectedDate}
-        onDateClick={onDateClick}
-        standardWidth={standardWidth}
-        startDate={startDate}
-        endDate={endDate}
-        lockDates={lockDates}
-        startDayOnlyMode={startDayOnlyMode}
-      />
-    </div>
-  );
-};
+        // 시작일만 선택 모드 (반복성 업무) - 시작일만 변경, 종료일은 무기한으로 유지
+        if (startDayOnlyMode) {
+          setStartDate(day);
+          const formattedDay = format(day, "yyyy/MM/dd");
+          updateTargetStartDay(formattedDay);
+          // 종료일 콜백을 호출하지 않음 - 종료일은 TaskAddModal에서 관리됨
+          return;
+        }
+
+        // 이벤트성 업무 모드 - 시작일과 종료일 모두 선택 가능
+        if (isSelectingStart) {
+          setStartDate(day);
+          // 시작일을 선택했는데 종료일보다 이후라면 종료일도 시작일로 설정
+          if (endDate && day > endDate) {
+            setEndDate(day);
+            const formattedDay = format(day, "yyyy/MM/dd");
+            updateTargetEndDay(formattedDay);
+          }
+          const formattedStartDay = format(day, "yyyy/MM/dd");
+          updateTargetStartDay(formattedStartDay);
+          setIsSelectingStart(false);
+          setCurrentView(currentMonth); // 현재 보고 있는 월 저장
+        } else {
+          // 종료일을 선택했는데 시작일보다 이전이라면
+          if (day < startDate) {
+            setStartDate(day);
+            setEndDate(startDate);
+            const formattedStartDay = format(day, "yyyy/MM/dd");
+            const formattedEndDay = format(startDate, "yyyy/MM/dd");
+            updateTargetStartDay(formattedStartDay);
+            updateTargetEndDay(formattedEndDay);
+          } else {
+            setEndDate(day);
+            const formattedEndDay = format(day, "yyyy/MM/dd");
+            updateTargetEndDay(formattedEndDay);
+          }
+          setIsSelectingStart(true);
+          // 현재 보고 있는 월을 유지 (startDate가 있는 월로 돌아가지 않도록)
+        }
+      },
+      [
+        isEdit,
+        singleDateMode,
+        startDayOnlyMode,
+        currentMonth,
+        startDate,
+        endDate,
+        isSelectingStart,
+        updateTargetStartDay,
+        updateTargetEndDay,
+      ]
+    );
+
+    return (
+      <div className="flex flex-col border border-gray-300 rounded-lg px-[20px] pt-[20px] h-[400px]">
+        <RenderHeader
+          currentMonth={currentMonth}
+          prevMonth={prevMonth}
+          nextMonth={nextMonth}
+          standardWidth={standardWidth}
+        />
+        <div className="mt-[24px]" />
+        <RenderDays standardWidth={standardWidth} />
+        <div
+          className="h-[2px] bg-onceBlue my-[24px]"
+          style={{ width: standardWidth }}
+        />
+        <RenderCells
+          currentMonth={currentMonth}
+          selectedDate={selectedDate}
+          onDateClick={onDateClick}
+          standardWidth={standardWidth}
+          startDate={startDate}
+          endDate={endDate}
+          lockDates={lockDates}
+          startDayOnlyMode={startDayOnlyMode}
+        />
+      </div>
+    );
+  }
+);

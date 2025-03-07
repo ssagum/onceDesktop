@@ -4,8 +4,7 @@ import NameCoin from "./NameCoin";
 import ModalTemplate from "./ModalTemplate";
 import HospitalStaffSelector from "./HospitalStaffSelector";
 import WhoSelector from "./WhoSelector";
-import TaskAddModal from "../Task/TaskAddModal";
-import TaskHistory from "../Task/TaskHistory";
+import TaskRecordModal from "../Task/TaskRecordModal";
 import { getTaskHistory, getTaskCompleters } from "../Task/TaskService";
 import { useToast } from "../../contexts/ToastContext";
 
@@ -93,7 +92,7 @@ function SingleTodoItem({
   const [selectedCompleters, setSelectedCompleters] = useState([]);
   const [taskHistory, setTaskHistory] = useState([]);
   const [hasTaskHistory, setHasTaskHistory] = useState(false);
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [showTaskHistory, setShowTaskHistory] = useState(false);
   const { showToast } = useToast();
 
   // 최신 currentDate를 추적하는 ref
@@ -359,7 +358,7 @@ function SingleTodoItem({
   // 업무 이력 보기 핸들러
   const handleViewHistory = (e) => {
     e.stopPropagation();
-    setHistoryModalOpen(true);
+    setShowTaskHistory(true);
 
     if (onViewHistory) {
       onViewHistory(task);
@@ -422,12 +421,11 @@ function SingleTodoItem({
       </div>
 
       {/* 히스토리 모달 - 필요한 경우에만 표시 */}
-      {historyModalOpen && (
-        <TaskHistory
-          taskId={id}
-          isVisible={historyModalOpen}
-          setIsVisible={setHistoryModalOpen}
-          currentDate={currentDate}
+      {showTaskHistory && (
+        <TaskRecordModal
+          isVisible={showTaskHistory}
+          setIsVisible={setShowTaskHistory}
+          task={task}
         />
       )}
     </>
