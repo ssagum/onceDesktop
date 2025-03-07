@@ -166,7 +166,7 @@ const QRCodeGenerator = ({ idList }) => {
   };
 
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex flex-col items-center w-full h-full">
       <div className="sticky top-0 bg-white w-full p-4 z-10 border-b no-print">
         <div className="flex flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
@@ -224,7 +224,8 @@ const QRCodeGenerator = ({ idList }) => {
               disabled={isLoading}
               className={`px-3 py-1 ${
                 isLoading ? "bg-gray-500" : "bg-green-600"
-              } text-white rounded-md flex items-center gap-1 text-sm`}>
+              } text-white rounded-md flex items-center gap-1 text-sm`}
+            >
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
@@ -238,10 +239,14 @@ const QRCodeGenerator = ({ idList }) => {
         </div>
       </div>
 
-      <div className="mt-4 w-full h-[calc(100vh-200px)] overflow-auto qr-print-container">
+      <div
+        className="mt-4 w-full overflow-auto qr-print-container"
+        style={{ maxHeight: "calc(100% - 120px)" }}
+      >
         <div
           ref={qrContainerRef}
-          className="qr-pages-container flex flex-col items-center">
+          className="qr-pages-container flex flex-col items-center"
+        >
           {pages.map((page, pageIndex) => (
             <div
               id={`qr-page-${pageIndex}`}
@@ -258,7 +263,8 @@ const QRCodeGenerator = ({ idList }) => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "flex-start",
-              }}>
+              }}
+            >
               <div
                 className="qr-grid"
                 style={{
@@ -266,7 +272,8 @@ const QRCodeGenerator = ({ idList }) => {
                   gridTemplateColumns: "repeat(2, 1fr)",
                   gap: "5mm",
                   width: "100%",
-                }}>
+                }}
+              >
                 {page.items.map((id) => (
                   <div
                     key={id}
@@ -280,7 +287,8 @@ const QRCodeGenerator = ({ idList }) => {
                       borderRadius: "3mm",
                       width: "100%",
                       boxSizing: "border-box",
-                    }}>
+                    }}
+                  >
                     <QRCodeCanvas
                       id={`qr-${id}`}
                       value={id}
@@ -294,7 +302,8 @@ const QRCodeGenerator = ({ idList }) => {
                           wordBreak: "keep-all",
                           width: "100%",
                           padding: "0 2mm",
-                        }}>
+                        }}
+                      >
                         {id}
                       </span>
                     )}
