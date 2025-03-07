@@ -6,7 +6,18 @@ import OnceOnOffButton from "../common/OnceOnOffButton";
 import DayToggle from "../common/DayToggle";
 import PriorityToggle from "../common/PriorityToggle";
 import { JcyCalendar } from "../common/JcyCalendar";
-import { format, parseISO } from "date-fns";
+import {
+  format,
+  parseISO,
+  formatISO,
+  addDays,
+  parse,
+  isBefore,
+  isAfter,
+  isSameDay,
+  differenceInDays,
+  isWithinInterval,
+} from "date-fns";
 import { getTaskHistory } from "./TaskService";
 import NameCoin from "../common/NameCoin";
 
@@ -30,6 +41,74 @@ const StatusBadge = styled.span`
   white-space: nowrap;
 `;
 
+// 완료자 컨테이너
+const CompletionInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+
+  .actor-list {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .completion-time {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+`;
+
+// 정렬 및 필터 헤더 컴포넌트
+const InteractiveHeader = styled.div`
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  user-select: none;
+  position: relative;
+
+  &:hover {
+    background-color: #f9fafb;
+  }
+
+  .indicator {
+    margin-left: 4px;
+    transition: transform 0.2s;
+  }
+
+  .indicator.asc {
+    transform: rotate(180deg);
+  }
+
+  &.active {
+    background-color: #ffedd5;
+    border-bottom: 2px solid #f97316;
+    font-weight: 600;
+    color: #f97316;
+  }
+
+  .filter-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    margin-left: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #fff;
+    background-color: #f97316;
+    transition: all 0.2s;
+  }
+`;
+
 function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const [selectedDays, setSelectedDays] = useState(task?.days || []);
   const [selectedCycle, setSelectedCycle] = useState(task?.cycle || "매일");
@@ -47,6 +126,8 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const [taskHistory, setTaskHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("일반");
+  const [sortDirection, setSortDirection] = useState("desc"); // 기본값: 내림차순(최신순)
+  const [showOnlyCompleted, setShowOnlyCompleted] = useState(false); // 기본값: 모든 기록 표시
 
   // 무한 종료일 (반복성 업무용)
   const INFINITE_END_DATE = "2099/12/31";
@@ -130,41 +211,244 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     return actionLabels[action] || action;
   };
 
-  // 완료 관련 이력만 필터링하여 표시 형식으로 변환
-  const getCompletionRecords = () => {
-    if (!taskHistory || taskHistory.length === 0) return [];
+  // 날짜가 업무 요일에 해당하는지 확인
+  const isTaskDay = (date) => {
+    if (task?.category === "1회성") {
+      return isSameDay(new Date(date), new Date(startDate));
+    }
 
-    // 완료 또는 취소 관련 이력만 필터링
-    const completionHistories = taskHistory.filter(
-      (item) => item.action === "complete" || item.action === "cancel_complete"
-    );
+    if (selectedCycle === "매일") {
+      return true;
+    }
 
-    // 표시 형식으로 변환
-    return completionHistories.map((item) => {
-      const { date, time, dayPeriod } = formatDateForDisplay(item.timestamp);
-      let status = "미완료";
+    const dayOfWeek = format(new Date(date), "E"); // 1: 월요일, 7: 일요일
+    const koreanDays = ["월", "화", "수", "목", "금", "토", "일"];
+    const dayName = koreanDays[dayOfWeek - 1];
 
-      if (item.action === "complete") {
-        status = "상완"; // 완료됨
-      } else if (item.action === "cancel_complete") {
-        status = "미완료"; // 취소됨
+    return selectedDays.includes(dayName);
+  };
+
+  // 시작일부터 종료일까지의 모든 날짜 생성
+  const generateAllDates = () => {
+    try {
+      // 시작일과 종료일 파싱
+      const startDateObj = parse(startDate, "yyyy/MM/dd", new Date());
+      let endDateObj;
+
+      // 반복성 업무거나 아직 종료일이 도래하지 않은 경우 오늘 날짜까지로 제한
+      if (task?.category === "반복성" || endDate === INFINITE_END_DATE) {
+        // 시간 정보 제거하고 날짜만 사용 (시간을 00:00:00으로 설정)
+        const today = new Date();
+        endDateObj = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        );
+      } else {
+        endDateObj = parse(endDate, "yyyy/MM/dd", new Date());
+
+        // 종료일이 미래인 경우 오늘까지만 표시
+        const today = new Date();
+        const todayWithoutTime = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        );
+        if (endDateObj > todayWithoutTime) {
+          endDateObj = todayWithoutTime;
+        }
       }
 
+      if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+        console.error("날짜 파싱 오류", { startDate, endDate });
+        return [];
+      }
+
+      // 시작일이 종료일보다 이후인 경우
+      if (startDateObj > endDateObj) {
+        return [];
+      }
+
+      const dates = [];
+      let currentDate = startDateObj;
+
+      // 날짜가 너무 많아지는 것을 방지 (최대 365일)
+      const maxDays = 365;
+      const totalDays = differenceInDays(endDateObj, startDateObj);
+
+      if (totalDays > maxDays) {
+        console.warn(
+          `날짜 범위가 너무 큽니다: ${totalDays}일. ${maxDays}일로 제한합니다.`
+        );
+        endDateObj = addDays(startDateObj, maxDays);
+      }
+
+      // 각 날짜 생성
+      while (
+        isBefore(currentDate, endDateObj) ||
+        isSameDay(currentDate, endDateObj)
+      ) {
+        // 현재 날짜가 업무 요일에 해당하는지 확인 (매일, 매주, 격주 등 설정에 따라)
+        if (isTaskDay(currentDate)) {
+          const dateStr = format(currentDate, "yyyy/MM/dd");
+          dates.push(dateStr);
+        }
+
+        currentDate = addDays(currentDate, 1);
+      }
+
+      return dates;
+    } catch (error) {
+      console.error("날짜 목록 생성 중 오류:", error);
+      return [];
+    }
+  };
+
+  // 특정 날짜의 완료 상태 확인 및, 완료자 정보 (actors) 반환
+  const getCompletionStatus = (dateStr) => {
+    if (!taskHistory || taskHistory.length === 0) return { status: "미완료" };
+
+    // 이 날짜에 대한 기록 찾기 (액션 타입 무관)
+    const dateRecords = taskHistory.filter((item) => {
+      if (!item.timestamp) return false;
+
+      const recordDate = new Date(item.timestamp);
+      // 시간 정보 없이 년/월/일만 비교하기 위해 형식 변환
+      const recordDateStr = format(recordDate, "yyyy/MM/dd");
+
+      // 날짜가 일치하는 기록 모두 포함 (액션 타입 확인 안 함)
+      return recordDateStr === dateStr;
+    });
+
+    if (dateRecords.length === 0) return { status: "미완료" };
+
+    // 가장 최근 기록 기준 (시간순으로 정렬 후)
+    dateRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latestRecord = dateRecords[0];
+
+    // 완료자 정보 처리
+    let actors = [];
+
+    // actors 배열이 있는 경우
+    if (Array.isArray(latestRecord.actors) && latestRecord.actors.length > 0) {
+      actors = latestRecord.actors;
+    }
+    // actor 문자열이 있는 경우
+    else if (latestRecord.actor) {
+      actors = [latestRecord.actor];
+    }
+    // actionBy 문자열이 있는 경우
+    else if (latestRecord.actionBy) {
+      actors = [latestRecord.actionBy];
+    }
+
+    // 각 actor를 객체 형태로 변환 (NameCoin 컴포넌트 요구사항)
+    const actorObjects = actors.map((actor) => {
+      // 이미 객체인 경우 그대로 사용
+      if (typeof actor === "object" && actor !== null) {
+        return {
+          id: actor.id || actor.userId || actor,
+          name: actor.name || actor.userName || actor,
+          ...actor,
+        };
+      }
+      // 문자열인 경우 객체로 변환
       return {
-        date,
-        time,
-        dayPeriod,
-        status,
-        actor:
-          item.actionBy ||
-          item.actor ||
-          (item.actors && item.actors.length > 0 ? item.actors[0] : ""),
+        id: actor,
+        name: actor,
+      };
+    });
+
+    return {
+      status: "상완",
+      timestamp: latestRecord.timestamp,
+      actors: actorObjects,
+    };
+  };
+
+  // 날짜별 완료 상태 포함한 전체 기록 생성
+  const getAllRecords = () => {
+    const allDates = generateAllDates();
+
+    console.log("생성된 날짜 목록:", allDates);
+
+    return allDates.map((dateStr) => {
+      const completionInfo = getCompletionStatus(dateStr);
+
+      // 날짜 문자열에서 요일 계산 (수정된 방식)
+      const dateObj = new Date(dateStr.split("/").join("-"));
+      const dayIndex = dateObj.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+      const koreanDays = ["일", "월", "화", "수", "목", "금", "토"];
+      const dayName = koreanDays[dayIndex];
+
+      // 해당 날짜의 완료 기록 찾기 (시간 정보 포함)
+      const dateRecord = taskHistory.find((item) => {
+        if (!item.timestamp) return false;
+
+        // 시간 정보 없이 년/월/일만 비교
+        const recordDate = new Date(item.timestamp);
+        const recordDateStr = format(recordDate, "yyyy/MM/dd");
+
+        return recordDateStr === dateStr && item.action === "complete";
+      });
+
+      // 날짜와 상태 정보 반환
+      return {
+        date: dateStr,
+        dayName, // 요일 추가
+        ...completionInfo,
+        // 시간 정보 추가 (완료된 경우에만)
+        ...(dateRecord
+          ? {
+              time: format(new Date(dateRecord.timestamp), "HH:mm"),
+              dayPeriod:
+                new Date(dateRecord.timestamp).getHours() < 12
+                  ? "오전"
+                  : "오후",
+            }
+          : {
+              time: "-",
+              dayPeriod: "-",
+            }),
       };
     });
   };
 
-  // 완료 기록 가져오기
-  const completionRecords = getCompletionRecords();
+  // 정렬 및 필터링된 업무 기록 가져오기
+  const getFilteredAndSortedRecords = () => {
+    let allRecords = getAllRecords();
+
+    // 완료된 업무만 보기 옵션이 켜져있으면 완료된 업무만 필터링
+    if (showOnlyCompleted) {
+      allRecords = allRecords.filter((record) => record.status === "상완");
+    }
+
+    // 날짜 기준으로 정렬
+    allRecords.sort((a, b) => {
+      const dateA = new Date(a.date.split("/").join("-"));
+      const dateB = new Date(b.date.split("/").join("-"));
+
+      // 정렬 방향에 따라 정렬
+      return sortDirection === "asc"
+        ? dateA - dateB // 오름차순 (과거 → 최신)
+        : dateB - dateA; // 내림차순 (최신 → 과거)
+    });
+
+    return allRecords;
+  };
+
+  // 정렬 방향 토글
+  const toggleSortDirection = () => {
+    setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+  };
+
+  // 완료된 업무만 보기 토글
+  const toggleCompletedFilter = () => {
+    setShowOnlyCompleted(!showOnlyCompleted);
+  };
+
+  // 정렬 및 필터링된 기록
+  const filteredAndSortedRecords = getFilteredAndSortedRecords();
 
   // 요일 배열
   const days = ["월", "화", "수", "목", "금", "토", "일"];
@@ -350,15 +634,64 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
 
             {/* 우측: 업무 일지 테이블 (3:2 비율로 변경) */}
             <div className="w-2/5 pl-4 h-full flex flex-col">
+              {/* 테이블 레코드 개수 표시 */}
+              <div className="mb-2 text-sm text-gray-600 flex justify-between items-center">
+                <div>
+                  <span className="font-medium">
+                    {filteredAndSortedRecords.length}개
+                  </span>
+                  <span className="ml-1">
+                    {showOnlyCompleted ? "완료 항목" : "업무 기록"} 표시 중
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400">
+                  <span className="italic">헤더를 클릭하여 정렬/필터 변경</span>
+                </div>
+              </div>
+
               {/* 헤더 부분 */}
               <div className="mb-4 bg-white border border-gray-300 rounded-md overflow-hidden">
                 <div className="flex">
-                  <div className="px-6 py-2 font-medium text-center w-1/2 border-r border-gray-300">
+                  <InteractiveHeader
+                    className="px-6 py-3 font-medium text-center w-1/2 border-r border-gray-300"
+                    onClick={toggleSortDirection}
+                  >
                     일시
-                  </div>
-                  <div className="px-6 py-2 font-medium text-center w-1/2 bg-gray-50">
-                    완료
-                  </div>
+                    <span
+                      className={`indicator ml-1 ${
+                        sortDirection === "asc" ? "asc" : ""
+                      }`}
+                    >
+                      {sortDirection === "asc" ? "▼" : "▲"}
+                    </span>
+                  </InteractiveHeader>
+                  <InteractiveHeader
+                    className={`px-6 py-3 font-medium text-center w-1/2 ${
+                      showOnlyCompleted ? "active" : ""
+                    }`}
+                    onClick={toggleCompletedFilter}
+                  >
+                    {showOnlyCompleted ? (
+                      <div className="flex items-center justify-center">
+                        완료만
+                        <svg
+                          className="w-4 h-4 ml-1"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center">
+                        모두
+                      </div>
+                    )}
+                  </InteractiveHeader>
                 </div>
               </div>
 
@@ -368,8 +701,8 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
                   <div className="flex justify-center items-center h-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>
-                ) : completionRecords.length > 0 ? (
-                  completionRecords.map((record, index) => (
+                ) : filteredAndSortedRecords.length > 0 ? (
+                  filteredAndSortedRecords.map((record, index) => (
                     <div
                       key={index}
                       className={`flex border-b border-gray-100 ${
@@ -378,28 +711,57 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
                     >
                       <div className="w-1/2 py-4 px-4 flex flex-col items-center justify-center">
                         <div className="font-medium text-gray-700">
-                          {record.date}
+                          {record.date} ({record.dayName})
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {record.dayPeriod} {record.time}
-                        </div>
+                        {record.status === "상완" &&
+                          record.dayPeriod !== "-" && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {record.dayPeriod} {record.time} 완료
+                            </div>
+                          )}
                       </div>
-                      <div className="w-1/2 py-4 px-4 flex justify-center items-center">
-                        <StatusBadge
-                          className={
-                            record.status === "상완"
-                              ? "bg-orange-100 text-orange-500 border border-orange-200"
-                              : "bg-gray-100 text-gray-500 border border-gray-200"
-                          }
-                        >
-                          {record.status}
-                        </StatusBadge>
+                      <div className="w-1/2 py-4 px-2 flex justify-center items-center">
+                        {record.status === "상완" ? (
+                          <CompletionInfo>
+                            <div className="actor-list">
+                              {record.actors && record.actors.length > 0 ? (
+                                <>
+                                  {record.actors.length <= 3 ? (
+                                    // 3명 이하면 모두 표시
+                                    record.actors.map((actor, i) => (
+                                      <NameCoin key={i} item={actor} />
+                                    ))
+                                  ) : (
+                                    // 3명 초과면 첫 2명과 나머지 수 표시
+                                    <>
+                                      <NameCoin item={record.actors[0]} />
+                                      <NameCoin item={record.actors[1]} />
+                                      <NameCoin
+                                        extraCount={record.actors.length - 2}
+                                      />
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <StatusBadge className="bg-orange-100 text-orange-500 border border-orange-200">
+                                  완료됨
+                                </StatusBadge>
+                              )}
+                            </div>
+                          </CompletionInfo>
+                        ) : (
+                          <StatusBadge className="bg-gray-100 text-gray-500 border border-gray-200">
+                            미완료
+                          </StatusBadge>
+                        )}
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="flex justify-center items-center h-full text-gray-500 py-10">
-                    업무 일지가 없습니다
+                    {showOnlyCompleted
+                      ? "완료된 업무가 없습니다"
+                      : "업무 일지가 없습니다"}
                   </div>
                 )}
               </div>

@@ -167,16 +167,33 @@ function SingleTodoItem({
             return;
           }
 
-          // 완료 이력이 있는지 확인
-          const completeHistory = history.find(
-            (h) => h.action === "complete" || h.action === "update_completers"
-          );
+          // 히스토리가 존재하면 완료된 것으로 간주
+          setHasTaskHistory(true);
 
-          setHasTaskHistory(!!completeHistory);
+          // 가장 최근 기록 기준으로 완료자 정보 설정
+          const latestRecord = [...history].sort(
+            (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+          )[0];
 
-          // 완료자 정보 설정
-          if (completeHistory) {
-            setSelectedCompleters(completeHistory.actors || []);
+          // 완료자 정보가 있으면 설정
+          if (latestRecord) {
+            // actors 배열이 있는 경우
+            if (
+              Array.isArray(latestRecord.actors) &&
+              latestRecord.actors.length > 0
+            ) {
+              setSelectedCompleters(latestRecord.actors);
+            }
+            // actor 문자열이 있는 경우
+            else if (latestRecord.actor) {
+              setSelectedCompleters([latestRecord.actor]);
+            }
+            // actionBy 문자열이 있는 경우
+            else if (latestRecord.actionBy) {
+              setSelectedCompleters([latestRecord.actionBy]);
+            } else {
+              setSelectedCompleters([]);
+            }
           } else {
             setSelectedCompleters([]);
           }
