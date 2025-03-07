@@ -392,7 +392,7 @@ function SingleTodoItem({
   return (
     <>
       <div
-        className={`h-[56px] flex flex-row w-full items-center bg-onceBackground mb-[4px] pr-[10px] ${
+        className={`h-[66px] flex flex-row w-full items-center bg-onceBackground mb-[4px] pr-[10px] ${
           isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
         }`}
         onClick={isDraggable ? undefined : handleClick}

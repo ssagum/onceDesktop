@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styled from "styled-components";
 import RenderTitlePart from "../common/RenderTitlePart";
 import ToDo from "../common/ToDo";
@@ -114,6 +114,7 @@ export default function HomeMainCanvas() {
   const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
   const [taskHistory, setTaskHistory] = useState([]);
   const { showToast } = useToast();
+  const [isMiniMode, setIsMiniMode] = useState(false);
 
   // 날짜 변경 시 업무 필터링 갱신
   useEffect(() => {
@@ -530,10 +531,15 @@ export default function HomeMainCanvas() {
     fetchTasks();
   }, []);
 
+  // 미니 모드 토글 함수
+  const toggleMiniMode = () => {
+    setIsMiniMode((prev) => !prev);
+  };
+
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
       {/* 위 영역 */}
-      <TopZone className="flex-[1] w-full p-[20px]">
+      <TopZone className="flex-[1] w-full pt-[20px] px-[20px]">
         <div className="w-full bg-white h-full flex-col px-[30px] rounded-xl">
           <InsideHeaderZone className="py-[20px] flex flex-row justify-between items-center">
             <InsideHeader title={"원내공지"} />
@@ -553,7 +559,7 @@ export default function HomeMainCanvas() {
           {/* pinned 상태인 공지가 없을 경우 안내 메시지 표시 */}
           {notices.filter((notice) => notice.pinned).length === 0 && (
             <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
-              등록된 공지사항이 없습니다.
+              <span className="mb-[40px]">등록된 공지사항이 없습니다.</span>
             </div>
           )}
         </div>
@@ -561,7 +567,7 @@ export default function HomeMainCanvas() {
       {/* 아래 영역 */}
       <BottomZone className="flex-[2] w-full p-[20px] flex flex-row gap-[20px]">
         {/* 왼쪽 영역 */}
-        <LeftZone className="flex-[2] bg-white rounded-xl p-[30px] flex flex-col h-full">
+        <LeftZone className="flex-[0.95] bg-white rounded-xl p-[30px] flex flex-col h-full">
           <div className="flex flex-row justify-between items-center">
             <div className="flex flex-row items-center">
               <div className="w-[40px] h-[40px] flex justify-center items-center">
@@ -594,7 +600,7 @@ export default function HomeMainCanvas() {
           </div>
         </LeftZone>
         {/* 오른쪽 영역 */}
-        <RightZone className="flex-[4] h-full">
+        <RightZone className="flex-[1.05] h-full">
           <div className="flex-col h-full flex w-full gap-y-[20px]">
             <RightTopZone className="flex-[1] w-full bg-white rounded-xl">
               <InsideHeaderZone className="p-[30px] flex flex-row w-full justify-between">
