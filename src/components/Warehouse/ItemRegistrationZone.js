@@ -600,7 +600,6 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
   const requiredFields = [
     "itemName",
     "category",
-    "price",
     "quantity",
     "writer",
     "department",
@@ -612,7 +611,6 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
     return (
       itemName &&
       category &&
-      price &&
       quantity &&
       writer.length > 0 &&
       department &&
@@ -969,8 +967,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
             }`}
-            onClick={() => handleModeChange("신규")}
-          >
+            onClick={() => handleModeChange("신규")}>
             신규
           </button>
           <button
@@ -979,8 +976,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                 ? "border-onceBlue bg-onceBlue text-white"
                 : "border-gray-400 text-gray-600"
             }`}
-            onClick={() => handleModeChange("정정")}
-          >
+            onClick={() => handleModeChange("정정")}>
             정정
           </button>
         </div>
@@ -1144,33 +1140,6 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                 : "bg-textBackground"
             } mr-[40px]`}
           />
-          <FormLabel
-            label={"단가"}
-            required={true}
-            className="h-[40px] flex items-center font-semibold text-black w-[80px]"
-          />
-          <CurrencyInput
-            name="price"
-            value={price}
-            onChange={(value) =>
-              handleChange({ target: { name: "price", value } })
-            }
-          />
-
-          <div className="flex items-center space-x-2 ml-[30px]">
-            <label className="font-semibold text-gray-600">VAT 포함</label>
-            <input
-              type="checkbox"
-              name="vat"
-              checked={vat}
-              onChange={(e) =>
-                handleChange({
-                  target: { name: "vat", value: e.target.checked },
-                })
-              }
-              className="w-5 h-5"
-            />
-          </div>
         </div>
         {/* 기초재고 & 안전재고 */}
         <div className="flex flex-row items-center">
@@ -1240,8 +1209,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                     <div
                       key={v.id}
                       className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onMouseDown={() => handleVendorSelect(v)}
-                    >
+                      onMouseDown={() => handleVendorSelect(v)}>
                       <div className="font-semibold">{v.clientName}</div>
                       {v.url && (
                         <div className="text-sm text-gray-600">{v.url}</div>
@@ -1276,8 +1244,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                     height="24"
                     viewBox="0 0 24 24"
                     fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
+                    xmlns="http://www.w3.org/2000/svg">
                     <path
                       d="M18 6L6 18M6 6L18 18"
                       stroke="currentColor"
@@ -1303,8 +1270,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                     height="20"
                     viewBox="0 0 24 24"
                     fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
+                    xmlns="http://www.w3.org/2000/svg">
                     <path
                       d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z"
                       stroke="currentColor"
@@ -1321,8 +1287,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
                   modalFilteredVendors.map((vendor) => (
                     <VendorItem
                       key={vendor.id}
-                      onClick={() => handleSelectVendorFromModal(vendor)}
-                    >
+                      onClick={() => handleSelectVendorFromModal(vendor)}>
                       <VendorName>{vendor.clientName}</VendorName>
                       {vendor.url && <VendorUrl>{vendor.url}</VendorUrl>}
                     </VendorItem>
