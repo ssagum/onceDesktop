@@ -14,6 +14,8 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
+import { format, parse } from "date-fns";
+import { convertToFirestoreDate } from "../../utils/dateUtils";
 
 // Task 컬렉션 레퍼런스
 const tasksCollectionRef = () => collection(db, "tasks");
@@ -118,12 +120,12 @@ export const addTask = async (taskData) => {
     const documentId = generateTaskId(taskData.title);
     console.log(`TaskService: 생성된, 업무 ID: ${documentId}`);
 
-    // 날짜 필드를 Date 객체로 변환 (Firestore 호환성)
+    // 날짜 필드를 Date 객체로 변환 (Firestore 호환성) - 시간 정보는 제거
     const processedData = {
       ...taskData,
       id: documentId, // 문서 ID를 id 필드에도 저장 (중요!)
-      startDate: taskData.startDate ? new Date(taskData.startDate) : new Date(),
-      endDate: taskData.endDate ? new Date(taskData.endDate) : new Date(),
+      startDate: convertToFirestoreDate(taskData.startDate),
+      endDate: convertToFirestoreDate(taskData.endDate),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -149,7 +151,7 @@ export const addTask = async (taskData) => {
       actionBy: taskData.writer || "시스템",
       timestamp: now,
       date: serverTimestamp(),
-      dateStr: formatDateForId(now),
+      dateStr: formatDateForTask(now),
     };
 
     console.log("TaskService: 업무 생성 이력 추가", historyData);
@@ -175,14 +177,28 @@ export const addTask = async (taskData) => {
 /**
  * 업무를 업데이트합니다.
  */
-export const updateTask = async (taskId, taskData) => {
+export const updateTask = async (updatedTaskData) => {
   try {
-    const taskRef = doc(db, "tasks", taskId);
-    await updateDoc(taskRef, {
-      ...taskData,
+    const taskId = updatedTaskData.id;
+    if (!taskId) {
+      throw new Error("업무 ID가 없습니다.");
+    }
+
+    // ID를 제외한 나머지 데이터만 추출
+    const { id, ...taskDataWithoutId } = updatedTaskData;
+
+    // 날짜 필드 처리
+    const processedData = {
+      ...taskDataWithoutId,
+      startDate: convertToFirestoreDate(updatedTaskData.startDate),
+      endDate: convertToFirestoreDate(updatedTaskData.endDate),
       updatedAt: serverTimestamp(),
-    });
-    return { id: taskId, ...taskData };
+    };
+
+    const taskRef = doc(db, "tasks", taskId);
+    await updateDoc(taskRef, processedData);
+
+    return updatedTaskData;
   } catch (error) {
     console.error("Error updating task:", error);
     throw error;

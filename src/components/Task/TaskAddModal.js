@@ -5,11 +5,13 @@ import { cancel } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import { JcyCalendar } from "../common/JcyCalendar";
 import TaskRecordModal from "./TaskRecordModal";
-import { format } from "date-fns";
+import { format, parse, isValid, parseISO } from "date-fns";
 import DayToggle from "../common/DayToggle";
 import PriorityToggle from "../common/PriorityToggle";
 import DepartmentRoleSelector from "../common/DepartmentRoleSelector";
 import { useToast } from "../../contexts/ToastContext";
+import FormLabel from "../common/FormLabel";
+import { formatSafeDate, parseKoreanDate } from "../../utils/dateUtils";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div``;
@@ -17,146 +19,25 @@ const InforationZone = styled.div``;
 const InfoRow = styled.div``;
 const ThreeButton = styled.div``;
 
-// 날짜가 유효한지 확인하는 헬퍼 함수
 const isValidDate = (dateString) => {
   if (!dateString) return false;
 
-  console.log("isValidDate 검사 중: ", dateString, typeof dateString);
-
-  try {
-    // 한글 날짜 형식 처리 (예: "2099년 12월 31일 오전 12시 0분 0초 UTC+9")
-    if (
-      typeof dateString === "string" &&
-      dateString.includes("년") &&
-      dateString.includes("월")
-    ) {
-      return true; // 한글 날짜 형식은 유효하다고 간주
-    }
-
-    // 일반적인 날짜 형식 처리
-    const date = new Date(dateString);
-    const isValid = date instanceof Date && !isNaN(date.getTime());
-    console.log(`${dateString} 유효성 결과: ${isValid}`);
-    return isValid;
-  } catch (error) {
-    console.error("날짜 유효성 검사 중 오류:", error);
-    return false;
-  }
+  const date = new Date(dateString);
+  return !isNaN(date.getTime());
 };
 
-// 한글 날짜 문자열을 Date 객체로 변환하는 함수
-const parseKoreanDate = (koreanDateString) => {
-  try {
-    // "2099년 12월 31일 오전 12시 0분 0초 UTC+9" 형식 파싱
-    if (typeof koreanDateString !== "string") return null;
-
-    // 연, 월, 일 추출
-    const yearMatch = koreanDateString.match(/(\d+)년/);
-    const monthMatch = koreanDateString.match(/(\d+)월/);
-    const dayMatch = koreanDateString.match(/(\d+)일/);
-
-    if (!yearMatch || !monthMatch || !dayMatch) return null;
-
-    const year = parseInt(yearMatch[1]);
-    const month = parseInt(monthMatch[1]) - 1; // 월은 0부터 시작
-    const day = parseInt(dayMatch[1]);
-
-    // 시간 정보도 있으면 추출
-    let hours = 0,
-      minutes = 0,
-      seconds = 0;
-    const hoursMatch = koreanDateString.match(/(\d+)시/);
-    const minutesMatch = koreanDateString.match(/(\d+)분/);
-    const secondsMatch = koreanDateString.match(/(\d+)초/);
-
-    if (hoursMatch) hours = parseInt(hoursMatch[1]);
-    if (minutesMatch) minutes = parseInt(minutesMatch[1]);
-    if (secondsMatch) seconds = parseInt(secondsMatch[1]);
-
-    // 오전/오후 처리
-    if (koreanDateString.includes("오후") && hours < 12) {
-      hours += 12;
-    }
-
-    console.log(
-      `한글 날짜 파싱: ${year}년 ${
-        month + 1
-      }월 ${day}일 ${hours}시 ${minutes}분 ${seconds}초`
-    );
-    return new Date(year, month, day, hours, minutes, seconds);
-  } catch (error) {
-    console.error("한글 날짜 파싱 오류:", error);
-    return null;
-  }
-};
-
-// 안전하게 날짜 포맷팅하는 함수
-const formatSafeDate = (dateValue) => {
-  console.log("formatSafeDate 호출됨: ", dateValue, typeof dateValue);
-
-  try {
-    // null, undefined 체크
-    if (!dateValue) {
-      console.log("날짜가 null 또는 undefined임");
-      return format(new Date(), "yyyy/MM/dd");
-    }
-
-    // 한글 날짜 형식 처리
-    if (
-      typeof dateValue === "string" &&
-      dateValue.includes("년") &&
-      dateValue.includes("월")
-    ) {
-      const parsedDate = parseKoreanDate(dateValue);
-      if (parsedDate) {
-        const formattedDate = format(parsedDate, "yyyy/MM/dd");
-        console.log(`한글 날짜 변환: ${dateValue} -> ${formattedDate}`);
-        return formattedDate;
-      }
-    }
-
-    // 다양한 날짜 형식 처리
-    let dateObj;
-
-    if (dateValue instanceof Date) {
-      // 이미 Date 객체인 경우
-      dateObj = dateValue;
-    } else if (typeof dateValue === "object" && dateValue.seconds) {
-      // Firestore 타임스탬프 처리
-      dateObj = new Date(dateValue.seconds * 1000);
-    } else if (typeof dateValue === "number") {
-      // 타임스탬프(밀리초) 처리
-      dateObj = new Date(dateValue);
-    } else if (typeof dateValue === "string") {
-      // 문자열 날짜 처리
-      dateObj = new Date(dateValue);
-    } else {
-      // 기타 케이스
-      console.log("알 수 없는 날짜 형식:", dateValue);
-      return format(new Date(), "yyyy/MM/dd");
-    }
-
-    // 생성된 Date 객체 유효성 검사
-    if (isNaN(dateObj.getTime())) {
-      console.log("유효하지 않은 Date 객체 생성됨:", dateValue);
-      return format(new Date(), "yyyy/MM/dd");
-    }
-
-    // 유효한 날짜를 원하는 형식으로 포맷팅
-    const formattedDate = format(dateObj, "yyyy/MM/dd");
-    console.log(`날짜 변환 성공: ${dateValue} -> ${formattedDate}`);
-    return formattedDate;
-  } catch (error) {
-    console.error("날짜 포맷팅 중 오류:", error, "원본 값:", dateValue);
-    return format(new Date(), "yyyy/MM/dd");
-  }
+// 한글 날짜 형식인지 확인하는 함수
+const isKoreanDateFormat = (dateString) => {
+  return (
+    typeof dateString === "string" &&
+    dateString.includes("년") &&
+    dateString.includes("월")
+  );
 };
 
 // 초기 날짜 값 설정 함수 - 컴포넌트 외부로 이동
 const getInitialDate = (dateValue) => {
-  console.log("getInitialDate 호출됨:", dateValue, typeof dateValue);
-
-  // 간단히 formatSafeDate 함수를 재사용
+  // formatSafeDate 유틸리티 함수 사용
   return formatSafeDate(dateValue);
 };
 
@@ -168,6 +49,7 @@ function TaskAddModal({
   onTaskAdd,
   onTaskEdit,
   onTaskDelete,
+  onSwitchToEditMode,
 }) {
   console.log("TaskAddModal 렌더링: ", task);
   if (task) {
@@ -565,6 +447,9 @@ function TaskAddModal({
   // 수정 모드로 전환
   const handleSwitchToEditMode = () => {
     setMode("edit");
+    if (onSwitchToEditMode) {
+      onSwitchToEditMode();
+    }
   };
 
   // 업무 삭제 핸들러
@@ -583,24 +468,12 @@ function TaskAddModal({
       return;
     }
 
-    // assignee가 문자열이거나 배열일 수 있으므로 유연하게 검증
-    const hasAssignee =
-      assignee &&
-      (typeof assignee === "string"
-        ? assignee.trim().length > 0
-        : assignee.length > 0);
-
-    if (!hasAssignee) {
-      showToast("담당자를 선택해주세요.", "warning");
-      return;
-    }
-
     // 새 업무 객체 생성
     const newTask = {
       id: mode === "edit" && task ? task.id : Date.now().toString(), // 편집 시 기존 ID 유지, 새 업무는 새 ID 생성
       title,
       writer: writer || "", // 빈 문자열로 기본값 설정
-      assignee,
+      assignee: assignee || "", // assignee가 빈 값이어도 저장 가능하도록 빈 문자열로 기본값 설정
       category,
       priority,
       startDate,
@@ -663,21 +536,32 @@ function TaskAddModal({
                 />
               </div>
               <InforationZone className="w-full flex flex-col px-[20px]">
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => isFieldEditable && setTitle(e.target.value)}
-                  placeholder="업무 제목을 입력하세요"
-                  className={`w-[630px] border border-gray-400 rounded-md h-[40px] px-4 ${
-                    isFieldEditable ? "bg-textBackground" : "bg-gray-100"
-                  } mb-[20px]`}
-                  disabled={!isFieldEditable}
-                />
-                <InfoRow className="grid grid-cols-2 gap-4 mb-[10px]">
+                <div className="flex flex-row items-center mb-[20px]">
+                  <FormLabel
+                    label="업무 제목"
+                    required={true}
+                    className="mb-2"
+                  />
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) =>
+                      isFieldEditable && setTitle(e.target.value)
+                    }
+                    placeholder="업무 제목을 입력하세요"
+                    className={`w-[570px] border border-gray-400 rounded-md h-[40px] px-4 ${
+                      isFieldEditable ? "bg-textBackground" : "bg-gray-100"
+                    }`}
+                    disabled={!isFieldEditable}
+                  />
+                </div>
+                <InfoRow className="grid grid-cols-2 gap-4 mb-[20px]">
                   <div className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      작성자:
-                    </label>
+                    <FormLabel
+                      label="작성자"
+                      required={true}
+                      className="mb-2"
+                    />
                     <DepartmentRoleSelector
                       value={writer}
                       onChange={(val) => isFieldEditable && setWriter(val)}
@@ -687,21 +571,21 @@ function TaskAddModal({
                     />
                   </div>
                   <div className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      담당자:
-                    </label>
+                    <FormLabel
+                      label="담당자"
+                      required={false}
+                      className="mb-2"
+                    />
                     <DepartmentRoleSelector
                       value={assignee}
                       onChange={(val) => isFieldEditable && setAssignee(val)}
-                      label="담당 선택"
+                      label="담당자 선택"
                       disabled={!isFieldEditable}
                     />
                   </div>
                 </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    분류:
-                  </label>
+                <InfoRow className="flex flex-row mb-[20px]">
+                  <FormLabel label="분류" required={true} className="mb-2" />
                   <div className="flex flex-row gap-x-[10px] w-full">
                     <OnceOnOffButton
                       className="h-[40px] w-full rounded-md"
@@ -726,10 +610,8 @@ function TaskAddModal({
                     />
                   </div>
                 </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    중요도:
-                  </label>
+                <InfoRow className="flex flex-row mb-[20px]">
+                  <FormLabel label="중요도" required={true} className="mb-2" />
                   <div className="flex flex-row gap-x-[10px]">
                     {["상", "중", "하"].map((level) => (
                       <PriorityToggle
@@ -742,10 +624,8 @@ function TaskAddModal({
                     ))}
                   </div>
                 </InfoRow>
-                <InfoRow className="flex flex-row mb-[10px]">
-                  <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                    날짜:
-                  </label>
+                <InfoRow className="flex flex-row mb-[20px]">
+                  <FormLabel label="날짜" required={true} className="mb-2" />
                   <div className="flex flex-col w-full">
                     <div className="flex flex-row items-center gap-x-[10px]">
                       <input
@@ -773,10 +653,8 @@ function TaskAddModal({
                   </div>
                 </InfoRow>
                 {category === "반복성" && (
-                  <InfoRow className="flex flex-row mb-[10px]">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      주기:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel label="주기" required={true} className="mb-2" />
                     <div className="flex flex-row gap-x-[10px] w-full">
                       <OnceOnOffButton
                         className="h-[40px] w-full rounded-md"
@@ -818,20 +696,16 @@ function TaskAddModal({
                   </InfoRow>
                 )}
                 {category === "1회성" && (
-                  <InfoRow className="flex flex-row mb-[10px]">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      주기:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel label="주기" required={false} className="mb-2" />
                     <div className="flex items-center text-gray-500 italic">
                       1회성 업무는 주기 설정이 필요하지 않습니다
                     </div>
                   </InfoRow>
                 )}
                 {category === "이벤트성" && (
-                  <InfoRow className="flex flex-row mb-[10px]">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      주기:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel label="주기" required={false} className="mb-2" />
                     <div className="flex flex-row gap-x-[10px] w-full">
                       <OnceOnOffButton
                         className="h-[40px] w-full rounded-md"
@@ -873,10 +747,12 @@ function TaskAddModal({
                   </InfoRow>
                 )}
                 {category === "반복성" && selectedCycle !== "매일" && (
-                  <InfoRow className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      요일:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel
+                      label="요일"
+                      required={selectedCycle !== "매일"}
+                      className="mb-2"
+                    />
                     <div className="flex flex-row gap-x-[10px] w-full">
                       {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
                         <DayToggle
@@ -893,20 +769,16 @@ function TaskAddModal({
                   </InfoRow>
                 )}
                 {category === "1회성" && (
-                  <InfoRow className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      요일:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel label="요일" required={false} className="mb-2" />
                     <div className="flex items-center text-gray-500 italic">
                       1회성 업무는 요일 설정이 필요하지 않습니다
                     </div>
                   </InfoRow>
                 )}
                 {category === "이벤트성" && selectedCycle !== "매일" && (
-                  <InfoRow className="flex flex-row">
-                    <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                      요일:
-                    </label>
+                  <InfoRow className="flex flex-row mb-[20px]">
+                    <FormLabel label="요일" required={false} className="mb-2" />
                     <div className="flex flex-row gap-x-[10px] w-full">
                       {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
                         <DayToggle
@@ -924,10 +796,12 @@ function TaskAddModal({
                 )}
                 {(category === "이벤트성" || category === "반복성") &&
                   selectedCycle === "매일" && (
-                    <InfoRow className="flex flex-row">
-                      <label className="h-[40px] flex items-center font-semibold text-black mb-2 w-[60px]">
-                        요일:
-                      </label>
+                    <InfoRow className="flex flex-row mb-[20px]">
+                      <FormLabel
+                        label="요일"
+                        required={false}
+                        className="mb-2"
+                      />
                       <div className="flex items-center text-gray-500 italic">
                         매일 수행하는 업무는 요일 설정이 필요하지 않습니다
                       </div>
@@ -936,8 +810,14 @@ function TaskAddModal({
               </InforationZone>
             </div>
             <div className="flex-[4] flex border my-[20px] bg-textBackground rounded-lg">
-              <div className="p-6 w-full">
-                <div className="mb-4 font-semibold text-lg">업무 내용</div>
+              <div className="p-4 w-full">
+                <div className="mb-2 font-semibold flex items-center">
+                  <FormLabel
+                    label="업무 내용"
+                    required={false}
+                    className="text-lg mb-2"
+                  />
+                </div>
                 <textarea
                   className={`w-full h-[150px] p-4 border border-gray-300 rounded-md ${
                     isFieldEditable ? "bg-white" : "bg-gray-100"

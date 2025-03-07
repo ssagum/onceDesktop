@@ -17,9 +17,11 @@ import {
   isSameDay,
   differenceInDays,
   isWithinInterval,
+  isValid,
 } from "date-fns";
 import { getTaskHistory } from "./TaskService";
 import NameCoin from "../common/NameCoin";
+import { formatSafeDate, parseToDateWithoutTime } from "../../utils/dateUtils";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div`
@@ -115,13 +117,11 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const [priority, setPriority] = useState(task?.priority || "중");
   const [startDate, setStartDate] = useState(
     task?.startDate
-      ? format(new Date(task.startDate), "yyyy/MM/dd")
-      : format(new Date(), "yyyy/MM/dd")
+      ? formatSafeDate(task.startDate)
+      : formatSafeDate(new Date())
   );
   const [endDate, setEndDate] = useState(
-    task?.endDate
-      ? format(new Date(task.endDate), "yyyy/MM/dd")
-      : format(new Date(), "yyyy/MM/dd")
+    task?.endDate ? formatSafeDate(task.endDate) : formatSafeDate(new Date())
   );
   const [taskHistory, setTaskHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -159,17 +159,22 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const formatDate = (timestamp) => {
     if (!timestamp) return "날짜 없음";
 
-    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
 
-    if (isNaN(date.getTime())) return "날짜 형식 오류";
+      if (isNaN(date.getTime())) return "날짜 형식 오류";
 
-    return date.toLocaleString("ko-KR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+      return date.toLocaleString("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      console.error("날짜 포맷팅 오류:", error, timestamp);
+      return "날짜 변환 오류";
+    }
   };
 
   // 날짜와 시간 분리 포맷팅
@@ -213,47 +218,52 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
 
   // 날짜가 업무 요일에 해당하는지 확인
   const isTaskDay = (date) => {
-    if (task?.category === "1회성") {
-      return isSameDay(new Date(date), new Date(startDate));
+    try {
+      if (task?.category === "1회성") {
+        const taskStartDate = parse(startDate, "yyyy/MM/dd", new Date());
+        return isValid(taskStartDate) && isSameDay(date, taskStartDate);
+      }
+
+      if (selectedCycle === "매일") {
+        return true;
+      }
+
+      const dayOfWeek = format(date, "E"); // 1: 월요일, 7: 일요일
+      const koreanDays = ["월", "화", "수", "목", "금", "토", "일"];
+      const dayName = koreanDays[dayOfWeek - 1];
+
+      return selectedDays.includes(dayName);
+    } catch (error) {
+      console.error("요일 확인 오류:", error, date);
+      return false;
     }
-
-    if (selectedCycle === "매일") {
-      return true;
-    }
-
-    const dayOfWeek = format(new Date(date), "E"); // 1: 월요일, 7: 일요일
-    const koreanDays = ["월", "화", "수", "목", "금", "토", "일"];
-    const dayName = koreanDays[dayOfWeek - 1];
-
-    return selectedDays.includes(dayName);
   };
 
   // 시작일부터 종료일까지의 모든 날짜 생성
   const generateAllDates = () => {
     try {
       // 시작일과 종료일 파싱
-      const startDateObj = parse(startDate, "yyyy/MM/dd", new Date());
+      const startDateObj = parseToDateWithoutTime(startDate);
+      if (!isValid(startDateObj)) {
+        console.error("시작일 파싱 오류:", startDate);
+        return [];
+      }
+
       let endDateObj;
 
       // 반복성 업무거나 아직 종료일이 도래하지 않은 경우 오늘 날짜까지로 제한
       if (task?.category === "반복성" || endDate === INFINITE_END_DATE) {
-        // 시간 정보 제거하고 날짜만 사용 (시간을 00:00:00으로 설정)
-        const today = new Date();
-        endDateObj = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate()
-        );
+        // 시간 정보 제거하고 날짜만 사용
+        endDateObj = parseToDateWithoutTime(new Date());
       } else {
-        endDateObj = parse(endDate, "yyyy/MM/dd", new Date());
+        endDateObj = parseToDateWithoutTime(endDate);
+        if (!isValid(endDateObj)) {
+          console.error("종료일 파싱 오류:", endDate);
+          return [];
+        }
 
         // 종료일이 미래인 경우 오늘까지만 표시
-        const today = new Date();
-        const todayWithoutTime = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate()
-        );
+        const todayWithoutTime = parseToDateWithoutTime(new Date());
         if (endDateObj > todayWithoutTime) {
           endDateObj = todayWithoutTime;
         }
@@ -312,12 +322,19 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     const dateRecords = taskHistory.filter((item) => {
       if (!item.timestamp) return false;
 
-      const recordDate = new Date(item.timestamp);
-      // 시간 정보 없이 년/월/일만 비교하기 위해 형식 변환
-      const recordDateStr = format(recordDate, "yyyy/MM/dd");
+      try {
+        const recordDate = new Date(item.timestamp);
+        if (!isValid(recordDate)) return false;
 
-      // 날짜가 일치하는 기록 모두 포함 (액션 타입 확인 안 함)
-      return recordDateStr === dateStr;
+        // 시간 정보 없이 년/월/일만 비교하기 위해 형식 변환
+        const recordDateStr = format(recordDate, "yyyy/MM/dd");
+
+        // 날짜가 일치하는 기록 모두 포함 (액션 타입 확인 안 함)
+        return recordDateStr === dateStr;
+      } catch (error) {
+        console.error("날짜 비교 오류:", error, item.timestamp);
+        return false;
+      }
     });
 
     if (dateRecords.length === 0) return { status: "미완료" };
@@ -400,11 +417,8 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
         // 시간 정보 추가 (완료된 경우에만)
         ...(dateRecord
           ? {
-              time: format(new Date(dateRecord.timestamp), "HH:mm"),
-              dayPeriod:
-                new Date(dateRecord.timestamp).getHours() < 12
-                  ? "오전"
-                  : "오후",
+              time: formatTimeWithFallback(dateRecord.timestamp),
+              dayPeriod: getDayPeriod(dateRecord.timestamp),
             }
           : {
               time: "-",
@@ -425,13 +439,24 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
 
     // 날짜 기준으로 정렬
     allRecords.sort((a, b) => {
-      const dateA = new Date(a.date.split("/").join("-"));
-      const dateB = new Date(b.date.split("/").join("-"));
+      try {
+        const dateA = parse(a.date, "yyyy/MM/dd", new Date());
+        const dateB = parse(b.date, "yyyy/MM/dd", new Date());
 
-      // 정렬 방향에 따라 정렬
-      return sortDirection === "asc"
-        ? dateA - dateB // 오름차순 (과거 → 최신)
-        : dateB - dateA; // 내림차순 (최신 → 과거)
+        // 유효한 날짜인지 확인
+        if (!isValid(dateA) || !isValid(dateB)) {
+          console.error("정렬 중 유효하지 않은 날짜:", a.date, b.date);
+          return 0;
+        }
+
+        // 정렬 방향에 따라 정렬
+        return sortDirection === "asc"
+          ? dateA.getTime() - dateB.getTime() // 오름차순 (과거 → 최신)
+          : dateB.getTime() - dateA.getTime(); // 내림차순 (최신 → 과거)
+      } catch (error) {
+        console.error("날짜 정렬 오류:", error, a.date, b.date);
+        return 0;
+      }
     });
 
     return allRecords;
@@ -456,6 +481,28 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   // TaskAddModal로 돌아가기
   const handleBack = () => {
     setIsVisible(false);
+  };
+
+  // 안전하게 시간 포맷팅하는 함수
+  const formatTimeWithFallback = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      return isValid(date) ? format(date, "HH:mm") : "-";
+    } catch (error) {
+      console.error("시간 포맷팅 오류:", error, timestamp);
+      return "-";
+    }
+  };
+
+  // 안전하게 오전/오후 구분하는 함수
+  const getDayPeriod = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      return isValid(date) ? (date.getHours() < 12 ? "오전" : "오후") : "-";
+    } catch (error) {
+      console.error("오전/오후 구분 오류:", error, timestamp);
+      return "-";
+    }
   };
 
   return (

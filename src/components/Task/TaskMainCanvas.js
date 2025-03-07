@@ -35,6 +35,7 @@ import {
   completeTask,
   getTaskHistory,
   deleteTask,
+  updateTask,
 } from "./TaskService";
 import ToDo from "../common/ToDo";
 import { db } from "../../firebase";
@@ -169,7 +170,7 @@ const priorityColors = {
   하: "bg-green-400",
 };
 
-function ToDoItem({ task, onViewHistory }) {
+function ToDoItem({ task, onViewHistory, onClick }) {
   const [whoModalOpen, setWhoModalOpen] = useState(false);
 
   // 중요도 기본값 설정
@@ -183,8 +184,18 @@ function ToDoItem({ task, onViewHistory }) {
     }
   };
 
+  // 클릭 핸들러 추가
+  const handleClick = () => {
+    if (onClick && task) {
+      onClick(task);
+    }
+  };
+
   return (
-    <div className="h-[56px] flex flex-row w-[300px] items-center bg-onceBackground mb-[4px]">
+    <div
+      className="h-[56px] flex flex-row w-[300px] items-center bg-onceBackground mb-[4px] cursor-pointer"
+      onClick={handleClick}
+    >
       <ColorZone className={`w-[20px] h-full ${priorityColors[priority]}`} />
       <TextZone className="flex-1 px-[20px]">
         <span>{task?.title || task?.content || "제목 없음"}</span>
@@ -206,41 +217,21 @@ function ToDoItem({ task, onViewHistory }) {
 /* ==============================================
    1) SortableTask: 드래그 가능한 실제 아이템 컴포넌트
 ============================================== */
-function SortableTask({ id, task, containerId, onViewHistory }) {
+function SortableTask({ id, task, containerId, onViewHistory, onClick }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
       id,
       data: {
-        type: "task",
-        sortable: { containerId },
+        type: "item",
+        task,
+        containerId,
       },
     });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition: "transform 250ms ease, left 250ms ease, top 250ms ease",
-    width: "100%",
-    height: "100%",
+    transition,
   };
-
-  // task가 없는 경우 빈 컴포넌트 반환
-  if (!task) {
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        {...listeners}
-        className="cursor-grab flex items-center justify-center"
-      >
-        <div className="h-[56px] flex flex-row w-[300px] items-center bg-gray-100 mb-[4px]">
-          <div className="flex-1 px-[20px] text-gray-400">
-            <span>빈 항목</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -250,7 +241,7 @@ function SortableTask({ id, task, containerId, onViewHistory }) {
       {...listeners}
       className="cursor-grab flex items-center justify-center"
     >
-      <ToDoItem task={task} onViewHistory={onViewHistory} />
+      <ToDoItem task={task} onViewHistory={onViewHistory} onClick={onClick} />
     </div>
   );
 }
@@ -258,14 +249,30 @@ function SortableTask({ id, task, containerId, onViewHistory }) {
 /* ==============================================
    2) ToDoDragComponent: 상단 unassigned 영역 (9칸 고정 그리드)
 ============================================== */
-export function ToDoDragComponent({ column, tasks, onViewHistory }) {
+export function ToDoDragComponent({
+  column,
+  tasks,
+  onViewHistory,
+  onTaskClick,
+}) {
   const totalSlots = 9; // 고정 셀 개수 (3×3)
 
-  // tasks가 배열 형태일 때 id를 찾아 매핑하여 사용
-  const taskIdsToUse = Array.isArray(tasks)
-    ? tasks.slice(0, totalSlots).map((task) => task.id)
-    : column.taskIds;
+  // 현재 페이지와 페이지당 항목 수 추출
+  const pageData = column.pageData || { currentPage: 1, itemsPerPage: 9 };
+  const startIndex = (pageData.currentPage - 1) * pageData.itemsPerPage;
+  const endIndex = startIndex + pageData.itemsPerPage;
 
+  // 할당되지 않은 작업만 필터링
+  const unassignedTasks = Array.isArray(tasks)
+    ? tasks.filter((task) => !task.assignee || task.assignee === "unassigned")
+    : [];
+
+  // 현재 페이지에 표시할 작업 ID들
+  const taskIdsToUse = Array.isArray(tasks)
+    ? unassignedTasks.slice(startIndex, endIndex).map((task) => task.id)
+    : column.taskIds.slice(startIndex, endIndex);
+
+  // 고정된 9개 슬롯에 작업 ID 배치
   const fixedSlots = Array.from({ length: totalSlots }, (_, index) =>
     taskIdsToUse[index] ? taskIdsToUse[index] : `empty-${index}`
   );
@@ -342,6 +349,7 @@ export function ToDoDragComponent({ column, tasks, onViewHistory }) {
                   task={taskData}
                   containerId={column.id}
                   onViewHistory={onViewHistory}
+                  onClick={onTaskClick}
                 />
               )}
             </div>
@@ -392,13 +400,22 @@ function TaskMainCanvas() {
   const [columns, setColumns] = useState(initialColumns);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [totalPages] = useState(7);
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(9); // 페이지당 9개 항목
   const [currentDate, setCurrentDate] = useState(new Date());
   const [taskAddModalOn, setTaskAddModalOn] = useState(false);
   const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
   const [taskHistory, setTaskHistory] = useState([]);
+  const [isEditMode, setIsEditMode] = useState(false); // 편집 모드 상태 추가
 
+  // 전체 페이지 계산 - 실제 할당되지 않은 작업 개수에 기반함
+  const unassignedTasks = tasks.filter(
+    (task) => !task.assignee || task.assignee === "unassigned"
+  );
+  const totalPages = Math.max(
+    1,
+    Math.ceil(unassignedTasks.length / itemsPerPage)
+  );
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   const sensors = useSensors(
@@ -484,6 +501,25 @@ function TaskMainCanvas() {
       }));
     } catch (error) {
       console.error("Error adding task:", error);
+    }
+  };
+
+  // 업무 편집 핸들러 추가
+  const handleTaskEdit = async (updatedTask) => {
+    try {
+      // Firebase에서 업무 정보 업데이트
+      await updateTask(updatedTask);
+
+      // 로컬 상태 업데이트
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === updatedTask.id ? updatedTask : task
+        )
+      );
+
+      console.log("작업 편집 완료:", updatedTask);
+    } catch (error) {
+      console.error("Error updating task:", error);
     }
   };
 
@@ -658,6 +694,7 @@ function TaskMainCanvas() {
   const handlePrevious = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
+
   const handleNext = () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
@@ -684,6 +721,21 @@ function TaskMainCanvas() {
     setCurrentDate((prevDate) => addDays(prevDate, 1));
   };
 
+  // 작업 클릭 핸들러 추가
+  const handleTaskClick = (task) => {
+    if (!task) return;
+
+    console.log("작업 클릭됨:", task);
+    setSelectedTask(task);
+    setIsEditMode(false); // 처음에는 뷰 모드로 열기
+    setTaskAddModalOn(true);
+  };
+
+  // TaskAddModal 모드 전환 핸들러
+  const handleSwitchToEditMode = () => {
+    setIsEditMode(true);
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -698,43 +750,54 @@ function TaskMainCanvas() {
             <OnceOnOffButton
               text={"업무 추가하기 +"}
               on={true}
-              onClick={() => setTaskAddModalOn(true)}
+              onClick={() => {
+                setSelectedTask(null); // 새 작업 생성 모드
+                setTaskAddModalOn(true);
+              }}
             />
           </div>
         </TitleZone>
         {/* 상단 할 일 목록 (9칸 고정 그리드) */}
         <ToDoDragComponent
-          column={columns.unassigned}
+          column={{
+            ...columns.unassigned,
+            pageData: { currentPage, itemsPerPage },
+          }}
           tasks={tasks}
           onViewHistory={handleViewTaskHistory}
+          onTaskClick={handleTaskClick}
         />
         {/* 페이지네이션 영역 */}
         <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
-          <button
-            className="px-3 py-1 border border-gray-300 rounded"
-            onClick={handlePrevious}
-          >
-            &lt;
-          </button>
-          {pages.map((page) => (
-            <button
-              key={page}
-              onClick={() => setCurrentPage(page)}
-              className={`px-3 py-1 rounded ${
-                page === currentPage
-                  ? "bg-[#002D5D] text-white"
-                  : "border border-gray-300"
-              }`}
-            >
-              {page}
-            </button>
-          ))}
-          <button
-            className="px-3 py-1 border border-gray-300 rounded"
-            onClick={handleNext}
-          >
-            &gt;
-          </button>
+          {totalPages > 1 && (
+            <>
+              <button
+                className="px-3 py-1 border border-gray-300 rounded"
+                onClick={handlePrevious}
+              >
+                &lt;
+              </button>
+              {pages.map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 rounded ${
+                    page === currentPage
+                      ? "bg-[#002D5D] text-white"
+                      : "border border-gray-300"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="px-3 py-1 border border-gray-300 rounded"
+                onClick={handleNext}
+              >
+                &gt;
+              </button>
+            </>
+          )}
         </PaginationZone>
         <div className="flex flex-row gap-x-[20px]">
           <div className="flex-1 flex flex-col items-center gap-y-[10px]">
@@ -775,11 +838,12 @@ function TaskMainCanvas() {
       <TaskAddModal
         isVisible={taskAddModalOn}
         setIsVisible={setTaskAddModalOn}
-        onTaskAdd={handleTaskAdd}
-        onTaskEdit={handleTaskAdd}
-        onTaskDelete={handleTaskDelete}
         task={selectedTask}
-        isEdit={false}
+        isEdit={isEditMode}
+        onTaskAdd={handleTaskAdd}
+        onTaskEdit={handleTaskEdit}
+        onTaskDelete={handleTaskDelete}
+        onSwitchToEditMode={handleSwitchToEditMode}
       />
 
       <TaskRecordModal
