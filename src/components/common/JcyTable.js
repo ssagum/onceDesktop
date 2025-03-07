@@ -60,16 +60,14 @@ export default function JcyTable({
     <div className="flex flex-col w-full mb-10 border border-gray-300 rounded-md">
       {/* 헤더 */}
       <div
-        className={`grid ${columnWidths} gap-4 border-b border-gray-300 h-12 items-center font-semibold bg-gray-50`}
-      >
+        className={`grid ${columnWidths} gap-4 border-b border-gray-300 h-12 items-center font-semibold bg-gray-50`}>
         {columns.map(({ label, key }) => (
           <div
             key={key}
             className={`flex items-center cursor-pointer text-gray-700 ${
               key === "title" ? "justify-start px-[20px]" : "justify-center"
             }`}
-            onClick={() => handleSort(key)}
-          >
+            onClick={() => handleSort(key)}>
             {label}{" "}
             {sortConfig.key === key
               ? sortConfig.direction === "asc"
@@ -89,8 +87,7 @@ export default function JcyTable({
               className={`w-full ${
                 rowClassName?.(index) ||
                 (index % 2 === 0 ? "bg-gray-100" : "bg-white")
-              }`}
-            >
+              }`}>
               {renderRow ? (
                 <div className={`items-center`}>{renderRow(row, index)}</div>
               ) : (
@@ -108,8 +105,7 @@ export default function JcyTable({
         <button
           className="px-3 py-1 border rounded"
           onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage <= 1}
-        >
+          disabled={currentPage <= 1}>
           &lt;
         </button>
         {[...Array(totalPages)].map((_, page) => (
@@ -118,18 +114,16 @@ export default function JcyTable({
             onClick={() => handlePageChange(page + 1)}
             className={`px-3 py-1 rounded ${
               currentPage === page + 1
-                ? "bg-blue-700 text-white"
+                ? "bg-onceBlue text-white"
                 : "border border-gray-300"
-            }`}
-          >
+            }`}>
             {page + 1}
           </button>
         ))}
         <button
           className="px-3 py-1 border rounded"
           onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages}
-        >
+          disabled={currentPage >= totalPages}>
           &gt;
         </button>
       </div>

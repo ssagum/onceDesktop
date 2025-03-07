@@ -23,7 +23,6 @@ const DropdownButton = styled.button`
       color: #4f46e5 !important;
       background-color: #eef2ff !important;
       `}
-    font-weight: 600;
   }
 
   &:hover {
@@ -85,11 +84,10 @@ export default function WhereSelector({
     <DropdownContainer ref={dropdownRef}>
       <DropdownButton
         disabled={disabled}
-        className={`w-[180px] h-[40px] bg-white flex justify-center items-center border border-onceGray rounded-md transition-all duration-200 ${
+        className={`w-[120px] h-[32px] text-[12px] bg-white flex justify-center items-center border border-onceGray rounded-md transition-all duration-200 ${
           displayValue !== "수신위치 선택" ? "selected" : ""
         }`}
-        onClick={handleClick}
-      >
+        onClick={handleClick}>
         <span className="text-inherit">
           {displayValue} {!disabled && "▼"}
         </span>
