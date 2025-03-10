@@ -4,6 +4,7 @@ import { useUserLevel } from "../utils/UserLevelContext";
 import { FiSettings } from "react-icons/fi";
 import UserChipText from "./common/UserChipText";
 import { departmentArray, locationOptions, roleOptions } from "../datas/users";
+import { Link } from "react-router-dom";
 
 function PCAllocation() {
   const { userLevelData, updateUserLevelData, resetUserLevelData } =
@@ -65,7 +66,9 @@ function PCAllocation() {
     <div>
       <div className="LoginZone flex flex-col w-full items-center h-[300px] justify-center">
         <div className="flex-[2] flex w-full items-center justify-center">
-          <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
+          <Link to="/">
+            <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
+          </Link>
         </div>
         <div className="flex-[3] flex w-full items-center justify-center h-full">
           {!needsSetup ? (

@@ -6,7 +6,11 @@ export default function JcyTable({
   data,
   rowClassName,
   renderRow,
-  itemsPerPage = 7,
+  itemsPerPage = 6,
+  // warehouse 테이블용 속성 추가
+  isWarehouseTable = false,
+  // 빈 행 높이 설정 (기본값: 80px)
+  emptyRowHeight = "80px",
 }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,6 +46,10 @@ export default function JcyTable({
     currentPage * itemsPerPage
   );
 
+  // 빈 행 계산
+  const emptyRowCount = Math.max(0, itemsPerPage - currentData.length);
+  const emptyRows = Array(emptyRowCount).fill(null);
+
   // 정렬 핸들러
   const handleSort = (key) => {
     const direction =
@@ -56,18 +64,26 @@ export default function JcyTable({
     }
   };
 
+  // 창고 테이블용 스타일
+  const warehouseGridStyle = isWarehouseTable
+    ? { gridTemplateColumns: "1.3fr 1fr 1.9fr 1fr 0.7fr 0.7fr 1.3fr" }
+    : {};
+
   return (
     <div className="flex flex-col w-full mb-10 border border-gray-300 rounded-md">
       {/* 헤더 */}
       <div
-        className={`grid ${columnWidths} gap-4 border-b border-gray-300 h-12 items-center font-semibold bg-gray-50`}>
+        className={`grid ${columnWidths} gap-4 border-b border-gray-300 h-12 items-center font-semibold bg-gray-50`}
+        style={isWarehouseTable ? warehouseGridStyle : {}}
+      >
         {columns.map(({ label, key }) => (
           <div
             key={key}
             className={`flex items-center cursor-pointer text-gray-700 ${
               key === "title" ? "justify-start px-[20px]" : "justify-center"
             }`}
-            onClick={() => handleSort(key)}>
+            onClick={() => handleSort(key)}
+          >
             {label}{" "}
             {sortConfig.key === key
               ? sortConfig.direction === "asc"
@@ -79,7 +95,7 @@ export default function JcyTable({
       </div>
 
       {/* 데이터 */}
-      <div className="min-h-[200px]">
+      <div className="flex flex-col">
         {currentData.length > 0 ? (
           currentData.map((row, index) => (
             <div
@@ -87,9 +103,10 @@ export default function JcyTable({
               className={`w-full ${
                 rowClassName?.(index) ||
                 (index % 2 === 0 ? "bg-gray-100" : "bg-white")
-              }`}>
+              }`}
+            >
               {renderRow ? (
-                <div className={`items-center`}>{renderRow(row, index)}</div>
+                <div className="items-center">{renderRow(row, index)}</div>
               ) : (
                 <div className="text-center">renderRow prop이 필요합니다.</div>
               )}
@@ -98,6 +115,19 @@ export default function JcyTable({
         ) : (
           <div className="text-center py-4">데이터가 없습니다.</div>
         )}
+
+        {/* 빈 행 추가 */}
+        {emptyRows.map((_, index) => (
+          <div
+            key={`empty-row-${index}`}
+            style={{ height: emptyRowHeight }}
+            className={`w-full ${
+              (currentData.length + index) % 2 === 0
+                ? "bg-gray-100"
+                : "bg-white"
+            }`}
+          />
+        ))}
       </div>
 
       {/* 페이지네이션 */}
@@ -105,7 +135,8 @@ export default function JcyTable({
         <button
           className="px-3 py-1 border rounded"
           onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage <= 1}>
+          disabled={currentPage <= 1}
+        >
           &lt;
         </button>
         {[...Array(totalPages)].map((_, page) => (
@@ -116,14 +147,16 @@ export default function JcyTable({
               currentPage === page + 1
                 ? "bg-onceBlue text-white"
                 : "border border-gray-300"
-            }`}>
+            }`}
+          >
             {page + 1}
           </button>
         ))}
         <button
           className="px-3 py-1 border rounded"
           onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages}>
+          disabled={currentPage >= totalPages}
+        >
           &gt;
         </button>
       </div>

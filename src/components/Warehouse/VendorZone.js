@@ -141,6 +141,7 @@ const VendorZone = () => {
             onUpdate={handleVendorUpdate}
           />
         )}
+        emptyRowHeight="60px"
       />
       <VendorModal
         isVisible={isNewVendorModalOpen}

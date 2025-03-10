@@ -303,6 +303,8 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
             onClick={() => handleRowClick(row)}
           />
         )}
+        isWarehouseTable={true}
+        emptyRowHeight="80px"
       />
       <ModalTemplate
         isVisible={isFilterModalOn}

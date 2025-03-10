@@ -506,7 +506,10 @@ function TaskAddModal({
       >
         <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
           <ModalHeaderZone className="flex flex-row w-full bg-white justify-between h-[50px] items-center">
-            <span className="text-[34px] font-bold">
+            <span
+              className="text-[34px] font-bold"
+              style={{ whiteSpace: "nowrap" }}
+            >
               {mode === "create"
                 ? "업무 추가"
                 : mode === "view"

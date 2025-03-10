@@ -86,15 +86,17 @@ function NoticeMainCanvas({ onCreatePost }) {
         </button>
       </TitleZone>
       {/* JcyTable 사용 */}
-      <div className="flex flex-col w-full mb-10 border border-gray-300 rounded-md bg-white">
+      <div className="flex flex-col w-full bg-white">
         <JcyTable
           columns={columns}
           columnWidths="grid-cols-[0.8fr,1.2fr,5fr,1fr,1fr]"
           data={sortedNotices}
           renderRow={renderRow}
+          itemsPerPage={12}
           rowClassName={(index) =>
             index % 2 === 0 ? "bg-gray-100" : "bg-white"
           }
+          emptyRowHeight="50px"
         />
       </div>
       <NoticeShowModal

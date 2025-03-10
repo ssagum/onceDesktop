@@ -514,7 +514,7 @@ export default function HomeMainCanvas() {
           )}
         </div>
       </TopZone>
-      <BottomZone className="flex-[2] w-full p-[20px] flex flex-row gap-[20px]">
+      <BottomZone className="flex-[2] w-full p-[20px] flex flex-row gap-[30px]">
         <LeftZone className="flex-[0.95] bg-white rounded-xl p-[30px] flex flex-col h-full">
           <div className="flex flex-row justify-between items-center">
             <div className="flex flex-row items-center">

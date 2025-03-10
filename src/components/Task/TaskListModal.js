@@ -195,6 +195,7 @@ export default function TaskListModal({
                 index % 2 === 0 ? "bg-gray-100" : "bg-white"
               }
               renderRow={(row, index) => <TaskRow task={row} index={index} />}
+              emptyRowHeight="44px"
             />
           </ModalContentZone>
         )}

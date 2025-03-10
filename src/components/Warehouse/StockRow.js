@@ -20,7 +20,11 @@ const StockRow = ({ index, item, onClick }) => {
 
   return (
     <div
-      className={`grid grid-cols-7 gap-4 py-3 cursor-pointer hover:bg-gray-200 items-center`}
+      className={`grid grid-cols-7 h-[80px] cursor-pointer hover:bg-gray-200 items-center`}
+      style={{
+        gridTemplateColumns: "1.3fr 1fr 1.9fr 1fr 0.7fr 0.7fr 1.3fr",
+        gap: "1rem",
+      }}
       onClick={onClick}
     >
       <div className="flex items-center justify-center text-black">
@@ -29,8 +33,8 @@ const StockRow = ({ index, item, onClick }) => {
       <div className="flex items-center justify-center text-black">
         {department}
       </div>
-      <div className="flex items-center justify-center text-black">
-        {itemName}
+      <div className="flex items-center justify-center text-black overflow-hidden">
+        <div className="text-center w-full px-2 line-clamp-2">{itemName}</div>
       </div>
       <div className="flex justify-center items-center">
         <ChipText text={state} />
