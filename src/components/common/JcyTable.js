@@ -50,6 +50,10 @@ export default function JcyTable({
   const emptyRowCount = Math.max(0, itemsPerPage - currentData.length);
   const emptyRows = Array(emptyRowCount).fill(null);
 
+  // 데이터가 없을 때 모든 행을 빈 행으로 처리
+  const allEmptyRows =
+    currentData.length === 0 ? Array(itemsPerPage).fill(null) : emptyRows;
+
   // 정렬 핸들러
   const handleSort = (key) => {
     const direction =
@@ -113,21 +117,41 @@ export default function JcyTable({
             </div>
           ))
         ) : (
-          <div className="text-center py-4">데이터가 없습니다.</div>
+          // 데이터가 없을 때 첫 번째 행에 메시지 표시
+          <div
+            style={{ height: emptyRowHeight }}
+            className="w-full bg-white flex items-center justify-center"
+          >
+            <div className="text-center py-4">데이터가 없습니다.</div>
+          </div>
         )}
 
         {/* 빈 행 추가 */}
-        {emptyRows.map((_, index) => (
-          <div
-            key={`empty-row-${index}`}
-            style={{ height: emptyRowHeight }}
-            className={`w-full ${
-              (currentData.length + index) % 2 === 0
-                ? "bg-gray-100"
-                : "bg-white"
-            }`}
-          />
-        ))}
+        {currentData.length > 0
+          ? // 데이터가 있을 때 남은 행을 빈 행으로 채움
+            emptyRows.map((_, index) => (
+              <div
+                key={`empty-row-${index}`}
+                style={{ height: emptyRowHeight }}
+                className={`w-full ${
+                  (currentData.length + index) % 2 === 0
+                    ? "bg-gray-100"
+                    : "bg-white"
+                }`}
+              />
+            ))
+          : // 데이터가 없을 때 첫 행 이후의 나머지 빈 행 추가
+            allEmptyRows
+              .slice(1)
+              .map((_, index) => (
+                <div
+                  key={`empty-row-${index}`}
+                  style={{ height: emptyRowHeight }}
+                  className={`w-full ${
+                    (index + 1) % 2 === 0 ? "bg-white" : "bg-gray-100"
+                  }`}
+                />
+              ))}
       </div>
 
       {/* 페이지네이션 */}

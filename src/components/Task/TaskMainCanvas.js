@@ -40,6 +40,7 @@ import {
 import ToDo from "../common/ToDo";
 import { db } from "../../firebase";
 import { collection, query, onSnapshot, where } from "firebase/firestore";
+import JcyTable from "../common/JcyTable";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -54,6 +55,51 @@ const ThreeButton = styled.div``;
 const InforationZone = styled.div``;
 const InfoRow = styled.div``;
 
+// 모드 토글 스위치 컴포넌트 - 스타일드 컴포넌트로 정의
+const ToggleContainer = styled.div`
+  display: flex;
+  position: relative;
+  width: 340px;
+  height: 50px;
+  margin-left: 25px;
+  border-radius: 30px;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  background-color: #f5f5f5;
+`;
+
+const ToggleOption = styled.div`
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50%;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  color: ${(props) => (props.active ? "#fff" : "#555")};
+  font-size: 16px;
+`;
+
+const ToggleSlider = styled.div`
+  position: absolute;
+  top: 4px;
+  left: ${(props) => (props.position === "left" ? "4px" : "50%")};
+  width: calc(50% - 8px);
+  height: calc(100% - 8px);
+  border-radius: 25px;
+  background-color: #2196f3;
+  transition: left 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ToggleIcon = styled.span`
+  margin-right: 10px;
+  font-size: 22px;
+`;
+
 // ★ 폴더 컨테이너: 폴더 느낌의 디자인과 드래그 시 애니메이션 효과 적용 ★
 const FolderContainer = styled.div`
   width: 300px;
@@ -67,6 +113,20 @@ const FolderContainer = styled.div`
   box-shadow: ${(props) =>
     props.isOver ? "0 8px 16px rgba(0,0,0,0.2)" : "none"};
 `;
+
+// 상태에 따른 배지 컬러 정의
+const statusColors = {
+  "현재 업무": "bg-green-100 text-green-800 border-green-200",
+  "지난 업무": "bg-gray-100 text-gray-600 border-gray-200",
+  "예정 업무": "bg-blue-100 text-blue-800 border-blue-200",
+};
+
+// 우선순위에 따른 색상 정의 (팬시한 스타일)
+const priorityBadgeColors = {
+  상: "bg-red-100 text-red-800 border-red-200",
+  중: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  하: "bg-green-100 text-green-800 border-green-200",
+};
 
 // 초기 할 일 데이터
 const initialTasks = {
@@ -391,6 +451,560 @@ function PersonFolder({ column, tasks }) {
 }
 
 /* ==============================================
+   TaskRow: 개별 업무 행을 렌더링하는 컴포넌트
+============================================== */
+function TaskRow({ task, onClick }) {
+  // 현재 날짜 구하기
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // 시간 부분 제거하여 날짜만 비교
+
+  // 시작일과 종료일 파싱 - 더 안전하게 수정
+  const parseTaskDate = (dateValue) => {
+    if (!dateValue) return null;
+
+    try {
+      // Timestamp 객체인 경우 (Firebase)
+      if (typeof dateValue === "object" && dateValue.seconds) {
+        return new Date(dateValue.seconds * 1000);
+      }
+
+      // Date 객체인 경우
+      if (dateValue instanceof Date) {
+        return new Date(dateValue); // 새 객체로 복사
+      }
+
+      // 문자열인 경우
+      if (typeof dateValue === "string") {
+        // 유효한 날짜 문자열인지 확인
+        const parsedDate = new Date(dateValue);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate;
+        }
+        return null;
+      }
+
+      // 숫자인 경우 (타임스탬프)
+      if (typeof dateValue === "number") {
+        return new Date(dateValue);
+      }
+
+      return null;
+    } catch (error) {
+      console.error("날짜 파싱 에러:", error, dateValue);
+      return null;
+    }
+  };
+
+  // 날짜 포맷팅 - 더 안전하게 수정
+  const formatDateField = (dateValue) => {
+    const date = parseTaskDate(dateValue);
+    if (!date) return "-";
+
+    try {
+      return format(date, "yyyy/MM/dd");
+    } catch (error) {
+      console.error("날짜 포맷 에러:", error, dateValue);
+      return "-";
+    }
+  };
+
+  // 요일 구하기 함수 추가
+  const getDayOfWeek = (dateValue) => {
+    const date = parseTaskDate(dateValue);
+    if (!date) return "";
+
+    try {
+      const days = ["일", "월", "화", "수", "목", "금", "토"];
+      return days[date.getDay()];
+    } catch (error) {
+      console.error("요일 계산 에러:", error, dateValue);
+      return "";
+    }
+  };
+
+  // 상태 결정 함수 - 더 안전하게 수정
+  const getTaskStatus = () => {
+    const startDate = parseTaskDate(task.startDate);
+    const endDate = parseTaskDate(task.endDate);
+
+    if (!startDate || !endDate) return "현재 업무"; // 날짜 정보가 없는 경우 기본값
+
+    try {
+      if (today >= startDate && today <= endDate) {
+        return "현재 업무";
+      } else if (today > endDate) {
+        return "지난 업무";
+      } else if (today < startDate) {
+        return "예정 업무";
+      }
+    } catch (error) {
+      console.error("상태 결정 중 에러:", error, { startDate, endDate, today });
+      return "현재 업무"; // 에러 발생 시 기본값
+    }
+
+    return "현재 업무"; // 기본값
+  };
+
+  const taskStatus = getTaskStatus();
+
+  // 툴크 텍스트 생성
+  const tooltipText = `시작일: ${formatDateField(
+    task.startDate
+  )} (${getDayOfWeek(task.startDate)})
+종료일: ${formatDateField(task.endDate)} (${getDayOfWeek(task.endDate)})`;
+
+  // JcyTable에서 사용하기 위한 이벤트 핸들러
+  const handleClick = () => {
+    if (onClick) {
+      onClick(task);
+    }
+  };
+
+  return {
+    onClick: handleClick,
+    priority: (
+      <div className="flex items-center justify-center">
+        <span
+          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+            priorityBadgeColors[task.priority] ||
+            "bg-gray-100 text-gray-800 border-gray-200"
+          }`}
+        >
+          {task.priority || "중"}
+        </span>
+      </div>
+    ),
+    title: (
+      <div className="font-medium text-gray-900 truncate">{task.title}</div>
+    ),
+    assignee: (
+      <div className="flex items-center justify-center">
+        <div className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-sm truncate">
+          {task.assignee || "미배정"}
+        </div>
+      </div>
+    ),
+    category: (
+      <div className="flex items-center justify-center">
+        <div className="text-gray-600 text-sm truncate">
+          {task.category || "1회성"}
+        </div>
+      </div>
+    ),
+    status: (
+      <div className="flex items-center justify-center">
+        <div
+          className={`inline-flex items-center px-2.5 py-1.5 rounded text-sm font-medium ${statusColors[taskStatus]}`}
+          title={tooltipText}
+        >
+          {taskStatus}
+        </div>
+      </div>
+    ),
+    writer: (
+      <div className="flex items-center justify-center">
+        <div className="text-gray-600 text-sm truncate">
+          {task.writer || "-"}
+        </div>
+      </div>
+    ),
+  };
+}
+
+/* ==============================================
+   TaskBoardView: 게시판 형태로 보여주는 컴포넌트 
+============================================== */
+function TaskBoardView({ tasks, onViewHistory, onTaskClick }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // 페이지당 10개 항목
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+
+  // 필터 관련 상태 추가
+  const [isFilterModalOn, setIsFilterModalOn] = useState(false);
+  const [selectedCategoryFilters, setSelectedCategoryFilters] = useState([]);
+  const [selectedPriorityFilters, setSelectedPriorityFilters] = useState([]);
+  const [selectedAssigneeFilters, setSelectedAssigneeFilters] = useState([]);
+
+  // 모든 필터를 하나로 합친 배열
+  const combinedFilters = [
+    ...selectedCategoryFilters,
+    ...selectedPriorityFilters,
+    ...selectedAssigneeFilters,
+  ];
+
+  // 데이터 필터링 및 정렬
+  const getFilteredData = () => {
+    let filteredTasks = [...tasks];
+
+    // 검색어 필터링
+    if (searchTerm) {
+      const cleanedSearchTerm = searchTerm.replace(/\s+/g, "").toLowerCase();
+      filteredTasks = filteredTasks.filter(
+        (task) =>
+          task.title?.toLowerCase().includes(cleanedSearchTerm) ||
+          task.content?.toLowerCase().includes(cleanedSearchTerm)
+      );
+    }
+
+    // 카테고리 필터링
+    if (selectedCategoryFilters.length > 0) {
+      filteredTasks = filteredTasks.filter((task) =>
+        selectedCategoryFilters.includes(task.category)
+      );
+    }
+
+    // 우선순위 필터링
+    if (selectedPriorityFilters.length > 0) {
+      filteredTasks = filteredTasks.filter((task) =>
+        selectedPriorityFilters.includes(task.priority)
+      );
+    }
+
+    // 담당자 필터링
+    if (selectedAssigneeFilters.length > 0) {
+      filteredTasks = filteredTasks.filter((task) =>
+        selectedAssigneeFilters.includes(task.assignee)
+      );
+    }
+
+    // 정렬
+    if (sortConfig.key) {
+      filteredTasks.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return filteredTasks;
+  };
+
+  const filteredData = getFilteredData();
+
+  // 필터 토글 함수
+  const toggleFilter = (filterValue, type) => {
+    if (type === "category") {
+      setSelectedCategoryFilters((prev) =>
+        prev.includes(filterValue)
+          ? prev.filter((f) => f !== filterValue)
+          : [...prev, filterValue]
+      );
+    } else if (type === "priority") {
+      setSelectedPriorityFilters((prev) =>
+        prev.includes(filterValue)
+          ? prev.filter((f) => f !== filterValue)
+          : [...prev, filterValue]
+      );
+    } else if (type === "assignee") {
+      setSelectedAssigneeFilters((prev) =>
+        prev.includes(filterValue)
+          ? prev.filter((f) => f !== filterValue)
+          : [...prev, filterValue]
+      );
+    }
+  };
+
+  // 필터 제거 핸들러
+  const handleRemoveFilter = (filter) => {
+    if (selectedCategoryFilters.includes(filter)) {
+      setSelectedCategoryFilters(
+        selectedCategoryFilters.filter((f) => f !== filter)
+      );
+    }
+    if (selectedPriorityFilters.includes(filter)) {
+      setSelectedPriorityFilters(
+        selectedPriorityFilters.filter((f) => f !== filter)
+      );
+    }
+    if (selectedAssigneeFilters.includes(filter)) {
+      setSelectedAssigneeFilters(
+        selectedAssigneeFilters.filter((f) => f !== filter)
+      );
+    }
+  };
+
+  // 모든 필터 초기화
+  const handleResetFilters = () => {
+    setSelectedCategoryFilters([]);
+    setSelectedPriorityFilters([]);
+    setSelectedAssigneeFilters([]);
+  };
+
+  // 정렬 핸들러
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // 페이지 변경 핸들러
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // 테이블 컬럼 정의 - 시작일과 종료일을 "현황"으로 변경
+  const columns = [
+    { label: "우선순위", key: "priority" },
+    { label: "제목", key: "title" },
+    { label: "담당자", key: "assignee" },
+    { label: "카테고리", key: "category" },
+    { label: "현황", key: "status" },
+    { label: "작성자", key: "writer" },
+  ];
+
+  // JcyTable에 맞게 renderRow 함수를 다시 추가
+  const renderRow = (task) => {
+    const rowData = TaskRow({ task, onClick: onTaskClick });
+    return (
+      <div
+        className="grid grid-cols-[0.8fr_2.5fr_1fr_0.8fr_1fr_0.8fr] border-b border-gray-200 hover:bg-gray-50 py-3"
+        onClick={rowData.onClick}
+      >
+        <div className="px-3">{rowData.priority}</div>
+        <div className="px-3">{rowData.title}</div>
+        <div className="px-3">{rowData.assignee}</div>
+        <div className="px-3">{rowData.category}</div>
+        <div className="px-3">{rowData.status}</div>
+        <div className="px-3">{rowData.writer}</div>
+      </div>
+    );
+  };
+
+  // 빈 데이터 표시 커스텀 메시지 - 높이 조정
+  const emptyMessage = (
+    <div
+      style={{ height: "calc(60px * 6 - 2px)" }}
+      className="w-full flex items-center justify-center border-b border-gray-200"
+    >
+      <p className="text-gray-500 text-lg">데이터가 없습니다</p>
+    </div>
+  );
+
+  return (
+    <div className="w-full flex flex-col h-full">
+      {/* 상단 검색 및 필터 영역 */}
+      <div className="w-full flex justify-between mb-6">
+        <div className="flex items-center">
+          <input
+            type="text"
+            className="border border-gray-300 rounded-md px-3 py-2 mr-2 w-64"
+            placeholder="검색어를 입력하세요"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button
+            onClick={() => setIsFilterModalOn(true)}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md"
+          >
+            필터
+          </button>
+
+          {/* 필터 칩 표시 */}
+          {combinedFilters.length > 0 && (
+            <div className="flex ml-2 flex-wrap">
+              {combinedFilters.map((filter, index) => (
+                <div
+                  key={index}
+                  className="flex items-center bg-gray-200 rounded-full px-3 py-1 mr-2 mb-1"
+                >
+                  <span>{filter}</span>
+                  <button
+                    className="ml-2 text-gray-600 hover:text-gray-900"
+                    onClick={() => handleRemoveFilter(filter)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {combinedFilters.length > 0 && (
+                <button
+                  className="text-blue-500 hover:text-blue-700 ml-2"
+                  onClick={handleResetFilters}
+                >
+                  모두 지우기
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* JcyTable 컴포넌트 사용 - 커스텀 그리드 비율 적용 */}
+      <div className="flex-grow flex flex-col" style={{ minHeight: "600px" }}>
+        <JcyTable
+          columns={columns}
+          data={filteredData}
+          columnWidths="grid-cols-[0.8fr_2.5fr_1fr_0.8fr_1fr_0.8fr]" // 제목 컬럼 넓게, 나머지 좁게
+          itemsPerPage={6}
+          renderRow={renderRow}
+          emptyRowHeight="60px"
+          emptyMessage={emptyMessage}
+          onSort={handleSort}
+          sortConfig={sortConfig}
+          currentPage={currentPage}
+          onPageChange={handlePageChange}
+          showPagination={true}
+          centerAlignHeaders={true}
+        />
+      </div>
+
+      {/* 필터 모달 */}
+      {isFilterModalOn && (
+        <ModalTemplate
+          width="600px"
+          height="500px"
+          isVisible={isFilterModalOn}
+          setIsVisible={setIsFilterModalOn}
+        >
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">필터 설정</h2>
+              <button onClick={() => setIsFilterModalOn(false)}>
+                <img src={cancel} alt="닫기" />
+              </button>
+            </div>
+
+            {/* 카테고리 필터 */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">카테고리</h3>
+              <div className="flex flex-wrap gap-2">
+                {["1회성", "반복성"].map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => toggleFilter(category, "category")}
+                    className={`px-3 py-1 rounded-full border ${
+                      selectedCategoryFilters.includes(category)
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 우선순위 필터 */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">우선순위</h3>
+              <div className="flex flex-wrap gap-2">
+                {["상", "중", "하"].map((priority) => (
+                  <button
+                    key={priority}
+                    onClick={() => toggleFilter(priority, "priority")}
+                    className={`px-3 py-1 rounded-full border ${
+                      selectedPriorityFilters.includes(priority)
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {priority}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 담당자 필터 */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">담당자</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(initialColumns)
+                  .filter((key) => key !== "unassigned")
+                  .map((assignee) => (
+                    <button
+                      key={assignee}
+                      onClick={() => toggleFilter(assignee, "assignee")}
+                      className={`px-3 py-1 rounded-full border ${
+                        selectedAssigneeFilters.includes(assignee)
+                          ? "bg-blue-500 text-white border-blue-500"
+                          : "border-gray-300"
+                      }`}
+                    >
+                      {assignee}
+                    </button>
+                  ))}
+              </div>
+            </div>
+
+            {/* 버튼 */}
+            <div className="flex justify-end mt-6">
+              <button
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md mr-2"
+                onClick={handleResetFilters}
+              >
+                초기화
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                onClick={() => setIsFilterModalOn(false)}
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        </ModalTemplate>
+      )}
+    </div>
+  );
+}
+
+// 날짜 처리 유틸 함수를 컴포넌트 외부로 분리하여 재사용성 높이기
+export const safeParseDate = (dateValue) => {
+  if (!dateValue) return null;
+
+  try {
+    // Timestamp 객체인 경우 (Firebase)
+    if (typeof dateValue === "object" && dateValue.seconds) {
+      return new Date(dateValue.seconds * 1000);
+    }
+
+    // Date 객체인 경우
+    if (dateValue instanceof Date) {
+      return new Date(dateValue); // 새 객체로 복사
+    }
+
+    // 문자열인 경우
+    if (typeof dateValue === "string") {
+      // 유효한 날짜 문자열인지 확인
+      const parsedDate = new Date(dateValue);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
+      return null;
+    }
+
+    // 숫자인 경우 (타임스탬프)
+    if (typeof dateValue === "number") {
+      return new Date(dateValue);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("날짜 파싱 에러:", error, dateValue);
+    return null;
+  }
+};
+
+export const safeFormatDate = (dateValue, formatStr = "yyyy/MM/dd") => {
+  const date = safeParseDate(dateValue);
+  if (!date) return "-";
+
+  try {
+    return format(date, formatStr);
+  } catch (error) {
+    console.error("날짜 포맷 에러:", error, dateValue);
+    return "-";
+  }
+};
+
+/* ==============================================
    4) TaskMainCanvas: 메인 컴포넌트
    - DndContext 내에서 상단 unassigned 영역과 하단 인원별 폴더 영역을 렌더링
    - onDragStart, onDragEnd 이벤트에서 항목 이동 및 재정렬 처리
@@ -407,6 +1021,9 @@ function TaskMainCanvas() {
   const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
   const [taskHistory, setTaskHistory] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false); // 편집 모드 상태 추가
+
+  // 추가: 뷰 모드 (dnd: 드래그 앤 드롭 모드, board: 게시판 모드)
+  const [viewMode, setViewMode] = useState("dnd");
 
   // 전체 페이지 계산 - 실제 할당되지 않은 작업 개수에 기반함
   const unassignedTasks = tasks.filter(
@@ -699,16 +1316,24 @@ function TaskMainCanvas() {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
-  // 날짜에 일(day)를 더하거나 빼는 헬퍼 함수입니다.
+  // 날짜에 일(day)를 더하거나 빼는 헬퍼 함수 업데이트
   const addDays = (date, days) => {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
+    try {
+      const parsedDate = safeParseDate(date);
+      if (!parsedDate) return new Date(); // 유효하지 않은 경우 오늘 날짜 반환
+
+      const result = new Date(parsedDate);
+      result.setDate(result.getDate() + days);
+      return result;
+    } catch (error) {
+      console.error("날짜 계산 중 에러:", error, { date, days });
+      return new Date(); // 에러 발생 시 오늘 날짜 반환
+    }
   };
 
-  // 날짜를 원하는 형식으로 포맷합니다. (예: YYYY-MM-DD)
+  // 날짜를 원하는 형식으로 포맷하는 함수 업데이트
   const formatDate = (date) => {
-    return date.toLocaleDateString();
+    return safeFormatDate(date);
   };
 
   // 왼쪽 버튼 클릭 시: 이전 근무일 (하루 전)
@@ -737,102 +1362,141 @@ function TaskMainCanvas() {
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="w-full flex flex-col h-full bg-white min-w-[1100px] min-h-[900px] rounded-xl px-[40px] py-[30px]">
-        <TitleZone className="w-full mb-[50px] flex flex-row justify-between items-center">
+    <div className="w-full flex flex-col h-full bg-white min-w-[1100px] min-h-[900px] rounded-xl px-[40px] py-[30px]">
+      <TitleZone className="w-full mb-[50px] flex flex-row justify-between items-center">
+        <div className="flex items-center">
           <span className="text-[34px] font-semibold">업무분장</span>
-          <div className="w-[160px]">
-            <OnceOnOffButton
-              text={"업무 추가하기 +"}
-              on={true}
-              onClick={() => {
-                setSelectedTask(null); // 새 작업 생성 모드
-                setTaskAddModalOn(true);
+
+          {/* 모드 전환 토글 개선 */}
+          <ToggleContainer>
+            <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
+            <ToggleOption
+              active={viewMode === "dnd"}
+              onClick={() => setViewMode("dnd")}
+            >
+              <ToggleIcon>🗂️</ToggleIcon>
+              드래그 모드
+            </ToggleOption>
+            <ToggleOption
+              active={viewMode === "board"}
+              onClick={() => setViewMode("board")}
+            >
+              <ToggleIcon>📋</ToggleIcon>
+              게시판 모드
+            </ToggleOption>
+          </ToggleContainer>
+        </div>
+        <div className="w-[160px]">
+          <OnceOnOffButton
+            text={"업무 추가하기 +"}
+            on={true}
+            onClick={() => {
+              setSelectedTask(null); // 새 작업 생성 모드
+              setTaskAddModalOn(true);
+            }}
+          />
+        </div>
+      </TitleZone>
+
+      {/* 뷰 모드에 따라 다른 컴포넌트 렌더링 */}
+      {viewMode === "dnd" ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {/* 드래그 앤 드롭 모드 내용 */}
+          <>
+            {/* 상단 할 일 목록 (9칸 고정 그리드) */}
+            <ToDoDragComponent
+              column={{
+                ...columns.unassigned,
+                pageData: { currentPage, itemsPerPage },
               }}
+              tasks={tasks}
+              onViewHistory={handleViewTaskHistory}
+              onTaskClick={handleTaskClick}
             />
-          </div>
-        </TitleZone>
-        {/* 상단 할 일 목록 (9칸 고정 그리드) */}
-        <ToDoDragComponent
-          column={{
-            ...columns.unassigned,
-            pageData: { currentPage, itemsPerPage },
-          }}
+
+            {/* 페이지네이션 영역 */}
+            <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
+              {totalPages > 1 && (
+                <>
+                  <button
+                    className="px-3 py-1 border border-gray-300 rounded"
+                    onClick={handlePrevious}
+                  >
+                    &lt;
+                  </button>
+                  {pages.map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 rounded ${
+                        page === currentPage
+                          ? "bg-[#002D5D] text-white"
+                          : "border border-gray-300"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    className="px-3 py-1 border border-gray-300 rounded"
+                    onClick={handleNext}
+                  >
+                    &gt;
+                  </button>
+                </>
+              )}
+            </PaginationZone>
+
+            {/* 폴더 구조 */}
+            <div className="flex flex-row gap-x-[20px]">
+              <div className="flex-1 flex flex-col items-center gap-y-[10px]">
+                <DragGoalFolder column={columns.원장} tasks={tasks} />
+              </div>
+              <div className="flex-1 flex flex-col items-center gap-y-[10px]">
+                <DragGoalFolder column={columns.원무과장} tasks={tasks} />
+                <DragGoalFolder column={columns.간호팀장} tasks={tasks} />
+                <DragGoalFolder column={columns.물리치료팀장} tasks={tasks} />
+                <DragGoalFolder column={columns.방사선팀장} tasks={tasks} />
+              </div>
+              <div className="flex-1 flex flex-col items-center gap-y-[10px]">
+                <DragGoalFolder column={columns.간호팀} tasks={tasks} />
+                <DragGoalFolder column={columns.원무팀} tasks={tasks} />
+                <DragGoalFolder column={columns.물리치료팀} tasks={tasks} />
+                <DragGoalFolder column={columns.방사선팀} tasks={tasks} />
+              </div>
+            </div>
+
+            <DragOverlay>
+              {activeTaskId && (
+                <div className="p-2 bg-white rounded shadow">
+                  {(() => {
+                    const activeTask = tasks.find(
+                      (task) => task.id === activeTaskId
+                    );
+                    return (
+                      activeTask?.title ||
+                      activeTask?.content ||
+                      `업무 ${activeTaskId}`
+                    );
+                  })()}
+                </div>
+              )}
+            </DragOverlay>
+          </>
+        </DndContext>
+      ) : (
+        /* 게시판 모드 컴포넌트 */
+        <TaskBoardView
           tasks={tasks}
           onViewHistory={handleViewTaskHistory}
           onTaskClick={handleTaskClick}
         />
-        {/* 페이지네이션 영역 */}
-        <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
-          {totalPages > 1 && (
-            <>
-              <button
-                className="px-3 py-1 border border-gray-300 rounded"
-                onClick={handlePrevious}
-              >
-                &lt;
-              </button>
-              {pages.map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-1 rounded ${
-                    page === currentPage
-                      ? "bg-[#002D5D] text-white"
-                      : "border border-gray-300"
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                className="px-3 py-1 border border-gray-300 rounded"
-                onClick={handleNext}
-              >
-                &gt;
-              </button>
-            </>
-          )}
-        </PaginationZone>
-        <div className="flex flex-row gap-x-[20px]">
-          <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder column={columns.원장} tasks={tasks} />
-          </div>
-          <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder column={columns.원무과장} tasks={tasks} />
-            <DragGoalFolder column={columns.간호팀장} tasks={tasks} />
-            <DragGoalFolder column={columns.물리치료팀장} tasks={tasks} />
-            <DragGoalFolder column={columns.방사선팀장} tasks={tasks} />
-          </div>
-          <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-            <DragGoalFolder column={columns.간호팀} tasks={tasks} />
-            <DragGoalFolder column={columns.원무팀} tasks={tasks} />
-            <DragGoalFolder column={columns.물리치료팀} tasks={tasks} />
-            <DragGoalFolder column={columns.방사선팀} tasks={tasks} />
-          </div>
-        </div>
-        <DragOverlay>
-          {activeTaskId && (
-            <div className="p-2 bg-white rounded shadow">
-              {(() => {
-                const activeTask = tasks.find(
-                  (task) => task.id === activeTaskId
-                );
-                return (
-                  activeTask?.title ||
-                  activeTask?.content ||
-                  `업무 ${activeTaskId}`
-                );
-              })()}
-            </div>
-          )}
-        </DragOverlay>
-      </div>
+      )}
 
       {/* 모달들 */}
       <TaskAddModal
@@ -851,7 +1515,7 @@ function TaskMainCanvas() {
         setIsVisible={setTaskHistoryModalOn}
         task={selectedTask}
       />
-    </DndContext>
+    </div>
   );
 }
 
