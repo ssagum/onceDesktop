@@ -3,7 +3,10 @@ import styled from "styled-components";
 import { useDroppable } from "@dnd-kit/core";
 
 // ★ 폴더 컨테이너: 폴더 느낌의 디자인과 드래그 시 애니메이션 효과 적용 ★
-const FolderContainer = styled.div`
+const FolderContainer = styled.div.attrs((props) => ({
+  // isOver 속성을 HTML로 전달하지 않도록 함
+  "data-is-over": props.isOver ? "true" : "false",
+}))`
   width: 240px;
   transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease,
     box-shadow 0.3s ease;
@@ -12,10 +15,14 @@ const FolderContainer = styled.div`
 `;
 
 export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
-  // useDroppable 훅을 사용해 드래그 오버 상태를 감지합니다.
+  // useDroppable 훅을 사용해 드래그 오버 상태를 감지하고, 드롭 시 assignee 정보를 포함합니다.
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
-    data: { type: "container", containerId: column.id },
+    data: {
+      type: "container",
+      containerId: column.id,
+      assignee: column.title, // 폴더의 title을 assignee로 사용
+    },
   });
 
   // 클릭 핸들러
@@ -70,16 +77,15 @@ export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
             isSelected ? "bg-blue-100" : ""
           }`}
         >
-          {column.taskIds.map((taskId, index) => (
+          {column.taskIds.length > 0 && (
             <div
-              key={taskId}
               className={`w-10 h-10 rounded-full ${
                 isSelected ? "bg-blue-200" : "bg-gray-200"
               } flex items-center justify-center`}
             >
-              {`+${index + 1}`}
+              {`+${column.taskIds.length}`}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </FolderContainer>

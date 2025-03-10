@@ -242,11 +242,24 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   // 시작일부터 종료일까지의 모든 날짜 생성
   const generateAllDates = () => {
     try {
-      // 시작일과 종료일 파싱
-      const startDateObj = parseToDateWithoutTime(startDate);
-      if (!isValid(startDateObj)) {
-        console.error("시작일 파싱 오류:", startDate);
+      // 안전하게 날짜 값 확인
+      if (!startDate) {
+        console.error("시작일이 없습니다");
         return [];
+      }
+
+      // 시작일과 종료일 파싱 - 타입에 맞게 안전하게 처리
+      let startDateObj;
+      try {
+        startDateObj = parseToDateWithoutTime(startDate);
+        if (!isValid(startDateObj)) {
+          console.error("시작일 파싱 오류:", startDate);
+          return [];
+        }
+      } catch (error) {
+        console.error("시작일 파싱 예외 발생:", error);
+        // 오류 발생 시 기본값으로 오늘 날짜 사용
+        startDateObj = new Date();
       }
 
       let endDateObj;
@@ -254,16 +267,23 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
       // 반복성 업무거나 아직 종료일이 도래하지 않은 경우 오늘 날짜까지로 제한
       if (task?.category === "반복성" || endDate === INFINITE_END_DATE) {
         // 시간 정보 제거하고 날짜만 사용
-        endDateObj = parseToDateWithoutTime(new Date());
+        endDateObj = new Date();
+        endDateObj.setHours(0, 0, 0, 0);
       } else {
-        endDateObj = parseToDateWithoutTime(endDate);
-        if (!isValid(endDateObj)) {
-          console.error("종료일 파싱 오류:", endDate);
-          return [];
+        try {
+          endDateObj = parseToDateWithoutTime(endDate);
+          if (!isValid(endDateObj)) {
+            console.error("종료일 파싱 오류:", endDate);
+            endDateObj = new Date(); // 오류 시 오늘 날짜 사용
+          }
+        } catch (error) {
+          console.error("종료일 파싱 예외 발생:", error);
+          endDateObj = new Date();
         }
 
         // 종료일이 미래인 경우 오늘까지만 표시
-        const todayWithoutTime = parseToDateWithoutTime(new Date());
+        const todayWithoutTime = new Date();
+        todayWithoutTime.setHours(0, 0, 0, 0);
         if (endDateObj > todayWithoutTime) {
           endDateObj = todayWithoutTime;
         }
@@ -386,8 +406,6 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   // 날짜별 완료 상태 포함한 전체 기록 생성
   const getAllRecords = () => {
     const allDates = generateAllDates();
-
-    console.log("생성된 날짜 목록:", allDates);
 
     return allDates.map((dateStr) => {
       const completionInfo = getCompletionStatus(dateStr);

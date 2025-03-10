@@ -51,16 +51,6 @@ function TaskAddModal({
   onTaskDelete,
   onSwitchToEditMode,
 }) {
-  console.log("TaskAddModal 렌더링: ", task);
-  if (task) {
-    console.log("task 객체 정보: ", {
-      id: task.id,
-      startDate: task.startDate,
-      type: typeof task.startDate,
-      isValidDate: isValidDate(task.startDate),
-    });
-  }
-
   // 모달 모드 관리 상태 추가
   // 'create': 새 Task 생성 모드
   // 'view': 기존 Task 상세 보기 모드

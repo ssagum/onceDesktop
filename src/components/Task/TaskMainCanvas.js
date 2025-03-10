@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -41,6 +41,7 @@ import ToDo from "../common/ToDo";
 import { db } from "../../firebase";
 import { collection, query, onSnapshot, where } from "firebase/firestore";
 import JcyTable from "../common/JcyTable";
+import { useToast } from "../../contexts/ToastContext"; // Toast 메시지 사용을 위한 훅 추가
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -68,7 +69,10 @@ const ToggleContainer = styled.div`
   background-color: #f5f5f5;
 `;
 
-const ToggleOption = styled.div`
+const ToggleOption = styled.div.attrs((props) => ({
+  // active 속성은 styled-components 내부에서만 사용하고 HTML로 전달하지 않도록 함
+  "data-active": props.active ? "true" : "false",
+}))`
   z-index: 1;
   display: flex;
   align-items: center;
@@ -81,18 +85,18 @@ const ToggleOption = styled.div`
   font-size: 16px;
 `;
 
-const ToggleSlider = styled.div`
+const ToggleSlider = styled.div.attrs((props) => ({
+  // position 속성을 HTML로 전달하지 않도록 함
+  "data-position": props.position || "left",
+}))`
   position: absolute;
   top: 4px;
   left: ${(props) => (props.position === "left" ? "4px" : "50%")};
   width: calc(50% - 8px);
   height: calc(100% - 8px);
-  border-radius: 25px;
-  background-color: #2196f3;
+  background-color: #007bff;
+  border-radius: 16px;
   transition: left 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 `;
 
 const ToggleIcon = styled.span`
@@ -101,17 +105,23 @@ const ToggleIcon = styled.span`
 `;
 
 // ★ 폴더 컨테이너: 폴더 느낌의 디자인과 드래그 시 애니메이션 효과 적용 ★
-const FolderContainer = styled.div`
+const FolderContainer = styled.div.attrs((props) => ({
+  // isOver 속성을 HTML로 전달하지 않도록 함
+  "data-is-over": props.isOver ? "true" : "false",
+}))`
   width: 300px;
   background: ${(props) => (props.isOver ? "#e0f7fa" : "#f7f7f7")};
-  border: 2px solid ${(props) => (props.isOver ? "#26a69a" : "#ccc")};
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: ${(props) =>
+    props.isOver
+      ? "0 5px 15px rgba(0, 0, 0, 0.2)"
+      : "0 2px 5px rgba(0, 0, 0, 0.1)"};
   transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease,
     box-shadow 0.3s ease;
   transform: ${(props) => (props.isOver ? "scale(1.05)" : "scale(1)")};
-  box-shadow: ${(props) =>
-    props.isOver ? "0 8px 16px rgba(0,0,0,0.2)" : "none"};
+  cursor: pointer;
+  margin-bottom: 20px;
 `;
 
 // 상태에 따른 배지 컬러 정의
@@ -299,7 +309,7 @@ function SortableTask({ id, task, containerId, onViewHistory, onClick }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="cursor-grab flex items-center justify-center"
+      className="cursor-grab flex items-center justify-center w-full h-full"
     >
       <ToDoItem task={task} onViewHistory={onViewHistory} onClick={onClick} />
     </div>
@@ -322,24 +332,34 @@ export function ToDoDragComponent({
   const startIndex = (pageData.currentPage - 1) * pageData.itemsPerPage;
   const endIndex = startIndex + pageData.itemsPerPage;
 
-  // 할당되지 않은 작업만 필터링
-  const unassignedTasks = Array.isArray(tasks)
-    ? tasks.filter((task) => !task.assignee || task.assignee === "미배정")
-    : [];
+  // 반드시 배열이 되도록 보장하여 에러 방지
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+
+  // 디버그 로그 추가 - 컴포넌트가 렌더링될 때마다 출력
+  console.log(`ToDoDragComponent 렌더링 [${column.id}]:`, {
+    tasks_length: safeTasks.length,
+    column_id: column.id,
+    column_title: column.title,
+    pageData,
+  });
 
   // 현재 페이지에 표시할 작업 ID들
-  const taskIdsToUse = Array.isArray(tasks)
-    ? unassignedTasks.slice(startIndex, endIndex).map((task) => task.id)
-    : column.taskIds.slice(startIndex, endIndex);
+  const taskIdsToUse = safeTasks
+    .slice(startIndex, endIndex)
+    .map((task) => task.id);
 
   // 고정된 9개 슬롯에 작업 ID 배치
   const fixedSlots = Array.from({ length: totalSlots }, (_, index) =>
-    taskIdsToUse[index] ? taskIdsToUse[index] : `empty-${index}`
+    taskIdsToUse[index] ? taskIdsToUse[index] : `empty-${index}-${column.id}`
   );
 
   const { setNodeRef } = useDroppable({
     id: column.id,
-    data: { type: "container", containerId: column.id },
+    data: {
+      type: "container",
+      containerId: column.id,
+      assignee: column.title, // assignee 정보 추가
+    },
   });
 
   const cellStyle = {
@@ -365,19 +385,14 @@ export function ToDoDragComponent({
   const getTaskData = (taskId) => {
     if (!taskId || taskId.toString().startsWith("empty-")) return null;
 
-    // tasks가 배열인 경우 (새로운 구현)
-    if (Array.isArray(tasks)) {
-      const task = tasks.find((t) => t.id === taskId);
-      if (task) return task;
+    // tasks가 배열인 경우
+    if (Array.isArray(safeTasks)) {
+      const task = safeTasks.find((t) => t.id === taskId);
+      return task || null;
     }
 
-    // tasks가 객체인 경우 (기존 구현)
-    if (tasks && typeof tasks === "object" && tasks[taskId]) {
-      return tasks[taskId];
-    }
-
-    // 태스크가 없으면 최소한의 내용으로 객체 생성
-    return { id: taskId, content: `업무 ${taskId}` };
+    // tasks가 객체인 경우 (이전 버전 호환성)
+    return safeTasks[taskId] || null;
   };
 
   return (
@@ -609,68 +624,50 @@ function TaskRow({ task, onClick }) {
 /* ==============================================
    TaskBoardView: 게시판 형태로 보여주는 컴포넌트 
 ============================================== */
-function TaskBoardView({ tasks, onViewHistory, onTaskClick }) {
+function TaskBoardView({
+  tasks,
+  onViewHistory,
+  onTaskClick,
+  selectedFolderId,
+}) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // 페이지당 10개 항목
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+  const [filters, setFilters] = useState({
+    categories: [],
+    priorities: [],
+    statuses: [],
+    sortBy: "endDate", // 기본 정렬 기준
+    sortDir: "asc", // 오름차순
+  });
 
-  // 필터 관련 상태 추가
-  const [isFilterModalOn, setIsFilterModalOn] = useState(false);
-  const [selectedCategoryFilters, setSelectedCategoryFilters] = useState([]);
-  const [selectedPriorityFilters, setSelectedPriorityFilters] = useState([]);
-  const [selectedAssigneeFilters, setSelectedAssigneeFilters] = useState([]);
-
-  // 모든 필터를 하나로 합친 배열
-  const combinedFilters = [
-    ...selectedCategoryFilters,
-    ...selectedPriorityFilters,
-    ...selectedAssigneeFilters,
-  ];
-
-  // 데이터 필터링 및 정렬
+  // 필터링 및 정렬된 데이터 가져오기
   const getFilteredData = () => {
     let filteredTasks = [...tasks];
 
-    // 검색어 필터링
-    if (searchTerm) {
-      const cleanedSearchTerm = searchTerm.replace(/\s+/g, "").toLowerCase();
-      filteredTasks = filteredTasks.filter(
-        (task) =>
-          task.title?.toLowerCase().includes(cleanedSearchTerm) ||
-          task.content?.toLowerCase().includes(cleanedSearchTerm)
+    // 카테고리 필터
+    if (filters.categories.length > 0) {
+      filteredTasks = filteredTasks.filter((task) =>
+        filters.categories.includes(task.category)
       );
     }
 
-    // 카테고리 필터링
-    if (selectedCategoryFilters.length > 0) {
+    // 우선순위 필터
+    if (filters.priorities.length > 0) {
       filteredTasks = filteredTasks.filter((task) =>
-        selectedCategoryFilters.includes(task.category)
-      );
-    }
-
-    // 우선순위 필터링
-    if (selectedPriorityFilters.length > 0) {
-      filteredTasks = filteredTasks.filter((task) =>
-        selectedPriorityFilters.includes(task.priority)
-      );
-    }
-
-    // 담당자 필터링
-    if (selectedAssigneeFilters.length > 0) {
-      filteredTasks = filteredTasks.filter((task) =>
-        selectedAssigneeFilters.includes(task.assignee)
+        filters.priorities.includes(task.priority)
       );
     }
 
     // 정렬
-    if (sortConfig.key) {
+    if (filters.sortBy) {
       filteredTasks.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === "asc" ? -1 : 1;
+        const aValue = a[filters.sortBy];
+        const bValue = b[filters.sortBy];
+        if (aValue < bValue) {
+          return filters.sortDir === "asc" ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === "asc" ? 1 : -1;
+        if (aValue > bValue) {
+          return filters.sortDir === "asc" ? 1 : -1;
         }
         return 0;
       });
@@ -680,64 +677,6 @@ function TaskBoardView({ tasks, onViewHistory, onTaskClick }) {
   };
 
   const filteredData = getFilteredData();
-
-  // 필터 토글 함수
-  const toggleFilter = (filterValue, type) => {
-    if (type === "category") {
-      setSelectedCategoryFilters((prev) =>
-        prev.includes(filterValue)
-          ? prev.filter((f) => f !== filterValue)
-          : [...prev, filterValue]
-      );
-    } else if (type === "priority") {
-      setSelectedPriorityFilters((prev) =>
-        prev.includes(filterValue)
-          ? prev.filter((f) => f !== filterValue)
-          : [...prev, filterValue]
-      );
-    } else if (type === "assignee") {
-      setSelectedAssigneeFilters((prev) =>
-        prev.includes(filterValue)
-          ? prev.filter((f) => f !== filterValue)
-          : [...prev, filterValue]
-      );
-    }
-  };
-
-  // 필터 제거 핸들러
-  const handleRemoveFilter = (filter) => {
-    if (selectedCategoryFilters.includes(filter)) {
-      setSelectedCategoryFilters(
-        selectedCategoryFilters.filter((f) => f !== filter)
-      );
-    }
-    if (selectedPriorityFilters.includes(filter)) {
-      setSelectedPriorityFilters(
-        selectedPriorityFilters.filter((f) => f !== filter)
-      );
-    }
-    if (selectedAssigneeFilters.includes(filter)) {
-      setSelectedAssigneeFilters(
-        selectedAssigneeFilters.filter((f) => f !== filter)
-      );
-    }
-  };
-
-  // 모든 필터 초기화
-  const handleResetFilters = () => {
-    setSelectedCategoryFilters([]);
-    setSelectedPriorityFilters([]);
-    setSelectedAssigneeFilters([]);
-  };
-
-  // 정렬 핸들러
-  const handleSort = (key) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  };
 
   // 페이지 변경 핸들러
   const handlePageChange = (page) => {
@@ -784,53 +723,6 @@ function TaskBoardView({ tasks, onViewHistory, onTaskClick }) {
 
   return (
     <div className="w-full flex flex-col h-full">
-      {/* 상단 검색 및 필터 영역 */}
-      <div className="w-full flex justify-between mb-6">
-        <div className="flex items-center">
-          <input
-            type="text"
-            className="border border-gray-300 rounded-md px-3 py-2 mr-2 w-64"
-            placeholder="검색어를 입력하세요"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button
-            onClick={() => setIsFilterModalOn(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md"
-          >
-            필터
-          </button>
-
-          {/* 필터 칩 표시 */}
-          {combinedFilters.length > 0 && (
-            <div className="flex ml-2 flex-wrap">
-              {combinedFilters.map((filter, index) => (
-                <div
-                  key={index}
-                  className="flex items-center bg-gray-200 rounded-full px-3 py-1 mr-2 mb-1"
-                >
-                  <span>{filter}</span>
-                  <button
-                    className="ml-2 text-gray-600 hover:text-gray-900"
-                    onClick={() => handleRemoveFilter(filter)}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {combinedFilters.length > 0 && (
-                <button
-                  className="text-blue-500 hover:text-blue-700 ml-2"
-                  onClick={handleResetFilters}
-                >
-                  모두 지우기
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* JcyTable 컴포넌트 사용 - 커스텀 그리드 비율 적용 */}
       <div className="flex-grow flex flex-col" style={{ minHeight: "600px" }}>
         <JcyTable
@@ -841,111 +733,14 @@ function TaskBoardView({ tasks, onViewHistory, onTaskClick }) {
           renderRow={renderRow}
           emptyRowHeight="60px"
           emptyMessage={emptyMessage}
-          onSort={handleSort}
-          sortConfig={sortConfig}
+          onSort={() => {}}
+          sortConfig={{ key: filters.sortBy, direction: filters.sortDir }}
           currentPage={currentPage}
           onPageChange={handlePageChange}
           showPagination={true}
           centerAlignHeaders={true}
         />
       </div>
-
-      {/* 필터 모달 */}
-      {isFilterModalOn && (
-        <ModalTemplate
-          width="600px"
-          height="500px"
-          isVisible={isFilterModalOn}
-          setIsVisible={setIsFilterModalOn}
-        >
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">필터 설정</h2>
-              <button onClick={() => setIsFilterModalOn(false)}>
-                <img src={cancel} alt="닫기" />
-              </button>
-            </div>
-
-            {/* 카테고리 필터 */}
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">카테고리</h3>
-              <div className="flex flex-wrap gap-2">
-                {["1회성", "반복성"].map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => toggleFilter(category, "category")}
-                    className={`px-3 py-1 rounded-full border ${
-                      selectedCategoryFilters.includes(category)
-                        ? "bg-blue-500 text-white border-blue-500"
-                        : "border-gray-300"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 우선순위 필터 */}
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">우선순위</h3>
-              <div className="flex flex-wrap gap-2">
-                {["상", "중", "하"].map((priority) => (
-                  <button
-                    key={priority}
-                    onClick={() => toggleFilter(priority, "priority")}
-                    className={`px-3 py-1 rounded-full border ${
-                      selectedPriorityFilters.includes(priority)
-                        ? "bg-blue-500 text-white border-blue-500"
-                        : "border-gray-300"
-                    }`}
-                  >
-                    {priority}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 담당자 필터 */}
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">담당자</h3>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(initialColumns)
-                  .filter((key) => key !== "미배정")
-                  .map((assignee) => (
-                    <button
-                      key={assignee}
-                      onClick={() => toggleFilter(assignee, "assignee")}
-                      className={`px-3 py-1 rounded-full border ${
-                        selectedAssigneeFilters.includes(assignee)
-                          ? "bg-blue-500 text-white border-blue-500"
-                          : "border-gray-300"
-                      }`}
-                    >
-                      {assignee}
-                    </button>
-                  ))}
-              </div>
-            </div>
-
-            {/* 버튼 */}
-            <div className="flex justify-end mt-6">
-              <button
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md mr-2"
-                onClick={handleResetFilters}
-              >
-                초기화
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-500 text-white rounded-md"
-                onClick={() => setIsFilterModalOn(false)}
-              >
-                적용
-              </button>
-            </div>
-          </div>
-        </ModalTemplate>
-      )}
     </div>
   );
 }
@@ -1005,32 +800,68 @@ export const safeFormatDate = (dateValue, formatStr = "yyyy/MM/dd") => {
    - onDragStart, onDragEnd 이벤트에서 항목 이동 및 재정렬 처리
 ============================================== */
 function TaskMainCanvas() {
-  const [tasks, setTasks] = useState([]);
-  const [columns, setColumns] = useState(initialColumns);
-  const [activeTaskId, setActiveTaskId] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(9); // 페이지당 9개 항목
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [taskAddModalOn, setTaskAddModalOn] = useState(false);
-  const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false);
-  const [taskHistory, setTaskHistory] = useState([]);
-  const [isEditMode, setIsEditMode] = useState(false); // 편집 모드 상태 추가
-  // 추가: 선택된 폴더 ID를 저장하는 상태
-  const [selectedFolderId, setSelectedFolderId] = useState("미배정");
-  // 추가: 필터링된 작업 목록
-  const [filteredTasks, setFilteredTasks] = useState([]);
+  // 핵심 상태 관리
+  const [tasks, setTasks] = useState([]); // 모든 작업 목록
+  const [columns, setColumns] = useState(initialColumns); // 컬럼별 작업 ID 매핑
+  const [activeTaskId, setActiveTaskId] = useState(null); // 드래그 중인 작업 ID
+  const [selectedTask, setSelectedTask] = useState(null); // 선택된 작업 (상세보기/편집용)
+  const [currentPage, setCurrentPage] = useState(1); // 페이지네이션 현재 페이지
+  const [itemsPerPage] = useState(9); // 페이지당 항목 수
+  const [currentDate, setCurrentDate] = useState(new Date()); // 현재 선택된 날짜
+  const [taskAddModalOn, setTaskAddModalOn] = useState(false); // 작업 추가 모달 표시 여부
+  const [taskHistoryModalOn, setTaskHistoryModalOn] = useState(false); // 작업 이력 모달 표시 여부
+  const [isEditMode, setIsEditMode] = useState(false); // 편집 모드 여부
+  const [selectedFolderId, setSelectedFolderId] = useState("미배정"); // 선택된 폴더 ID
+  const [viewMode, setViewMode] = useState("dnd"); // 뷰 모드 (dnd: 드래그 앤 드롭 모드, board: 게시판 모드)
+  const [filteredTasks, setFilteredTasks] = useState([]); // 필터링된 작업 목록
 
-  // 추가: 뷰 모드 (dnd: 드래그 앤 드롭 모드, board: 게시판 모드)
-  const [viewMode, setViewMode] = useState("dnd");
+  // 파생 상태 대신 useEffect 사용하여 tasks나 selectedFolderId가 변경될 때마다 필터링
+  useEffect(() => {
+    if (!tasks || !Array.isArray(tasks)) {
+      setFilteredTasks([]);
+      return;
+    }
 
-  // 전체 페이지 계산 - 실제 할당되지 않은 작업 개수에 기반함
-  const unassignedTasks = tasks.filter(
-    (task) => !task.assignee || task.assignee === "미배정"
-  );
+    // selectedFolderId에 따라 작업 필터링
+    if (selectedFolderId === "미배정") {
+      const unassignedTasks = tasks.filter(
+        (task) => !task.assignee || task.assignee === "미배정"
+      );
+      setFilteredTasks(unassignedTasks);
+      console.log("미배정 작업 필터링:", unassignedTasks.length);
+    } else if (selectedFolderId) {
+      const filtered = tasks.filter((task) => {
+        const taskAssignee = (task.assignee || "").trim();
+        const folderId = selectedFolderId.trim();
+        return taskAssignee.toLowerCase() === folderId.toLowerCase();
+      });
+
+      console.log(`[${selectedFolderId}] 폴더 작업 필터링:`, {
+        총작업수: tasks.length,
+        필터링결과: filtered.length,
+      });
+
+      setFilteredTasks(filtered);
+    } else {
+      // 선택된 폴더가 없으면 전체 작업 표시
+      setFilteredTasks(tasks);
+      console.log("전체 작업 표시:", tasks.length);
+    }
+  }, [tasks, selectedFolderId]); // selectedFolderId 의존성 추가
+
+  // Toast 메시지를 사용하기 위한 훅
+  const { showToast } = useToast();
+
+  // ID로 작업 찾기
+  const getTaskById = (taskId) => {
+    if (!taskId || !tasks || !Array.isArray(tasks)) return null;
+    return tasks.find((task) => task.id === taskId) || null;
+  };
+
+  // 전체 페이지 계산 - 필터링된 작업 개수에 기반함
   const totalPages = Math.max(
     1,
-    Math.ceil(unassignedTasks.length / itemsPerPage)
+    Math.ceil(filteredTasks.length / itemsPerPage)
   );
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
@@ -1039,6 +870,49 @@ function TaskMainCanvas() {
       activationConstraint: { distance: 15 },
     })
   );
+
+  // 폴더 선택 처리 함수 - 간소화됨
+  const handleFolderSelect = (folderId) => {
+    // 이미 선택된 폴더를 다시 클릭하면 선택 해제
+    if (selectedFolderId === folderId) {
+      setSelectedFolderId("미배정");
+      console.log("폴더 선택 해제, 미배정으로 전환");
+
+      // 미배정 폴더로 전환 시 해당 작업 목록을 즉시 필터링
+      if (tasks && Array.isArray(tasks)) {
+        const unassignedTasks = tasks.filter(
+          (task) => !task.assignee || task.assignee === "미배정"
+        );
+        setFilteredTasks(unassignedTasks);
+      }
+    } else {
+      // 새 폴더 선택
+      setSelectedFolderId(folderId);
+      console.log("새 폴더 선택:", folderId);
+
+      // 새 폴더 선택 시 해당 작업 목록을 즉시 필터링
+      if (tasks && Array.isArray(tasks)) {
+        const newFilteredTasks = tasks.filter((task) => {
+          const taskAssignee = (task.assignee || "").trim();
+          const newFolderId = folderId.trim();
+          return taskAssignee.toLowerCase() === newFolderId.toLowerCase();
+        });
+
+        // 필터링된 결과를 설정 (업무가 없어도 빈 배열을 설정)
+        setFilteredTasks(newFilteredTasks);
+
+        // 디버그 로그 추가
+        console.log(`폴더 [${folderId}] 선택 - 필터링된 업무:`, {
+          총업무수: tasks.length,
+          필터링결과: newFilteredTasks.length,
+          폴더ID: folderId,
+        });
+      }
+    }
+
+    // 페이지 초기화
+    setCurrentPage(1);
+  };
 
   // Firebase에서 모든 업무 실시간 감지
   useEffect(() => {
@@ -1077,34 +951,9 @@ function TaskMainCanvas() {
 
     // 컴포넌트 언마운트 시 리스너 제거
     return () => unsubscribe();
-  }, [currentDate]);
+  }, [currentDate]); // selectedFolderId는 필요하지 않음 - 제거
 
-  // 선택된 폴더가 변경되면 해당 폴더의 작업만 필터링
-  useEffect(() => {
-    if (selectedFolderId) {
-      // 선택된 폴더의 taskIds를 이용해 해당 작업들만 필터링
-      const folderTaskIds = columns[selectedFolderId]?.taskIds || [];
-      const tasksInFolder = tasks.filter((task) =>
-        folderTaskIds.includes(task.id)
-      );
-      setFilteredTasks(tasksInFolder);
-    } else {
-      // 선택된 폴더가 없으면 전체 작업 표시
-      setFilteredTasks(tasks);
-    }
-  }, [selectedFolderId, tasks, columns]);
-
-  // 폴더 선택 처리 함수
-  const handleFolderSelect = (folderId) => {
-    // 이미 선택된 폴더를 다시 클릭하면 선택 해제
-    if (selectedFolderId === folderId) {
-      setSelectedFolderId(null);
-    } else {
-      setSelectedFolderId(folderId);
-    }
-  };
-
-  // 컬럼별로 업무 분류하는 함수
+  // 컬럼별로 업무 분류하는 함수 - 개선됨
   const updateColumns = (taskList) => {
     // 모든 컬럼 초기화
     const updatedColumns = { ...initialColumns };
@@ -1114,15 +963,96 @@ function TaskMainCanvas() {
 
     // 담당자별로 업무 분류
     taskList.forEach((task) => {
+      // null, undefined 체크 추가
+      if (!task) return;
+
       const assignee = task.assignee || "미배정";
+
+      // 해당 assignee에 맞는 컬럼이 있는지 확인
       if (updatedColumns[assignee]) {
         updatedColumns[assignee].taskIds.push(task.id);
       } else {
+        // 일치하는 컬럼이 없으면 미배정으로 처리
         updatedColumns.미배정.taskIds.push(task.id);
       }
     });
 
+    // 각 컬럼별 taskIds 개수 확인
+    const taskCounts = {};
+    Object.keys(updatedColumns).forEach((key) => {
+      taskCounts[key] = updatedColumns[key].taskIds.length;
+    });
     setColumns(updatedColumns);
+
+    /* 자동 전환 기능 비활성화 - 사용자가 직접 선택한 폴더는 유지
+    // 현재 선택된 폴더의 작업 수가 0이고, 다른 폴더에 작업이 있으면 자동으로 미배정으로 전환
+    if (
+      selectedFolderId !== "미배정" &&
+      updatedColumns[selectedFolderId]?.taskIds.length === 0 &&
+      Object.values(taskCounts).some((count) => count > 0)
+    ) {
+      setSelectedFolderId("미배정");
+    }
+    */
+  };
+
+  // 업무 담당자 변경 핸들러 - 개선됨
+  const updateTaskAssignee = async (
+    taskId,
+    assignee,
+    autoSelectFolder = false
+  ) => {
+    try {
+      // Firebase에서 업무 담당자 변경 및 이력 추가
+      await assignTask(taskId, assignee, "업무분장 페이지");
+
+      // 현재 업무 목록 새로고침
+      const updatedTasks = await getTasksByDate(currentDate);
+
+      // 업데이트된 업무가 올바른 assignee를 가지고 있는지 확인
+      const updatedTask = updatedTasks.find((task) => task.id === taskId);
+      // 전체 작업 목록 업데이트 - 이것이 filteredTasks를 자동으로 업데이트함
+      setTasks(updatedTasks);
+
+      // 담당자가 변경된 경우, 필요시 해당 폴더로 자동 전환
+      if (autoSelectFolder) {
+        setSelectedFolderId(assignee);
+      }
+
+      // 컬럼별로 업무 분류 다시 실행 - 기존 컬럼에 덮어쓰지 않고 업데이트
+      const updatedColumns = { ...columns };
+
+      // 업데이트된 업무 목록에 맞게 taskIds 업데이트
+      updatedTasks.forEach((task) => {
+        const taskAssignee = task.assignee || "미배정";
+
+        // 해당 assignee 컬럼이 있는지 확인
+        if (updatedColumns[taskAssignee]) {
+          // 이미 이 taskId가 있는지 확인
+          if (!updatedColumns[taskAssignee].taskIds.includes(task.id)) {
+            updatedColumns[taskAssignee].taskIds.push(task.id);
+          }
+        } else {
+          // 일치하는 컬럼이 없으면 미배정으로 처리
+          if (!updatedColumns.미배정.taskIds.includes(task.id)) {
+            updatedColumns.미배정.taskIds.push(task.id);
+          }
+        }
+      });
+
+      // 존재하지 않는 업무 ID는 제거
+      const validTaskIds = updatedTasks.map((task) => task.id);
+      Object.keys(updatedColumns).forEach((key) => {
+        updatedColumns[key].taskIds = updatedColumns[key].taskIds.filter((id) =>
+          validTaskIds.includes(id)
+        );
+      });
+
+      // 컬럼 상태 업데이트
+      setColumns(updatedColumns);
+    } catch (error) {
+      console.error("Error updating task assignee:", error);
+    }
   };
 
   // 업무 추가 핸들러
@@ -1131,52 +1061,38 @@ function TaskMainCanvas() {
       // Firebase에 업무 추가
       const addedTask = await addTask(newTask);
 
-      // 업무 목록과 컬럼 업데이트
-      setTasks((prev) => [...prev, addedTask]);
+      // 현재 업무 목록 새로고침 - 이렇게 하면 filteredTasks도 자동으로 업데이트됨
+      const updatedTasks = await getTasksByDate(currentDate);
+      setTasks(updatedTasks);
 
-      // 미배정 컬럼에 새 업무 추가
-      setColumns((prev) => ({
-        ...prev,
-        미배정: {
-          ...prev.미배정,
-          taskIds: [...prev.미배정.taskIds, addedTask.id],
-        },
-      }));
+      // 컬럼별로 업무 분류 다시 실행
+      updateColumns(updatedTasks);
+
+      // 성공 메시지 표시
+      showToast("업무가 성공적으로 추가되었습니다.", "success");
     } catch (error) {
       console.error("Error adding task:", error);
+      showToast("업무 추가 중 오류가 발생했습니다.", "error");
     }
   };
 
-  // 업무 편집 핸들러 추가
+  // 업무 편집 핸들러
   const handleTaskEdit = async (updatedTask) => {
     try {
       // Firebase에서 업무 정보 업데이트
       await updateTask(updatedTask);
 
-      // 로컬 상태 업데이트
-      setTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.id === updatedTask.id ? updatedTask : task
-        )
-      );
-
-      console.log("작업 편집 완료:", updatedTask);
-    } catch (error) {
-      console.error("Error updating task:", error);
-    }
-  };
-
-  // 업무 담당자 변경 핸들러
-  const updateTaskAssignee = async (taskId, assignee) => {
-    try {
-      // Firebase에서 업무 담당자 변경 및 이력 추가
-      await assignTask(taskId, assignee, "업무분장 페이지");
-
-      // 현재 업무 목록 새로고침
+      // 현재 업무 목록 새로고침 - 이렇게 하면 filteredTasks도 자동으로 업데이트됨
       const updatedTasks = await getTasksByDate(currentDate);
       setTasks(updatedTasks);
+
+      // 컬럼별로 업무 분류 다시 실행
+      updateColumns(updatedTasks);
+
+      showToast("업무가 성공적으로 수정되었습니다.", "success");
     } catch (error) {
-      console.error("Error updating task assignee:", error);
+      console.error("Error updating task:", error);
+      showToast("업무 수정 중 오류가 발생했습니다.", "error");
     }
   };
 
@@ -1239,91 +1155,203 @@ function TaskMainCanvas() {
     setActiveTaskId(event.active.id);
   };
 
+  // 폴더의 ID를 명시적으로 확인하는 함수
+  const isFolder = (id) => {
+    return Object.keys(initialColumns).includes(id);
+  };
+
+  // Sortable 컨테이너인지 확인하는 함수
+  const isSortableContainer = (id) => {
+    return id && typeof id === "string" && id.startsWith("Sortable-");
+  };
+
+  // 컬럼 상태 업데이트 함수 - 일관된 방식으로 컬럼 상태를 업데이트
+  const updateColumnTaskIds = (updates) => {
+    setColumns((prevColumns) => {
+      const newColumns = { ...prevColumns };
+
+      // 각 업데이트 적용
+      Object.entries(updates).forEach(([columnId, taskIds]) => {
+        if (newColumns[columnId]) {
+          newColumns[columnId] = {
+            ...newColumns[columnId],
+            taskIds,
+          };
+        }
+      });
+
+      return newColumns;
+    });
+  };
+
   const handleDragEnd = async (event) => {
     const { active, over } = event;
+
+    // 드롭 대상이 없는 경우 종료
     if (!over) {
       setActiveTaskId(null);
       return;
     }
+
+    const taskId = active.id;
+    const activeContainer = active.data.current?.sortable?.containerId;
+    const overContainer = over.data.current?.sortable?.containerId || over.id;
+
+    // 새 담당자 결정
+    const newAssignee =
+      over.data.current?.assignee ||
+      columns[overContainer]?.title ||
+      overContainer;
 
     // 드래그된 아이템이 task이고, 드랍 컨테이너가 담당자 폴더인 경우
     if (
       active.data.current?.type === "task" &&
       over.data.current?.type === "container"
     ) {
-      const taskId = active.id;
-      const containerId = over.id;
-
-      // 컬럼 유효성 검사 추가
-      if (!columns[containerId]) {
-        console.error(`컬럼을 찾을 수 없습니다: ${containerId}`);
+      // 컬럼 유효성 검사
+      if (!columns[overContainer]) {
+        console.error(`컬럼을 찾을 수 없습니다: ${overContainer}`);
         setActiveTaskId(null);
         return;
       }
 
-      // 담당자 정보 업데이트 (containerId가 담당자 정보)
-      await updateTaskAssignee(taskId, containerId);
+      try {
+        // 담당자 정보 업데이트 - 같은 폴더에 드롭해도 처리하도록 함
+        await updateTaskAssignee(taskId, newAssignee, false);
+        showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
 
-      // 기존 컬럼에서 제거하고 새 컬럼에 추가
-      const activeContainer = active.data.current.sortable?.containerId;
-      if (activeContainer && activeContainer !== containerId) {
-        const sourceColumn = columns[activeContainer];
-        const destinationColumn = columns[containerId];
+        // 업무가 같은 컨테이너로 이동된 경우 UI 업데이트만 하고 종료
+        if (activeContainer === overContainer) {
+          setActiveTaskId(null);
+          return;
+        }
 
-        if (sourceColumn && destinationColumn) {
-          const newSourceTaskIds = sourceColumn.taskIds.filter(
+        // 컬럼 상태 업데이트를 위한 변경 사항 준비
+        const updates = {};
+
+        // 출발 컨테이너에서 작업 제거
+        if (activeContainer && columns[activeContainer]) {
+          const sourceTaskIds = columns[activeContainer].taskIds.filter(
             (id) => id !== taskId
           );
-          const newDestinationTaskIds = [...destinationColumn.taskIds, taskId];
-
-          setColumns({
-            ...columns,
-            [activeContainer]: {
-              ...sourceColumn,
-              taskIds: newSourceTaskIds,
-            },
-            [containerId]: {
-              ...destinationColumn,
-              taskIds: newDestinationTaskIds,
-            },
-          });
+          updates[activeContainer] = sourceTaskIds;
+        } else if (activeContainer && isSortableContainer(activeContainer)) {
+          // Sortable 컨테이너인 경우, 작업의 이전 담당자 찾기
+          const taskData = getTaskById(taskId);
+          if (taskData && taskData.assignee && columns[taskData.assignee]) {
+            const prevAssignee = taskData.assignee;
+            const sourceTaskIds = columns[prevAssignee].taskIds.filter(
+              (id) => id !== taskId
+            );
+            updates[prevAssignee] = sourceTaskIds;
+          }
         }
+
+        // 도착 컨테이너에 작업 추가
+        if (columns[overContainer]) {
+          // 이미 이 taskId가 overContainer에 있지 않은 경우에만 추가
+          if (!columns[overContainer].taskIds.includes(taskId)) {
+            const destTaskIds = [...columns[overContainer].taskIds, taskId];
+            updates[overContainer] = destTaskIds;
+          } else {
+            // 이미 있는 경우 기존 배열 유지
+            updates[overContainer] = [...columns[overContainer].taskIds];
+          }
+        }
+
+        // 한 번의 호출로 모든 컬럼 상태 업데이트
+        updateColumnTaskIds(updates);
+      } catch (error) {
+        console.error("업무 할당 중 오류 발생:", error);
+        showToast("업무 배치 중 오류가 발생했습니다.", "error");
       }
 
       setActiveTaskId(null);
       return;
     }
 
-    // 같은 컨테이너 내에서 순서 변경
-    const activeContainer = active.data.current?.sortable?.containerId;
-    const overContainer = over.data.current?.sortable?.containerId || over.id;
+    // 목적지가 폴더인 경우를 처리
+    if (isFolder(overContainer)) {
+      try {
+        // 담당자 업데이트
+        await updateTaskAssignee(taskId, newAssignee, false);
+        showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
 
-    if (
-      !activeContainer ||
-      !overContainer ||
-      !columns[activeContainer] ||
-      !columns[overContainer]
-    ) {
-      console.error("유효하지 않은 컨테이너:", {
-        activeContainer,
-        overContainer,
-      });
+        // 같은 폴더로 이동한 경우 작업은 이미 완료됨 (updateTaskAssignee에서 처리됨)
+        if (activeContainer === overContainer) {
+          setActiveTaskId(null);
+          return;
+        }
+
+        // 컬럼 상태 업데이트를 위한 변경 사항 준비
+        const updates = {};
+
+        // 출발 컨테이너에서 작업 제거
+        if (columns[activeContainer]) {
+          updates[activeContainer] = columns[activeContainer].taskIds.filter(
+            (id) => id !== taskId
+          );
+        } else if (isSortableContainer(activeContainer)) {
+          // Sortable 컨테이너인 경우, 작업의 이전 담당자 찾기
+          const taskData = getTaskById(taskId);
+          if (taskData && taskData.assignee && columns[taskData.assignee]) {
+            updates[taskData.assignee] = columns[
+              taskData.assignee
+            ].taskIds.filter((id) => id !== taskId);
+          }
+        }
+
+        // 도착 컨테이너에 작업 추가
+        if (columns[overContainer]) {
+          // 이미 이 taskId가 overContainer에 있지 않은 경우에만 추가
+          if (!columns[overContainer].taskIds.includes(taskId)) {
+            updates[overContainer] = [
+              ...columns[overContainer].taskIds,
+              taskId,
+            ];
+          } else {
+            // 이미 있는 경우 기존 배열 유지
+            updates[overContainer] = [...columns[overContainer].taskIds];
+          }
+        }
+
+        // 한 번의 호출로 모든 컬럼 상태 업데이트
+        updateColumnTaskIds(updates);
+      } catch (error) {
+        console.error("업무 할당 중 오류 발생 (컨테이너 간 이동):", error);
+        showToast("업무 배치 중 오류가 발생했습니다.", "error");
+      }
+
       setActiveTaskId(null);
       return;
     }
 
+    // 같은 컨테이너 내에서의 순서 변경
     if (activeContainer === overContainer) {
       const column = columns[activeContainer];
-      const oldIndex = column.taskIds.indexOf(active.id);
+      if (!column) {
+        setActiveTaskId(null);
+        return;
+      }
+
+      const oldIndex = column.taskIds.indexOf(taskId);
       const newIndex = column.taskIds.indexOf(over.id);
+
       if (oldIndex !== newIndex) {
         const newTaskIds = arrayMove(column.taskIds, oldIndex, newIndex);
-        setColumns({
-          ...columns,
-          [activeContainer]: { ...column, taskIds: newTaskIds },
-        });
+        updateColumnTaskIds({ [activeContainer]: newTaskIds });
+        showToast("업무 순서가 변경되었습니다.", "success");
       }
-    } else {
+    }
+    // Sortable 컨테이너 간 이동
+    else if (
+      isSortableContainer(activeContainer) &&
+      isSortableContainer(overContainer)
+    ) {
+      // Sortable 컨테이너 간 이동은 처리하지 않음
+    }
+    // 다른 컨테이너로 이동하는 경우
+    else {
       const sourceColumn = columns[activeContainer];
       const destinationColumn = columns[overContainer];
 
@@ -1333,27 +1361,34 @@ function TaskMainCanvas() {
         return;
       }
 
-      const newSourceTaskIds = sourceColumn.taskIds.filter(
-        (id) => id !== active.id
-      );
-      const newDestinationTaskIds = [...destinationColumn.taskIds];
-      const overIndex = newDestinationTaskIds.indexOf(over.id);
-      newDestinationTaskIds.splice(overIndex, 0, active.id);
+      try {
+        // 담당자 업데이트
+        await updateTaskAssignee(taskId, newAssignee, false);
+        showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
 
-      setColumns({
-        ...columns,
-        [activeContainer]: { ...sourceColumn, taskIds: newSourceTaskIds },
-        [overContainer]: {
-          ...destinationColumn,
-          taskIds: newDestinationTaskIds,
-        },
-      });
+        // 출발 컨테이너에서 작업 제거
+        const newSourceTaskIds = sourceColumn.taskIds.filter(
+          (id) => id !== taskId
+        );
 
-      // 담당자 업데이트 (미배정이 아닌 다른 컬럼으로 이동한 경우)
-      if (overContainer !== "미배정") {
-        await updateTaskAssignee(active.id, overContainer);
-      } else {
-        await updateTaskAssignee(active.id, null);
+        // 도착 컨테이너에 작업 추가 (특정 위치에 삽입)
+        const newDestinationTaskIds = [...destinationColumn.taskIds];
+        const overIndex = newDestinationTaskIds.indexOf(over.id);
+
+        if (overIndex >= 0) {
+          newDestinationTaskIds.splice(overIndex, 0, taskId);
+        } else {
+          newDestinationTaskIds.push(taskId);
+        }
+
+        // 한 번의 호출로 컬럼 상태 업데이트
+        updateColumnTaskIds({
+          [activeContainer]: newSourceTaskIds,
+          [overContainer]: newDestinationTaskIds,
+        });
+      } catch (error) {
+        console.error("업무 할당 중 오류 발생 (컨테이너 간 이동):", error);
+        showToast("업무 배치 중 오류가 발생했습니다.", "error");
       }
     }
 
@@ -1402,7 +1437,6 @@ function TaskMainCanvas() {
   const handleTaskClick = (task) => {
     if (!task) return;
 
-    console.log("작업 클릭됨:", task);
     setSelectedTask(task);
     setIsEditMode(false); // 처음에는 뷰 모드로 열기
     setTaskAddModalOn(true);
@@ -1460,18 +1494,25 @@ function TaskMainCanvas() {
           {/* 드래그 앤 드롭 모드 내용 */}
           <>
             {/* 상단 할 일 목록 (9칸 고정 그리드) - 선택된 폴더가 있으면 해당 폴더의 작업만 표시 */}
-            <ToDoDragComponent
-              column={{
-                ...columns[selectedFolderId || "미배정"],
+            {(() => {
+              // 현재 선택된 폴더에 맞게 컬럼 데이터 생성 (key prop 추가)
+              const columnData = {
                 pageData: { currentPage, itemsPerPage },
-                title: selectedFolderId
-                  ? columns[selectedFolderId].title
-                  : "미배정",
-              }}
-              tasks={selectedFolderId ? filteredTasks : tasks}
-              onViewHistory={handleViewTaskHistory}
-              onTaskClick={handleTaskClick}
-            />
+                title: selectedFolderId || "미배정",
+                id: selectedFolderId || "미배정",
+                key: selectedFolderId || "미배정", // 리렌더링을 위한 key 추가
+              };
+
+              return (
+                <ToDoDragComponent
+                  key={`todo-drag-${selectedFolderId}`} // 고유 키 추가
+                  column={columnData}
+                  tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
+                  onViewHistory={handleViewTaskHistory}
+                  onTaskClick={handleTaskClick}
+                />
+              );
+            })()}
 
             {/* 페이지네이션 영역 */}
             <PaginationZone className="flex justify-center items-center space-x-2 my-[30px]">
@@ -1598,9 +1639,10 @@ function TaskMainCanvas() {
       ) : (
         /* 게시판 모드 컴포넌트 */
         <TaskBoardView
-          tasks={selectedFolderId ? filteredTasks : tasks}
+          tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
           onViewHistory={handleViewTaskHistory}
           onTaskClick={handleTaskClick}
+          selectedFolderId={selectedFolderId} // selectedFolderId를 전달
         />
       )}
 

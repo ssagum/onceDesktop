@@ -62,6 +62,37 @@ export const parseToDateWithoutTime = (dateString) => {
   try {
     if (!dateString) return new Date();
 
+    // Date 객체가 직접 전달된 경우 처리
+    if (dateString instanceof Date) {
+      return new Date(
+        dateString.getFullYear(),
+        dateString.getMonth(),
+        dateString.getDate(),
+        0,
+        0,
+        0
+      );
+    }
+
+    // Timestamp 객체인 경우 처리 (Firebase)
+    if (typeof dateString === "object" && dateString.seconds) {
+      const date = new Date(dateString.seconds * 1000);
+      return new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        0,
+        0,
+        0
+      );
+    }
+
+    // 문자열이 아닌 경우 문자열로 변환 시도
+    if (typeof dateString !== "string") {
+      console.warn("문자열이 아닌 값이 전달됨:", dateString);
+      dateString = String(dateString);
+    }
+
     // 날짜 파싱 시도
     const parsedDate = parse(dateString, "yyyy/MM/dd", new Date());
 
