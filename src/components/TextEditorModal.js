@@ -11,6 +11,9 @@ import {
   FaListUl,
   FaImage,
   FaFileUpload,
+  FaPalette,
+  FaTimes,
+  FaTextHeight,
 } from "react-icons/fa";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebase";
@@ -28,6 +31,11 @@ const COLORS = [
   { label: "노랑", value: "#FFD700" },
   { label: "보라", value: "#800080" },
   { label: "회색", value: "#808080" },
+  { label: "분홍", value: "#FF69B4" },
+  { label: "주황", value: "#FFA500" },
+  { label: "하늘", value: "#00BFFF" },
+  { label: "갈색", value: "#A52A2A" },
+  { label: "연두", value: "#9ACD32" },
 ];
 
 const SIZES = [
@@ -93,6 +101,11 @@ const TextEditorModal = ({
     DEPARTMENTS[0].value
   );
   const [isPinned, setIsPinned] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [currentFontSize, setCurrentFontSize] = useState("16px");
 
   // useToast 훅 사용
   const { showToast } = useToast();
@@ -119,40 +132,153 @@ const TextEditorModal = ({
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
-        const span = document.createElement("span");
-        span.style.fontSize = `${value}px`;
 
-        if (!range.collapsed) {
-          range.surroundContents(span);
-        } else {
-          const textNode = document.createTextNode("\u200B");
-          span.appendChild(textNode);
-          range.insertNode(span);
+        try {
+          // 현재 선택된 내용이 있는 경우
+          if (!range.collapsed) {
+            const span = document.createElement("span");
+            span.style.fontSize = `${value}px`;
+
+            try {
+              range.surroundContents(span);
+            } catch (e) {
+              // surroundContents가 실패할 경우 (여러 노드에 걸쳐 있는 경우)
+              // 텍스트 노드를 추출하여 처리
+              const fragment = range.extractContents();
+              span.appendChild(fragment);
+              range.insertNode(span);
+            }
+          } else {
+            // 커서만 있는 경우 현재 위치에 span 추가
+            const span = document.createElement("span");
+            span.style.fontSize = `${value}px`;
+
+            // 눈에 보이지 않는 문자를 포함하여 span 추가
+            const textNode = document.createTextNode("\u200B"); // 너비 없는 공백
+            span.appendChild(textNode);
+            range.insertNode(span);
+
+            // 커서를 추가한 span 내부로 이동
+            const newRange = document.createRange();
+            newRange.setStart(textNode, 1);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          }
+        } catch (e) {
+          console.error("글자 크기 변경 중 오류 발생:", e);
+          // 기본 execCommand 방식으로 폴백
+          document.execCommand(command, false, value);
         }
-
-        selection.removeAllRanges();
-        selection.addRange(range);
       }
-    } else if (
-      command === "insertOrderedList" ||
-      command === "insertUnorderedList"
-    ) {
-      const selection = window.getSelection();
-      const range = selection.getRangeAt(0);
+    } else if (command === "foreColor") {
+      try {
+        document.execCommand(command, false, value);
+        setShowColorPicker(false);
+      } catch (e) {
+        console.error("글자 색상 변경 중 오류 발생:", e);
 
-      document.execCommand(command, false, value);
+        // 대체 방법: 선택된 텍스트에 span 요소 추가
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
 
-      const listElements = editorRef.current.querySelectorAll("ul, ol");
-      listElements.forEach((list) => {
-        list.style.paddingLeft = "2em";
-        list.style.margin = "0.5em 0";
-        list.style.listStylePosition = "outside";
-      });
+          if (!range.collapsed) {
+            try {
+              const span = document.createElement("span");
+              span.style.color = value;
+              range.surroundContents(span);
+            } catch (e) {
+              // 여러 노드에 걸친 선택인 경우
+              const fragment = range.extractContents();
+              const span = document.createElement("span");
+              span.style.color = value;
+              span.appendChild(fragment);
+              range.insertNode(span);
+            }
+          } else {
+            // 커서만 있는 경우
+            const span = document.createElement("span");
+            span.style.color = value;
+            const textNode = document.createTextNode("\u200B");
+            span.appendChild(textNode);
+            range.insertNode(span);
+
+            // 커서 위치 조정
+            const newRange = document.createRange();
+            newRange.setStart(textNode, 1);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          }
+        }
+      }
     } else {
       document.execCommand(command, false, value);
     }
     editorRef.current.focus();
   }, []);
+
+  // 문서 클릭 이벤트 처리를 위한 useEffect
+  useEffect(() => {
+    const handleDocumentClick = (e) => {
+      // 색상 선택기와 글자 크기 선택기 영역 외부를 클릭하면 닫기
+      const colorPicker = document.querySelector(".color-picker-container");
+      const fontSizePicker = document.querySelector(
+        ".fontsize-picker-container"
+      );
+
+      if (colorPicker && !colorPicker.contains(e.target)) {
+        setShowColorPicker(false);
+      }
+
+      if (fontSizePicker && !fontSizePicker.contains(e.target)) {
+        setShowFontSizePicker(false);
+      }
+    };
+
+    // 이벤트 리스너 등록
+    document.addEventListener("mousedown", handleDocumentClick);
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+    };
+  }, []);
+
+  // 현재 선택된 텍스트의 폰트 크기를 조회하는 함수
+  const getCurrentFontSize = () => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const container = range.startContainer;
+
+      // 텍스트 노드인 경우 부모 요소 확인
+      if (container.nodeType === Node.TEXT_NODE && container.parentNode) {
+        const style = window.getComputedStyle(container.parentNode);
+        return style.fontSize;
+      }
+
+      // 요소 노드인 경우 직접 확인
+      if (container.nodeType === Node.ELEMENT_NODE) {
+        const style = window.getComputedStyle(container);
+        return style.fontSize;
+      }
+
+      // 인접한 부모 요소 확인
+      let parentElement = container.parentNode;
+      while (parentElement && parentElement !== editorRef.current) {
+        const style = window.getComputedStyle(parentElement);
+        if (style.fontSize) {
+          return style.fontSize;
+        }
+        parentElement = parentElement.parentNode;
+      }
+    }
+
+    // 기본값
+    return "16px";
+  };
 
   if (!show) return null;
 
@@ -249,7 +375,15 @@ const TextEditorModal = ({
         img.style.height = "auto";
         img.style.display = "inline-block";
 
-        document.execCommand("insertHTML", false, img.outerHTML);
+        // Insert the image into the editor
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.insertNode(img);
+          range.collapse(false); // Move the cursor after the inserted image
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
 
         requestAnimationFrame(() => {
           setContent(editorRef.current.innerHTML);
@@ -274,41 +408,24 @@ const TextEditorModal = ({
       await uploadBytes(fileRef, file);
       const downloadURL = await getDownloadURL(fileRef);
 
-      // 파일 링크 생성
-      const fileElement = document.createElement("div");
-      fileElement.style.cssText = `
-        display: flex;
-        align-items: center;
-        padding: 10px;
-        margin: 5px 0;
-        background-color: #f8f9fa;
-        border-radius: 4px;
-        border: 1px solid #dee2e6;
-      `;
+      const newFile = {
+        id: Date.now(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: downloadURL,
+      };
 
-      const fileIcon = document.createElement("span");
-      fileIcon.innerHTML = "📎";
-      fileIcon.style.marginRight = "8px";
-
-      const fileLink = document.createElement("a");
-      fileLink.href = downloadURL;
-      fileLink.textContent = file.name;
-      fileLink.target = "_blank";
-      fileLink.style.color = "#007bff";
-      fileLink.style.textDecoration = "none";
-
-      fileElement.appendChild(fileIcon);
-      fileElement.appendChild(fileLink);
-
-      document.execCommand("insertHTML", false, fileElement.outerHTML);
-
-      requestAnimationFrame(() => {
-        setContent(editorRef.current.innerHTML);
-      });
+      setUploadedFiles((prevFiles) => [...prevFiles, newFile]);
+      showToast("파일이 업로드되었습니다.", "success");
     } catch (error) {
       console.error("File upload error:", error);
       showToast("파일 업로드에 실패했습니다.", "error");
     }
+  };
+
+  const removeFile = (id) => {
+    setUploadedFiles((prevFiles) => prevFiles.filter((file) => file.id !== id));
   };
 
   const handleImageClick = (e) => {
@@ -389,6 +506,9 @@ const TextEditorModal = ({
           container.remove();
         }
       });
+    } else {
+      // If an image is clicked, allow resizing
+      handleImageClick(e);
     }
   };
 
@@ -398,8 +518,12 @@ const TextEditorModal = ({
       return;
     }
 
-    if (!editorRef.current.textContent.trim()) {
-      showToast("내용을 입력해주세요", "error");
+    if (
+      !editorRef.current.textContent.trim() &&
+      uploadedFiles.length === 0 &&
+      uploadedImages.length === 0
+    ) {
+      showToast("내용을 입력하거나 파일을 첨부해주세요", "error");
       return;
     }
 
@@ -412,6 +536,12 @@ const TextEditorModal = ({
         classification: selectedDepartment,
         pinned: isPinned,
         noticeType: isPinned ? "notice" : "regular",
+        attachedFiles: uploadedFiles,
+        attachedImages: uploadedImages.map((img) => ({
+          id: img.id,
+          name: img.name,
+          src: img.src,
+        })),
       };
 
       if (handleSave) {
@@ -425,6 +555,49 @@ const TextEditorModal = ({
       console.error("게시글 저장 실패:", error);
       showToast("게시글 저장에 실패했습니다", "error");
     }
+  };
+
+  // 파일 크기 형식화
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + " B";
+    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    else return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  const handleKeyDown = (e) => {
+    // 특수 키 처리를 위한 간단한 함수
+    // (불렛포인트 관련 코드는 제거)
+  };
+
+  // 폰트 크기와 색상 버튼 클릭 이벤트를 별도 함수로 분리
+  const handleFontSizeClick = (size) => {
+    // 현재 선택 영역 저장
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+      // 선택된 영역이 없으면 에디터에 포커스만 설정
+      editorRef.current.focus();
+      return;
+    }
+
+    // 에디터 자체에 포커스 설정
+    editorRef.current.focus();
+
+    // 크기 변경 명령 실행
+    execCommand("fontSize", size);
+
+    // 색상 선택기 닫기
+    setShowFontSizePicker(false);
+  };
+
+  const handleColorClick = (color) => {
+    // 에디터에 포커스 설정
+    editorRef.current.focus();
+
+    // 색상 변경 명령 실행
+    execCommand("foreColor", color);
+
+    // 색상 선택기 닫기
+    setShowColorPicker(false);
   };
 
   return (
@@ -473,6 +646,91 @@ const TextEditorModal = ({
           </div>
           <div className="editor-toolbar" style={toolbarStyle}>
             <div style={toolGroupStyle}>
+              {/* 글자 크기 선택 - 좌측 끝으로 이동 */}
+              <div
+                className="fontsize-picker-container"
+                style={colorPickerContainerStyle}
+              >
+                <button
+                  onClick={() => {
+                    setShowFontSizePicker(!showFontSizePicker);
+                    setShowColorPicker(false); // 다른 선택기는 닫기
+                  }}
+                  style={{
+                    ...buttonStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title="글자 크기"
+                >
+                  {/* 더 명확한 아이콘으로 변경 */}
+                  <FaTextHeight />
+                  <span style={{ fontSize: "12px", marginLeft: "2px" }}>
+                    {getCurrentFontSize().replace("px", "")}
+                  </span>
+                </button>
+                {showFontSizePicker && (
+                  <div style={fontSizeDropdownStyle}>
+                    {SIZES.map((size) => (
+                      <button
+                        key={size.value}
+                        onClick={() => handleFontSizeClick(size.value)}
+                        style={{
+                          padding: "8px 12px",
+                          border: "none",
+                          borderBottom: "1px solid #eee",
+                          backgroundColor: "white",
+                          width: "100%",
+                          textAlign: "left",
+                          fontSize: `${size.value}px`,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {size.label}px
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 글자 색상 선택 - 좌측으로 이동 */}
+              <div
+                className="color-picker-container"
+                style={colorPickerContainerStyle}
+              >
+                <button
+                  onClick={() => {
+                    setShowColorPicker(!showColorPicker);
+                    setShowFontSizePicker(false); // 다른 선택기는 닫기
+                  }}
+                  style={buttonStyle}
+                  title="글자 색상"
+                >
+                  <FaPalette />
+                </button>
+                {showColorPicker && (
+                  <div style={colorPaletteStyle}>
+                    {COLORS.map((color) => (
+                      <button
+                        key={color.value}
+                        onClick={() => handleColorClick(color.value)}
+                        title={color.label}
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          backgroundColor: color.value,
+                          border: "1px solid #ddd",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          margin: "2px",
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={() => execCommand("bold")}
                 style={buttonStyle}
@@ -533,12 +791,6 @@ const TextEditorModal = ({
                 style={{ display: "none" }}
                 onChange={handleImageUpload}
               />
-              <input
-                type="file"
-                id="fileUpload"
-                style={{ display: "none" }}
-                onChange={handleFileUpload}
-              />
               <button
                 onClick={() => document.getElementById("imageUpload").click()}
                 style={buttonStyle}
@@ -553,13 +805,85 @@ const TextEditorModal = ({
               ref={editorRef}
               contentEditable
               onInput={handleChange}
+              onKeyDown={handleKeyDown}
               onCompositionStart={handleCompositionStart}
               onCompositionEnd={handleCompositionEnd}
-              onClick={handleEditorClick}
+              onClick={(e) => {
+                handleEditorClick(e);
+                // 다른 툴바 드롭다운 닫기
+                setShowColorPicker(false);
+                setShowFontSizePicker(false);
+              }}
               onMouseDown={handleImageClick}
               suppressContentEditableWarning
               style={editorStyle}
             />
+          </div>
+
+          {/* 첨부파일 섹션 - 일반 파일만 표시 */}
+          <div style={attachmentSectionStyle}>
+            <div style={{ marginBottom: "15px" }}>
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  marginBottom: "10px",
+                }}
+              >
+                첨부파일
+              </h3>
+              <div style={fileButtonsContainerStyle}>
+                <div style={fileButtonStyle}>
+                  <input
+                    type="file"
+                    id="fileUpload"
+                    style={{ display: "none" }}
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    onClick={() =>
+                      document.getElementById("fileUpload").click()
+                    }
+                    style={fileUploadButtonStyle}
+                  >
+                    <FaFileUpload style={{ marginRight: "5px" }} /> 파일 첨부
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 일반 첨부 파일 목록 */}
+            {uploadedFiles.length > 0 && (
+              <div>
+                <h4
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    marginBottom: "10px",
+                  }}
+                >
+                  첨부 파일 ({uploadedFiles.length})
+                </h4>
+                <div style={fileListStyle}>
+                  {uploadedFiles.map((file) => (
+                    <div key={file.id} style={fileItemStyle}>
+                      <div style={fileInfoStyle}>
+                        <span style={{ fontWeight: "bold" }}>{file.name}</span>
+                        <span style={{ color: "#888", fontSize: "12px" }}>
+                          {formatFileSize(file.size)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeFile(file.id)}
+                        style={fileRemoveButtonStyle}
+                      >
+                        <FaTimes />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="modal-footer" style={footerStyle}>
@@ -725,35 +1049,34 @@ const colorPickerContainerStyle = {
   position: "relative",
 };
 
-const colorDropdownStyle = {
+const fontSizeDropdownStyle = {
   position: "absolute",
   top: "100%",
-  left: 0,
-  display: "none",
-  flexDirection: "column",
+  left: "0",
   backgroundColor: "white",
   border: "1px solid #ddd",
   borderRadius: "4px",
-  padding: "4px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
   zIndex: 1000,
-  boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-  minWidth: "100px",
+  width: "80px",
+  maxHeight: "200px",
+  overflowY: "auto",
 };
 
-const colorOptionStyle = {
-  display: "flex",
-  alignItems: "center",
-  padding: "6px 8px",
-  border: "none",
-  cursor: "pointer",
-  width: "100%",
-  textAlign: "left",
-  borderRadius: "2px",
-};
-
-const colorLabelStyle = {
-  marginLeft: "8px",
-  fontSize: "12px",
+const colorPaletteStyle = {
+  position: "absolute",
+  top: "100%",
+  left: "0",
+  backgroundColor: "white",
+  border: "1px solid #ddd",
+  borderRadius: "4px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+  zIndex: 1000,
+  padding: "10px",
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)", // 한 줄에 3개씩 표시 (4개에서 변경)
+  gap: "8px",
+  width: "132px", // 더 정확한 너비 계산: (28px * 3) + (8px * 2) + (10px * 2)
 };
 
 const titleInputContainerStyle = {
@@ -768,6 +1091,137 @@ const titleInputStyle = {
   border: "1px solid #ddd",
   borderRadius: "4px",
   outline: "none",
+};
+
+// 첨부파일 관련 스타일
+const attachmentSectionStyle = {
+  marginTop: "20px",
+  borderTop: "1px solid #eee",
+  paddingTop: "15px",
+};
+
+const fileButtonsContainerStyle = {
+  display: "flex",
+  gap: "10px",
+};
+
+const fileButtonStyle = {
+  flex: 1,
+};
+
+const fileUploadButtonStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  padding: "8px 10px",
+  backgroundColor: "#f5f5f5",
+  border: "1px dashed #ccc",
+  borderRadius: "4px",
+  cursor: "pointer",
+  transition: "all 0.2s",
+  ":hover": {
+    backgroundColor: "#e8e8e8",
+  },
+};
+
+const imagePreviewContainerStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px",
+};
+
+const imagePreviewStyle = {
+  position: "relative",
+  width: "100px",
+  height: "100px",
+  borderRadius: "4px",
+  overflow: "hidden",
+  border: "1px solid #ddd",
+};
+
+const imagePreviewImgStyle = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  cursor: "pointer",
+};
+
+const imagePreviewOverlayStyle = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  opacity: 0,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  transition: "opacity 0.2s",
+  ":hover": {
+    opacity: 1,
+  },
+};
+
+const imageRemoveButtonStyle = {
+  position: "absolute",
+  top: "5px",
+  right: "5px",
+  padding: "2px",
+  backgroundColor: "rgba(255,255,255,0.8)",
+  color: "#ff4d4f",
+  border: "none",
+  borderRadius: "50%",
+  cursor: "pointer",
+  fontSize: "12px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const imageInsertButtonStyle = {
+  backgroundColor: "rgba(255,255,255,0.8)",
+  color: "#333",
+  border: "none",
+  borderRadius: "4px",
+  padding: "4px 8px",
+  fontSize: "12px",
+  cursor: "pointer",
+};
+
+const fileListStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+};
+
+const fileItemStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "10px",
+  backgroundColor: "#f9f9f9",
+  borderRadius: "4px",
+  border: "1px solid #eee",
+};
+
+const fileInfoStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+};
+
+const fileRemoveButtonStyle = {
+  backgroundColor: "transparent",
+  color: "#ff4d4f",
+  border: "none",
+  cursor: "pointer",
+  fontSize: "16px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 export default TextEditorModal;

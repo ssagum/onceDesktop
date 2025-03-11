@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
 import { db } from "../../firebase";
 import styled from "styled-components";
 import JcyTable from "../common/JcyTable";
 import RenderTitlePart from "../common/RenderTitlePart";
 import NoticeShowModal from "./NoticeShowModal";
+import { useToast } from "../../contexts/ToastContext";
 
 // === styled-components 영역 ===
 
@@ -13,12 +21,13 @@ const TitleZone = styled.div`
   /* 필요에 따라 스타일 추가 */
 `;
 
-function NoticeMainCanvas({ onCreatePost }) {
+function NoticeMainCanvas({ onCreatePost, onEditPost }) {
   const [notices, setNotices] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
@@ -33,6 +42,31 @@ function NoticeMainCanvas({ onCreatePost }) {
 
     return () => unsubscribe();
   }, []);
+
+  // 게시글 삭제 함수
+  const handleDeleteNotice = async (noticeId) => {
+    try {
+      const noticeRef = doc(db, "notices", noticeId);
+      await deleteDoc(noticeRef);
+
+      // 댓글도 함께 삭제하는 로직 추가 가능
+      // 여기서는 생략 (클라우드 함수 또는 배치 작업으로 처리하는 것이 더 적합)
+
+      showToast("게시글이 삭제되었습니다.", "success");
+      return true;
+    } catch (error) {
+      console.error("Error deleting notice:", error);
+      showToast("게시글 삭제에 실패했습니다.", "error");
+      return false;
+    }
+  };
+
+  // 게시글 수정 함수
+  const handleEditNotice = (notice) => {
+    if (onEditPost && notice) {
+      onEditPost(notice);
+    }
+  };
 
   // JcyTable에 필요한 데이터 포맷
   const columns = [
@@ -67,7 +101,9 @@ function NoticeMainCanvas({ onCreatePost }) {
       };
     });
 
-  const renderRow = (row) => <RenderTitlePart row={row} />;
+  const renderRow = (row) => (
+    <RenderTitlePart row={row} onEditPost={onEditPost} />
+  );
 
   const handleNoticeClick = (notice) => {
     setSelectedNotice(notice);
@@ -103,6 +139,8 @@ function NoticeMainCanvas({ onCreatePost }) {
         show={showNoticeModal}
         handleClose={() => setShowNoticeModal(false)}
         notice={selectedNotice}
+        onEdit={handleEditNotice}
+        onDelete={handleDeleteNotice}
       />
     </div>
   );

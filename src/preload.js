@@ -8,6 +8,24 @@ contextBridge.exposeInMainWorld("electron", {
   sendNotification: (message) => {
     ipcRenderer.send("show-notification", message);
   },
+  downloadFile: (fileUrl, fileName) => {
+    return ipcRenderer.send("download-file", {
+      url: fileUrl,
+      fileName: fileName,
+    });
+  },
+  onDownloadProgress: (callback) => {
+    const progressListener = (event, progress) => callback(progress);
+    ipcRenderer.on("download-progress", progressListener);
+    return () =>
+      ipcRenderer.removeListener("download-progress", progressListener);
+  },
+  onDownloadComplete: (callback) => {
+    const completeListener = (event, result) => callback(result);
+    ipcRenderer.on("download-complete", completeListener);
+    return () =>
+      ipcRenderer.removeListener("download-complete", completeListener);
+  },
 });
 
 // 알림 소리 재생을 위한 리스너

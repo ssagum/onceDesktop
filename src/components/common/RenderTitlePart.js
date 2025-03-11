@@ -3,6 +3,9 @@ import styled from "styled-components";
 import HoverFrame from "./HoverFrame";
 import ShrinkText from "./ShrinkText";
 import NoticeShowModal from "../Notice.js/NoticeShowModal";
+import { doc, deleteDoc } from "firebase/firestore";
+import { db } from "../../firebase";
+import { useToast } from "../../contexts/ToastContext";
 
 const FixedRightZone = styled.div`
   width: 100px;
@@ -40,8 +43,13 @@ const AuthorDateCell = styled.div`
   text-align: center;
 `;
 
-export default function RenderTitlePart({ row, isHomeMode = false }) {
+export default function RenderTitlePart({
+  row,
+  isHomeMode = false,
+  onEditPost,
+}) {
   const [showModal, setShowModal] = useState(false);
+  const { showToast } = useToast();
 
   const handleOpenModal = () => {
     setShowModal(true);
@@ -49,6 +57,29 @@ export default function RenderTitlePart({ row, isHomeMode = false }) {
 
   const handleCloseModal = () => {
     setShowModal(false);
+  };
+
+  // 게시글 삭제 함수 - 권한 검사 제거 (모든 사용자가 삭제 가능)
+  const handleDeleteNotice = async (noticeId) => {
+    try {
+      const noticeRef = doc(db, "notices", noticeId);
+      await deleteDoc(noticeRef);
+      showToast("게시글이 삭제되었습니다.", "success");
+      handleCloseModal();
+      return true;
+    } catch (error) {
+      console.error("Error deleting notice:", error);
+      showToast("게시글 삭제에 실패했습니다.", "error");
+      return false;
+    }
+  };
+
+  // 게시글 수정 함수 - 모든 사용자가 수정 가능
+  const handleEditNotice = (notice) => {
+    if (onEditPost && notice) {
+      onEditPost(notice);
+    }
+    handleCloseModal();
   };
 
   // row가 undefined일 경우 기본값 설정
@@ -129,6 +160,8 @@ export default function RenderTitlePart({ row, isHomeMode = false }) {
         show={showModal}
         handleClose={handleCloseModal}
         notice={row}
+        onEdit={handleEditNotice}
+        onDelete={handleDeleteNotice}
       />
     </>
   );

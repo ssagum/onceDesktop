@@ -10,6 +10,8 @@ import {
 } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
+import fs from "node:fs";
+import { download } from "electron-dl";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -22,19 +24,29 @@ let mainWindow;
 let tray = null;
 
 const createWindow = () => {
-  // CSP 설정
+  // CSP 설정 강화 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // 개발 환경에서는 웹팩 핫 리로딩을 위해 'unsafe-eval' 허용
+    const cspHeader = isDevelopment
+      ? "default-src 'self';" +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com;" +
+        "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com ws: webpack:;" +
+        "worker-src 'self' blob:;" +
+        "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
+        "style-src 'self' 'unsafe-inline';" +
+        "font-src 'self' data:;"
+      : "default-src 'self';" +
+        "script-src 'self';" +
+        "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;" +
+        "worker-src 'self' blob:;" +
+        "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
+        "style-src 'self' 'unsafe-inline';" +
+        "font-src 'self' data:;";
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        "Content-Security-Policy": [
-          "default-src 'self';" +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com;" +
-            "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;" +
-            "worker-src 'self' blob:;" +
-            "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
-            "style-src 'self' 'unsafe-inline';",
-        ],
+        "Content-Security-Policy": [cspHeader],
       },
     });
   });
@@ -54,9 +66,10 @@ const createWindow = () => {
         ),
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
-      nodeIntegration: true,
+      nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      sandbox: true,
     },
   });
 
@@ -202,6 +215,62 @@ ipcMain.on("show-notification", (event, message) => {
   });
 });
 
+// 파일 다운로드 처리
+ipcMain.on("download-file", async (event, { url, fileName }) => {
+  if (!mainWindow) return;
+
+  try {
+    // 사용자에게 저장할 위치 선택 요청
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "파일 저장",
+      defaultPath: app.getPath("downloads") + "/" + fileName,
+      buttonLabel: "저장",
+      // 파일 형식에 따른 필터 설정
+      filters: [{ name: "모든 파일", extensions: ["*"] }],
+    });
+
+    if (filePath) {
+      // 파일이 로컬 경로인지 URL인지 확인
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        // URL인 경우 electron-dl을 사용하여 다운로드
+        await download(mainWindow, url, {
+          filename: path.basename(filePath),
+          directory: path.dirname(filePath),
+          onProgress: (progress) => {
+            mainWindow.webContents.send("download-progress", progress);
+          },
+        });
+        mainWindow.webContents.send("download-complete", {
+          success: true,
+          filePath,
+        });
+      } else {
+        // 로컬 파일인 경우 복사
+        const sourceFile = url.startsWith("file://") ? url.slice(7) : url;
+        fs.copyFile(sourceFile, filePath, (err) => {
+          if (err) {
+            mainWindow.webContents.send("download-complete", {
+              success: false,
+              error: err.message,
+            });
+          } else {
+            mainWindow.webContents.send("download-complete", {
+              success: true,
+              filePath,
+            });
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error("파일 다운로드 오류:", error);
+    mainWindow.webContents.send("download-complete", {
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 function createTimerWindow() {
   const timerWindow = new BrowserWindow({
     width: 800,
@@ -210,6 +279,7 @@ function createTimerWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: TIMER_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
     backgroundColor: "#000000",
@@ -217,15 +287,18 @@ function createTimerWindow() {
 
   timerWindow.loadURL(TIMER_WINDOW_WEBPACK_ENTRY);
 
-  // CSP 설정 추가
+  // CSP 설정 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
   timerWindow.webContents.session.webRequest.onHeadersReceived(
     (details, callback) => {
+      // 개발 환경에서는 웹팩 핫 리로딩을 위해 'unsafe-eval' 허용
+      const cspHeader = isDevelopment
+        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: webpack:;"
+        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';";
+
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
-          ],
+          "Content-Security-Policy": [cspHeader],
         },
       });
     }
