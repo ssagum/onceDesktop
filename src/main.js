@@ -220,47 +220,63 @@ ipcMain.on("download-file", async (event, { url, fileName }) => {
   if (!mainWindow) return;
 
   try {
+    // 한글 파일명을 위한 인코딩 처리
+    const decodedFileName = decodeURIComponent(fileName);
+
+    // 윈도우용 한글 파일명 처리
+    const normalizedFileName = Buffer.from(decodedFileName, "utf8").toString();
+
     // 사용자에게 저장할 위치 선택 요청
-    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
       title: "파일 저장",
-      defaultPath: app.getPath("downloads") + "/" + fileName,
+      defaultPath: path.join(app.getPath("downloads"), normalizedFileName),
       buttonLabel: "저장",
-      // 파일 형식에 따른 필터 설정
       filters: [{ name: "모든 파일", extensions: ["*"] }],
     });
 
-    if (filePath) {
-      // 파일이 로컬 경로인지 URL인지 확인
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        // URL인 경우 electron-dl을 사용하여 다운로드
-        await download(mainWindow, url, {
-          filename: path.basename(filePath),
-          directory: path.dirname(filePath),
-          onProgress: (progress) => {
-            mainWindow.webContents.send("download-progress", progress);
-          },
-        });
-        mainWindow.webContents.send("download-complete", {
-          success: true,
-          filePath,
-        });
-      } else {
-        // 로컬 파일인 경우 복사
-        const sourceFile = url.startsWith("file://") ? url.slice(7) : url;
-        fs.copyFile(sourceFile, filePath, (err) => {
-          if (err) {
-            mainWindow.webContents.send("download-complete", {
-              success: false,
-              error: err.message,
-            });
-          } else {
-            mainWindow.webContents.send("download-complete", {
-              success: true,
-              filePath,
-            });
-          }
-        });
-      }
+    // 취소된 경우 처리
+    if (canceled || !filePath) {
+      mainWindow.webContents.send("download-complete", {
+        success: false,
+        error: "canceled",
+      });
+      return;
+    }
+
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      // 다운로드 경로의 디렉토리와 파일명을 분리
+      const downloadDir = path.dirname(filePath);
+      const downloadFileName = Buffer.from(
+        path.basename(filePath),
+        "utf8"
+      ).toString();
+
+      await download(mainWindow, url, {
+        filename: downloadFileName,
+        directory: downloadDir,
+        onProgress: (progress) => {
+          mainWindow.webContents.send("download-progress", progress);
+        },
+      });
+      mainWindow.webContents.send("download-complete", {
+        success: true,
+        filePath,
+      });
+    } else {
+      const sourceFile = url.startsWith("file://") ? url.slice(7) : url;
+      fs.copyFile(sourceFile, filePath, (err) => {
+        if (err) {
+          mainWindow.webContents.send("download-complete", {
+            success: false,
+            error: err.message,
+          });
+        } else {
+          mainWindow.webContents.send("download-complete", {
+            success: true,
+            filePath,
+          });
+        }
+      });
     }
   } catch (error) {
     console.error("파일 다운로드 오류:", error);

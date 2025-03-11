@@ -84,7 +84,10 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
             return newState;
           });
         } else {
-          showToast(`파일 다운로드 실패: ${error}`, "error");
+          // 취소된 경우 별도 메시지 표시하지 않음
+          if (error !== "canceled") {
+            showToast(`파일 다운로드 실패: ${error}`, "error");
+          }
           setDownloadingFiles((prev) => {
             const newState = { ...prev };
             // 모든 다운로드 상태 초기화
@@ -110,8 +113,12 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       // 다운로드 상태 설정
       setDownloadingFiles((prev) => ({ ...prev, [fileName]: true }));
 
+      // 파일명 정규화 및 인코딩
+      const normalizedFileName = fileName.normalize("NFC");
+      const encodedFileName = encodeURIComponent(normalizedFileName);
+
       // Electron 환경인 경우 contextBridge API를 통해 다운로드 요청
-      electronAPI.downloadFile(fileUrl, fileName);
+      electronAPI.downloadFile(fileUrl, encodedFileName);
       showToast("파일 다운로드가 시작되었습니다.", "info");
     } else {
       // 웹 환경인 경우 기존 방식으로 다운로드
@@ -231,8 +238,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                 <button
                   onClick={handleEdit}
                   style={editButtonStyle}
-                  title="게시글 수정"
-                >
+                  title="게시글 수정">
                   <FaPencilAlt /> 수정
                 </button>
                 <button
@@ -242,8 +248,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                       ? confirmDeleteButtonStyle
                       : deleteButtonStyle
                   }
-                  title="게시글 삭제"
-                >
+                  title="게시글 삭제">
                   <FaTrash /> {showConfirmDelete ? "삭제 확인" : "삭제"}
                 </button>
               </>
@@ -297,8 +302,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                           downloadingFiles[
                             image.name || `image_${index + 1}.jpg`
                           ]
-                        }
-                      >
+                        }>
                         {downloadingFiles[
                           image.name || `image_${index + 1}.jpg`
                         ] ? (
@@ -332,8 +336,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                         onClick={() => handleFileDownload(file.url, file.name)}
                         style={fileDownloadButtonStyle}
                         title="파일 다운로드"
-                        disabled={downloadingFiles[file.name]}
-                      >
+                        disabled={downloadingFiles[file.name]}>
                         {downloadingFiles[file.name] ? (
                           <FaSpinner
                             style={{ animation: "spin 1s linear infinite" }}
@@ -369,8 +372,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                         </span>
                         <button
                           onClick={() => handleDeleteComment(comment.id)}
-                          style={deleteCommentButtonStyle}
-                        >
+                          style={deleteCommentButtonStyle}>
                           삭제
                         </button>
                       </div>
