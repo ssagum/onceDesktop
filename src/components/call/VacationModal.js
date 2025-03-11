@@ -907,16 +907,12 @@ export default function VacationModal({ isVisible, setIsVisible }) {
                 </FormValue>
               </FormRow>
 
-              {/* 제외일수 설명 - 경조사 모드가 아닐 때만 표시 */}
-              {vacationForm.vacationType !== "경조사" && (
-                <div className="px-4 w-full">
-                  <InfoText>
-                    * 공휴일 및 회사 지정 휴무일 등 자동으로 제외되지 않는
-                    날짜를 수동으로 입력할 수 있습니다. 일요일은 자동으로
-                    제외됩니다.
-                  </InfoText>
-                </div>
-              )}
+              <div className="px-4 w-full">
+                <InfoText>
+                  * 공휴일 및 회사 지정 휴무일 등 자동으로 제외되지 않는 날짜를
+                  수동으로 입력할 수 있습니다. 일요일은 자동으로 제외됩니다.
+                </InfoText>
+              </div>
 
               {/* 휴가 타입 */}
               <FormRow>

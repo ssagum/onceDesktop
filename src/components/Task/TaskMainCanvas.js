@@ -42,6 +42,7 @@ import { db } from "../../firebase";
 import { collection, query, onSnapshot, where } from "firebase/firestore";
 import JcyTable from "../common/JcyTable";
 import { useToast } from "../../contexts/ToastContext"; // Toast 메시지 사용을 위한 훅 추가
+import DateViewModal from "./DateViewModal";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -335,6 +336,52 @@ export function ToDoDragComponent({
   // 반드시 배열이 되도록 보장하여 에러 방지
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
+  // 날짜별 보기 모달 상태 관리
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [currentDateIndex, setCurrentDateIndex] = useState(0);
+
+  // 현재 날짜 기준으로 3일치 날짜 생성 (오늘, 내일, 모레)
+  const dateList = useMemo(() => {
+    const today = new Date();
+    return [0, 1, 2].map((offset) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + offset);
+      return date;
+    });
+  }, []);
+
+  // 날짜 포맷팅 함수
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}.${month}.${day}`;
+  };
+
+  // 이전 날짜로 이동
+  const handlePrevDate = () => {
+    if (currentDateIndex > 0) {
+      setCurrentDateIndex((prev) => prev - 1);
+    }
+  };
+
+  // 다음 날짜로 이동
+  const handleNextDate = () => {
+    if (currentDateIndex < dateList.length - 1) {
+      setCurrentDateIndex((prev) => prev + 1);
+    }
+  };
+
+  // 날짜별 보기 모달 열기
+  const handleOpenDateModal = () => {
+    setShowDateModal(true);
+  };
+
+  // 날짜별 보기 모달 닫기
+  const handleCloseDateModal = () => {
+    setShowDateModal(false);
+  };
+
   // 디버그 로그 추가 - 컴포넌트가 렌더링될 때마다 출력
   console.log(`ToDoDragComponent 렌더링 [${column.id}]:`, {
     tasks_length: safeTasks.length,
@@ -396,7 +443,7 @@ export function ToDoDragComponent({
   };
 
   return (
-    <div className="mb-[2]">
+    <div className="mb-[2] relative">
       {/* DragGoalFolder와 같은 꼭지 부분 추가 */}
       <div className="relative inline-block bottom-[-5px]">
         <svg
@@ -420,42 +467,88 @@ export function ToDoDragComponent({
       </div>
 
       {/* 기존 그리드 영역 */}
-      <div
-        ref={setNodeRef}
-        className="relative bg-gray-50 p-4 rounded shadow h-[280px] w-full"
-      >
-        <SortableContext items={fixedSlots}>
-          {fixedSlots.map((id, index) => {
-            const pos = gridPositions[index];
-            const isEmpty = id.toString().startsWith("empty-");
-            const taskData = getTaskData(id);
-
-            return (
-              <div
-                key={id}
-                style={{
-                  ...cellStyle,
-                  position: "absolute",
-                  left: pos.left,
-                  top: pos.top,
-                }}
-              >
-                {isEmpty ? (
-                  <div className="w-full h-full rounded border border-dashed"></div>
-                ) : (
-                  <SortableTask
-                    id={id}
-                    task={taskData}
-                    containerId={column.id}
-                    onViewHistory={onViewHistory}
-                    onClick={onTaskClick}
-                  />
-                )}
+      <div className="relative">
+        <div
+          ref={setNodeRef}
+          className="relative bg-gray-50 p-4 rounded shadow h-[280px] w-full"
+        >
+          {/* 우상단 포스트잇 스타일의 날짜별 보기 탭 - 그리드와 딱 맞닿게 배치 */}
+          <div className="absolute right-4 -top-[60px] z-10">
+            {/* 단일 파란색 탭 */}
+            <div
+              className="relative w-24 h-[60px] cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
+              onClick={handleOpenDateModal} // 모달 열기 함수 연결
+              title="날짜별 보기"
+            >
+              {/* 상단 색상 부분 */}
+              <div className="h-6 bg-onceBlue rounded-t-md shadow-sm border-t border-l border-r border-gray-200 flex items-center justify-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
               </div>
-            );
-          })}
-        </SortableContext>
+
+              {/* 반투명 중간 부분 */}
+              <div className="h-[36px] bg-onceChipBlue bg-opacity-90 rounded-b-none border-l border-r border-gray-200 shadow-sm flex items-center justify-center">
+                <span className="text-onceBlue text-sm font-medium">
+                  날짜별 보기
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <SortableContext items={fixedSlots}>
+            {fixedSlots.map((id, index) => {
+              const pos = gridPositions[index];
+              const isEmpty = id.toString().startsWith("empty-");
+              const taskData = getTaskData(id);
+
+              return (
+                <div
+                  key={id}
+                  style={{
+                    ...cellStyle,
+                    position: "absolute",
+                    left: pos.left,
+                    top: pos.top,
+                  }}
+                >
+                  {isEmpty ? (
+                    <div className="w-full h-full rounded border border-dashed"></div>
+                  ) : (
+                    <SortableTask
+                      id={id}
+                      task={taskData}
+                      containerId={column.id}
+                      onViewHistory={onViewHistory}
+                      onClick={onTaskClick}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </SortableContext>
+        </div>
       </div>
+
+      {/* 날짜별 보기 모달 */}
+      {showDateModal && (
+        <DateViewModal
+          isVisible={showDateModal}
+          onClose={handleCloseDateModal}
+          column={column}
+          tasks={tasks}
+        />
+      )}
     </div>
   );
 }
