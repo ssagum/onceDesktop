@@ -5,10 +5,13 @@ import { FiSettings } from "react-icons/fi";
 import UserChipText from "./common/UserChipText";
 import { departmentArray, locationOptions, roleOptions } from "../datas/users";
 import { Link } from "react-router-dom";
+import { getCurrentUser, logoutUser } from "../utils/UserAuth";
+import MiniLoginForm from "./common/MiniLoginForm";
+import MiniDevTools from "./common/MiniDevTools";
 
 function PCAllocation() {
-  const { userLevelData, updateUserLevelData, resetUserLevelData } =
-    useUserLevel();
+  const { userLevelData, updateUserLevelData } = useUserLevel();
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
 
   // userLevelData의 부서가 유효한지 검사 후 기본값 설정
   const validDepartment =
@@ -62,78 +65,104 @@ function PCAllocation() {
     }
   };
 
+  // 로그아웃 핸들러
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+  };
+
+  // 로그인 성공 후 사용자 정보 업데이트
+  const updateCurrentUser = () => {
+    setCurrentUser(getCurrentUser());
+  };
+
   return (
-    <div>
-      <div className="LoginZone flex flex-col w-full items-center h-[300px] justify-center">
-        <div className="flex-[2] flex w-full items-center justify-center">
-          <Link to="/">
-            <img src={logoLong} alt="logo" className="w-[200px] h-auto" />
-          </Link>
-        </div>
-        <div className="flex-[3] flex w-full items-center justify-center h-full">
-          {!needsSetup ? (
-            // PC 할당 완료된 경우의 UI
-            <div className="flex flex-row items-center w-full px-[20px]">
-              <div className="flex flex-col w-full gap-y-[10px] items-center px-[10px]">
-                <UserChipText
-                  options={[
-                    {
-                      label: userLevelData.department,
-                      value: userLevelData.department,
-                    },
-                  ]}
-                  selected={userLevelData.department}
-                  onChange={() => {}}
-                />
-                <UserChipText
-                  options={[
-                    { label: userLevelData.role, value: userLevelData.role },
-                  ]}
-                  selected={userLevelData.role}
-                  onChange={() => {}}
-                />
-                <UserChipText
-                  options={[
-                    {
-                      label: userLevelData.location,
-                      value: userLevelData.location,
-                    },
-                  ]}
-                  selected={userLevelData.location}
-                  onChange={() => {}}
-                  green={true}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <FiSettings
-                  onClick={() => setModalOpen(true)}
-                  className="text-onceBlue text-[30px] cursor-pointer"
-                />
-                {/* 초기화 버튼 추가 */}
-                {/* <button
-                  onClick={resetUserLevelData}
-                  className="text-red-500 text-sm hover:text-red-700"
-                >
-                  초기화
-                </button> */}
-              </div>
-            </div>
-          ) : (
-            // PC 할당이 필요한 경우의 UI
-            <div className="flex flex-col items-center gap-4">
-              <div className="text-gray-500 text-center">
-                이 PC는 아직 설정되지 않았습니다
-              </div>
-              <button
-                onClick={openModal}
-                className="bg-onceBlue w-[160px] h-[60px]"
-              >
-                <span className="text-white">PC 할당</span>
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="flex flex-col items-center py-4 px-2">
+      {/* 로고 영역 */}
+      <div className="flex w-full items-center justify-center mb-3">
+        <Link to="/">
+          <img src={logoLong} alt="logo" className="w-[180px] h-auto" />
+        </Link>
       </div>
+
+      {/* PC 할당 정보 영역 */}
+      <div className="w-full mb-3">
+        {!needsSetup ? (
+          <div className="flex flex-col items-center">
+            <div className="flex flex-col w-full gap-y-[6px] items-center">
+              <UserChipText
+                options={[
+                  {
+                    label: userLevelData.department,
+                    value: userLevelData.department,
+                  },
+                ]}
+                selected={userLevelData.department}
+                onChange={() => {}}
+              />
+              <UserChipText
+                options={[
+                  { label: userLevelData.role, value: userLevelData.role },
+                ]}
+                selected={userLevelData.role}
+                onChange={() => {}}
+              />
+              <UserChipText
+                options={[
+                  {
+                    label: userLevelData.location,
+                    value: userLevelData.location,
+                  },
+                ]}
+                selected={userLevelData.location}
+                onChange={() => {}}
+                green={true}
+              />
+            </div>
+            <div className="mt-1">
+              <FiSettings
+                onClick={openModal}
+                className="text-onceBlue text-[20px] cursor-pointer"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-gray-500 text-center text-sm">
+              설정되지 않은 PC
+            </div>
+            <button
+              onClick={openModal}
+              className="bg-onceBlue text-white px-3 py-1 rounded text-sm"
+            >
+              PC 할당
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 사용자 로그인 정보 영역 */}
+      <div className="w-full border-t border-gray-200 pt-3 mb-2">
+        {currentUser ? (
+          <div className="flex flex-col items-center text-sm">
+            <span className="font-medium text-onceBlue">
+              {currentUser.name}
+            </span>
+            <span className="text-xs text-gray-500 mb-1">님 사용 중</span>
+            <button
+              onClick={handleLogout}
+              className="text-red-500 text-xs hover:underline"
+            >
+              로그아웃
+            </button>
+          </div>
+        ) : (
+          <MiniLoginForm onLoginSuccess={updateCurrentUser} />
+        )}
+      </div>
+
+      {/* 개발 도구 */}
+      <MiniDevTools />
 
       {/* 모달: 관리자 패스워드 입력 및 정보 수정 */}
       {modalOpen && (
