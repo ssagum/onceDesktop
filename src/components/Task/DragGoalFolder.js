@@ -1,41 +1,89 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useDroppable } from "@dnd-kit/core";
 
-// ★ 폴더 컨테이너: 폴더 느낌의 디자인과 드래그 시 애니메이션 효과 적용 ★
-const FolderContainer = styled.div.attrs((props) => ({
-  // isOver 속성을 HTML로 전달하지 않도록 함
-  "data-is-over": props.isOver ? "true" : "false",
-}))`
+// ★ 폴더 컨테이너: transient props($) 문법을 사용하여 DOM 경고 해결 ★
+const FolderContainer = styled.div`
   width: 240px;
   transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease,
     box-shadow 0.3s ease;
-  transform: ${(props) => (props.isOver ? "scale(1.10)" : "scale(1)")};
+  transform: ${(props) =>
+    props.$isOver
+      ? "scale(1.10)"
+      : props.$isSelected
+      ? "scale(1.05)"
+      : "scale(1)"};
   cursor: pointer;
+  position: relative;
+
+  /* 드래그 오버 시 테두리 효과 추가 */
+  &:after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: ${(props) =>
+      props.$isOver ? "3px dashed #3B82F6" : "0px solid transparent"};
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: ${(props) => (props.$isOver ? "1" : "0")};
+    transition: opacity 0.3s ease;
+  }
 `;
 
-export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
+export default function DragGoalFolder({
+  column,
+  tasks,
+  onClick,
+  isSelected,
+  title,
+}) {
+  // 드래그 중인지 여부를 추적하는 상태 추가
+  const [isDragging, setIsDragging] = useState(false);
+
   // useDroppable 훅을 사용해 드래그 오버 상태를 감지하고, 드롭 시 assignee 정보를 포함합니다.
-  const { setNodeRef, isOver } = useDroppable({
-    id: column.id,
-    data: {
-      type: "container",
-      containerId: column.id,
-      assignee: column.title, // 폴더의 title을 assignee로 사용
-    },
+  const { setNodeRef, isOver, active } = useDroppable({
+    id: title,
   });
 
-  // 클릭 핸들러
+  // active 상태가 변경될 때마다 isDragging 업데이트
+  useEffect(() => {
+    setIsDragging(!!active);
+  }, [active]);
+
+  // 클릭 핸들러 - 드래그 중이 아닐 때만 작동하도록 수정
   const handleClick = () => {
+    // 드래그 중이면 클릭 이벤트 무시
+    if (isDragging) {
+      console.log("드래그 중이므로 클릭 무시");
+      return;
+    }
+
     if (onClick) {
+      console.log("🖱️ 폴더 클릭:", column.id);
       onClick(column.id);
     }
   };
 
   return (
-    <FolderContainer ref={setNodeRef} isOver={isOver} onClick={handleClick}>
+    <FolderContainer
+      ref={setNodeRef}
+      $isOver={isOver}
+      $isSelected={isSelected}
+      onClick={handleClick}
+      data-is-over={isOver ? "true" : "false"}
+      data-is-selected={isSelected ? "true" : "false"}
+      data-is-dragging={isDragging ? "true" : "false"}
+    >
       {/* 폴더 하단: 배경색이 기본적으로 bg-onceHover 클래스 적용 */}
-      <div className="relative inline-block">
+      <div
+        className="relative inline-block w-full h-full"
+        data-droppable="true"
+        data-container-id={column.id}
+        data-folder-type="DragGoalFolder"
+      >
         <svg
           className="w-[198px] h-[33px]"
           viewBox="0 0 198 33"
@@ -44,14 +92,18 @@ export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
           <polygon
             points="0,0 154,0 198,33 0,33"
             className={`fill-white stroke-onceHover stroke-[8] ${
-              isOver ? "fill-blue-50" : ""
-            } ${isSelected ? "fill-blue-50" : ""}`}
+              isOver && !isSelected ? "fill-blue-50" : ""
+            } ${isSelected ? "fill-blue-100" : ""} ${
+              isOver && isSelected ? "fill-blue-200" : ""
+            }`}
           />
           <foreignObject x="0" y="0" width="143" height="33">
             <div
               xmlns="http://www.w3.org/1999/xhtml"
-              className={`flex items-center justify-center w-full h-full text-black border-l-[8px] border-onceHover ${
-                isSelected ? "font-bold" : ""
+              className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
+                isOver && !isSelected ? "border-blue-400" : "border-onceHover"
+              } ${isSelected ? "font-bold border-blue-500" : ""} ${
+                isOver && isSelected ? "border-blue-600" : ""
               }`}
             >
               {column.title}
@@ -74,14 +126,18 @@ export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
         </svg>
         <div
           className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-            isSelected ? "bg-blue-100" : ""
+            isSelected && !isOver ? "bg-blue-100" : ""
+          } ${isOver && !isSelected ? "bg-blue-50" : ""} ${
+            isOver && isSelected ? "bg-blue-200" : ""
           }`}
         >
-          {column.taskIds.length > 0 && (
+          {column.taskIds?.length > 0 && (
             <div
-              className={`w-10 h-10 rounded-full ${
-                isSelected ? "bg-blue-200" : "bg-gray-200"
-              } flex items-center justify-center`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                isSelected && !isOver ? "bg-blue-200" : "bg-gray-200"
+              } ${isOver && !isSelected ? "bg-blue-100" : ""} ${
+                isOver && isSelected ? "bg-blue-300" : ""
+              }`}
             >
               {`+${column.taskIds.length}`}
             </div>

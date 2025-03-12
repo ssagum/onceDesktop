@@ -158,6 +158,12 @@ export default function SideBar() {
               nowURL={nowURL === "/schedule" ? "예약관리" : nowURL}
             />
           </Link>
+          <Link to="/management">
+            <RenderIndex
+              indexValue="관리"
+              nowURL={nowURL === "/management" ? "관리" : nowURL}
+            />
+          </Link>
         </IndexZone>
         <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
           <span className="text-onceGray text-once18">

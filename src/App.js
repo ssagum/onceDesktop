@@ -24,6 +24,7 @@ import { db } from "./firebase";
 import { notification } from "./assets/sound";
 // Toast Provider 추가
 import { ToastProvider } from "./contexts/ToastContext";
+import Management from "./pages/Managemnet";
 // TODO: Add SDKs for Firebase products that you want to use
 
 const App = () => {
@@ -65,7 +66,7 @@ const App = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/task" element={<Task />} />
           <Route path="/schedule" element={<Schedule />} />
-          <Route path="/vacation" element={<Vacation />} />
+          <Route path="/management" element={<Management />} />
         </Routes>
         {/* <ChatBot /> */}
       </div>
