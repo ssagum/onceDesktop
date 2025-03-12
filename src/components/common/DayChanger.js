@@ -1,12 +1,17 @@
 import React from "react";
 
 const DayChanger = ({ currentDate, onPrevDay, onNextDay }) => {
-  // 날짜를 "YYYY.MM.DD" 형식으로 변환하는 함수
+  // 날짜를 "YYYY.MM.DD (요일)" 형식으로 변환하는 함수
   const formatDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
-    return `${year}.${month}.${day}`;
+
+    // 요일 추가
+    const dayOfWeek = ["일", "월", "화", "수", "목", "금", "토"];
+    const dayName = dayOfWeek[date.getDay()];
+
+    return `${year}.${month}.${day} (${dayName})`;
   };
 
   return (
@@ -28,7 +33,9 @@ const DayChanger = ({ currentDate, onPrevDay, onNextDay }) => {
           />
         </svg>
       </div>
-      <div className="px-[20px] font-medium">{formatDate(currentDate)}</div>
+      <div className="px-[20px] font-medium select-none">
+        {formatDate(currentDate)}
+      </div>
       <div
         className="w-[20px] h-[20px] flex justify-center items-center cursor-pointer"
         onClick={onNextDay}

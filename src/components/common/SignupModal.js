@@ -1,72 +1,130 @@
 import React, { useState } from "react";
 import { registerUser } from "../../utils/UserAuth";
 
+// FormField 컴포넌트를 함수 외부로 분리
+const FormField = ({ label, required, children, className = "" }) => (
+  <div className={`flex items-center ${className}`}>
+    <label className="w-24 text-sm font-semibold text-gray-800 shrink-0">
+      {label}:{required && <span className="text-red-500">*</span>}
+    </label>
+    <div className="flex-1">{children}</div>
+  </div>
+);
+
 function SignupModal({ isOpen, onClose }) {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    name: "",
-    idNumberFront: "",
-    idNumberBack: "",
-    phoneFirst: "010",
-    phoneMiddle: "",
-    phoneLast: "",
-    department: "",
-    address: "",
-    bankName: "",
-    accountNumber: "",
-  });
+  // 단일 formData 객체 대신 개별 상태로 관리
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
+  const [idNumberFront, setIdNumberFront] = useState("");
+  const [idNumberBack, setIdNumberBack] = useState("");
+  const [phoneFirst, setPhoneFirst] = useState("010");
+  const [phoneMiddle, setPhoneMiddle] = useState("");
+  const [phoneLast, setPhoneLast] = useState("");
+  const [department, setDepartment] = useState("");
+  const [address, setAddress] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (!isOpen) return null;
-
+  // ItemRegistrationZone 스타일의 핸들러
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+
+    // 각 필드별 상태 업데이트
+    switch (name) {
+      case "email":
+        setEmail(value);
+        break;
+      case "password":
+        setPassword(value);
+        break;
+      case "confirmPassword":
+        setConfirmPassword(value);
+        break;
+      case "name":
+        setName(value);
+        break;
+      case "idNumberFront":
+        setIdNumberFront(value);
+        break;
+      case "idNumberBack":
+        setIdNumberBack(value);
+        break;
+      case "phoneFirst":
+        setPhoneFirst(value);
+        break;
+      case "phoneMiddle":
+        setPhoneMiddle(value);
+        break;
+      case "phoneLast":
+        setPhoneLast(value);
+        break;
+      case "address":
+        setAddress(value);
+        break;
+      case "bankName":
+        setBankName(value);
+        break;
+      case "accountNumber":
+        setAccountNumber(value);
+        break;
+      default:
+        break;
+    }
   };
 
   const handleDepartmentSelect = (dept) => {
-    setFormData({
-      ...formData,
-      department: dept,
-    });
+    setDepartment(dept);
   };
 
   const validateForm = () => {
-    if (!formData.email || !formData.email.includes("@")) {
+    if (!email || !email.includes("@")) {
       setError("유효한 이메일을 입력해주세요");
       return false;
     }
-    if (!formData.password) {
+    if (!password) {
       setError("비밀번호를 입력해주세요");
       return false;
     }
-    if (formData.password !== formData.confirmPassword) {
+    if (password !== confirmPassword) {
       setError("비밀번호가 일치하지 않습니다");
       return false;
     }
-    if (!formData.name) {
+    if (!name) {
       setError("이름을 입력해주세요");
       return false;
     }
-    if (!formData.idNumberFront || !formData.idNumberBack) {
+    if (!idNumberFront || !idNumberBack) {
       setError("주민번호를 입력해주세요");
       return false;
     }
-    if (!formData.phoneMiddle || !formData.phoneLast) {
+    if (!phoneMiddle || !phoneLast) {
       setError("연락처를 입력해주세요");
       return false;
     }
-    if (!formData.department) {
+    if (!department) {
       setError("부서를 선택해주세요");
       return false;
     }
+    if (!address) {
+      setError("주소를 입력해주세요");
+      return false;
+    }
+    if (!bankName || !accountNumber) {
+      setError("급여계좌 정보를 입력해주세요");
+      return false;
+    }
     return true;
+  };
+
+  // 이름과 생년월일로 사용자 ID 생성
+  const generateUserId = () => {
+    // 주민번호 앞자리 6자리는 생년월일(YYMMDD)
+    const birthDate = idNumberFront;
+    return `${name}_${birthDate}`;
   };
 
   const handleSubmit = async (e) => {
@@ -78,24 +136,24 @@ function SignupModal({ isOpen, onClose }) {
     setError("");
 
     try {
+      // 사용자 ID 생성
+      const userId = generateUserId();
+      console.log("생성된 사용자 ID:", userId);
+
       // 회원가입에 필요한 추가 정보 구성
       const additionalData = {
-        idNumber: `${formData.idNumberFront}-${formData.idNumberBack}`,
-        phoneNumber: `${formData.phoneFirst}-${formData.phoneMiddle}-${formData.phoneLast}`,
-        department: formData.department,
-        address: formData.address || "",
+        userId,
+        idNumber: `${idNumberFront}-${idNumberBack}`,
+        phoneNumber: `${phoneFirst}-${phoneMiddle}-${phoneLast}`,
+        department,
+        address: address || "",
         bankInfo: {
-          bankName: formData.bankName || "",
-          accountNumber: formData.accountNumber || "",
+          bankName: bankName || "",
+          accountNumber: accountNumber || "",
         },
       };
 
-      const result = await registerUser(
-        formData.email,
-        formData.password,
-        formData.name,
-        additionalData
-      );
+      const result = await registerUser(email, password, name, additionalData);
 
       if (result.success) {
         alert("회원가입이 완료되었습니다. 로그인해주세요.");
@@ -111,12 +169,8 @@ function SignupModal({ isOpen, onClose }) {
     }
   };
 
-  // 필드 라벨 컴포넌트
-  const FormLabel = ({ label, required }) => (
-    <label className="block text-sm font-semibold text-gray-800">
-      {label}:{required && <span className="text-red-500">*</span>}
-    </label>
-  );
+  // 중요: 모달이 열려있지 않으면 렌더링하지 않음
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
@@ -147,74 +201,59 @@ function SignupModal({ isOpen, onClose }) {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* ID/Email */}
-          <div className="flex flex-col mb-4">
-            <div className="flex items-center mb-2">
-              <FormLabel label="ID/Email" required={true} />
-            </div>
+          <FormField label="ID/Email" required={true}>
             <input
               type="email"
               name="email"
-              value={formData.email}
+              value={email}
               onChange={handleChange}
               placeholder="danielpark@shopthetrip.world"
               className="w-full border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
             />
-          </div>
+          </FormField>
 
           {/* 비밀번호와 재확인을 같은 행에 배치 */}
-          <div className="flex flex-row space-x-4 mb-4">
-            <div className="flex flex-col flex-1">
-              <div className="flex items-center mb-2">
-                <FormLabel label="비밀번호" required={true} />
-              </div>
+          <div className="flex flex-row space-x-4">
+            <FormField label="비밀번호" required={true} className="flex-1">
               <input
                 type="password"
                 name="password"
-                value={formData.password}
+                value={password}
                 onChange={handleChange}
                 placeholder="Password"
                 className="w-full border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
               />
-            </div>
-            <div className="flex flex-col flex-1">
-              <div className="flex items-center mb-2">
-                <FormLabel label="재확인" required={true} />
-              </div>
+            </FormField>
+            <FormField label="재확인" required={true} className="flex-1">
               <input
                 type="password"
                 name="confirmPassword"
-                value={formData.confirmPassword}
+                value={confirmPassword}
                 onChange={handleChange}
                 placeholder="Password"
                 className="w-full border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
               />
-            </div>
+            </FormField>
           </div>
 
           {/* 이름과 주민번호를 같은 행에 배치 */}
-          <div className="flex flex-row space-x-4 mb-4">
-            <div className="flex flex-col">
-              <div className="flex items-center mb-2">
-                <FormLabel label="이름" required={true} />
-              </div>
+          <div className="flex flex-row space-x-4">
+            <FormField label="이름" required={true} className="flex-1">
               <input
                 type="text"
                 name="name"
-                value={formData.name}
+                value={name}
                 onChange={handleChange}
                 placeholder="이름"
                 className="w-full border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
               />
-            </div>
-            <div className="flex flex-col flex-1">
-              <div className="flex items-center mb-2">
-                <FormLabel label="주민번호" required={true} />
-              </div>
+            </FormField>
+            <FormField label="주민번호" required={true} className="flex-1">
               <div className="flex items-center">
                 <input
                   type="text"
                   name="idNumberFront"
-                  value={formData.idNumberFront}
+                  value={idNumberFront}
                   onChange={handleChange}
                   placeholder="123456"
                   maxLength={6}
@@ -224,26 +263,23 @@ function SignupModal({ isOpen, onClose }) {
                 <input
                   type="text"
                   name="idNumberBack"
-                  value={formData.idNumberBack}
+                  value={idNumberBack}
                   onChange={handleChange}
                   placeholder="1234567"
                   maxLength={7}
                   className="w-[120px] border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
                 />
               </div>
-            </div>
+            </FormField>
           </div>
 
           {/* 연락처 */}
-          <div className="flex flex-col mb-4">
-            <div className="flex items-center mb-2">
-              <FormLabel label="연락처" required={true} />
-            </div>
+          <FormField label="연락처" required={true}>
             <div className="flex items-center">
               <input
                 type="text"
                 name="phoneFirst"
-                value={formData.phoneFirst}
+                value={phoneFirst}
                 onChange={handleChange}
                 placeholder="010"
                 maxLength={3}
@@ -253,7 +289,7 @@ function SignupModal({ isOpen, onClose }) {
               <input
                 type="text"
                 name="phoneMiddle"
-                value={formData.phoneMiddle}
+                value={phoneMiddle}
                 onChange={handleChange}
                 placeholder="1234"
                 maxLength={4}
@@ -263,28 +299,32 @@ function SignupModal({ isOpen, onClose }) {
               <input
                 type="text"
                 name="phoneLast"
-                value={formData.phoneLast}
+                value={phoneLast}
                 onChange={handleChange}
                 placeholder="0317"
                 maxLength={4}
                 className="w-[100px] border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
               />
             </div>
-          </div>
+          </FormField>
 
           {/* 부서 */}
-          <div className="flex flex-col mb-4">
-            <div className="flex items-center mb-2">
-              <FormLabel label="부서" required={true} />
-            </div>
+          <FormField label="부서" required={true}>
             <div className="flex space-x-2">
-              {["진료", "물리치료", "원장님", "간호", "방사선"].map((dept) => (
+              {[
+                "원장팀",
+                "간호팀",
+                "물리치료팀",
+                "원무팀",
+                "영상의학팀",
+                "경영지원팀",
+              ].map((dept) => (
                 <button
                   type="button"
                   key={dept}
                   onClick={() => handleDepartmentSelect(dept)}
                   className={`px-4 py-2 border rounded-md ${
-                    formData.department === dept
+                    department === dept
                       ? "bg-onceBlue text-white border-onceBlue"
                       : "bg-white text-gray-600 border-gray-300"
                   }`}
@@ -293,33 +333,27 @@ function SignupModal({ isOpen, onClose }) {
                 </button>
               ))}
             </div>
-          </div>
+          </FormField>
 
           {/* 주소 */}
-          <div className="flex flex-col mb-4">
-            <div className="flex items-center mb-2">
-              <FormLabel label="주소" required={false} />
-            </div>
+          <FormField label="주소" required={true}>
             <input
               type="text"
               name="address"
-              value={formData.address}
+              value={address}
               onChange={handleChange}
-              placeholder="경기도 오산시 궐동"
+              placeholder="경기 오산시 죽담안로 38-15 금영프라자 3, 4층"
               className="w-full border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
             />
-          </div>
+          </FormField>
 
           {/* 급여계좌 */}
-          <div className="flex flex-col mb-4">
-            <div className="flex items-center mb-2">
-              <FormLabel label="급여계좌" required={false} />
-            </div>
+          <FormField label="급여계좌" required={true}>
             <div className="flex space-x-2 w-full">
               <input
                 type="text"
                 name="bankName"
-                value={formData.bankName}
+                value={bankName}
                 onChange={handleChange}
                 placeholder="은행"
                 className="w-[150px] border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
@@ -327,13 +361,13 @@ function SignupModal({ isOpen, onClose }) {
               <input
                 type="text"
                 name="accountNumber"
-                value={formData.accountNumber}
+                value={accountNumber}
                 onChange={handleChange}
                 placeholder="계좌번호"
                 className="flex-1 border border-gray-300 rounded-md h-[40px] px-4 bg-[#F9F9F9]"
               />
             </div>
-          </div>
+          </FormField>
 
           {/* 에러 메시지 */}
           {error && (

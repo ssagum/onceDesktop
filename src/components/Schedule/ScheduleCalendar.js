@@ -66,7 +66,7 @@ const ScheduleCalendar = ({
   };
 
   const calendarDays = generateCalendarData();
-  const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth() + 1;
 

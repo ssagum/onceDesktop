@@ -164,6 +164,16 @@ const hospitalStaff = [
     email: "sangbin.park@hospital.com",
     phone: "010-1414-1414",
   },
+  {
+    id: "지창윤",
+    name: "지창윤",
+    role: "팀원",
+    hospitalOwner: false,
+    departmentLeader: false,
+    department: "경영지원팀",
+    email: "changyun.ji@hospital.com",
+    phone: "010-5141-7233",
+  },
 ];
 
 export default hospitalStaff;

@@ -7,11 +7,11 @@ const PriorityToggle = ({ text, isOn, onClick }) => {
 
     switch (text) {
       case "상":
-        return "bg-[#FF5C5C] text-white"; // onceRed
+        return "bg-onceBlue text-white"; // onceRed
       case "중":
-        return "bg-[#FBAB3A] text-white"; // onceYellow
+        return "bg-onceBlue text-white"; // onceYellow
       case "하":
-        return "bg-[#4CAF50] text-white"; // onceGreen
+        return "bg-onceBlue text-white"; // onceGreen
       default:
         return "bg-[#FBAB3A] text-white";
     }

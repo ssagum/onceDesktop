@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { loginUser } from "../../utils/UserAuth";
+import { useUserLevel } from "../../utils/UserLevelContext";
 import SignupModal from "./SignupModal";
 
 function MiniLoginForm({ onLoginSuccess }) {
+  const { login, logout, isLoggedIn, currentUser } = useUserLevel();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -20,7 +22,7 @@ function MiniLoginForm({ onLoginSuccess }) {
     setError("");
 
     try {
-      const result = await loginUser(email, password);
+      const result = await login(email, password, rememberMe);
 
       if (result.success) {
         setEmail("");
@@ -37,6 +39,12 @@ function MiniLoginForm({ onLoginSuccess }) {
     }
   };
 
+  // 로그아웃 처리
+  const handleLogout = () => {
+    logout();
+    if (onLoginSuccess) onLoginSuccess(); // 로그아웃 후 모달 닫기 등의 처리
+  };
+
   // 회원가입 모달 열기
   const handleSignupClick = () => {
     setShowSignupModal(true);
@@ -46,6 +54,23 @@ function MiniLoginForm({ onLoginSuccess }) {
   const closeSignupModal = () => {
     setShowSignupModal(false);
   };
+
+  // 이미 로그인되어 있는 경우 로그아웃 버튼만 보여줌
+  if (isLoggedIn && currentUser) {
+    return (
+      <div className="w-full flex flex-col items-center px-2 py-3">
+        <div className="text-center mb-3">
+          <p className="text-sm font-medium">{currentUser.name}님 로그인됨</p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded transition-colors"
+        >
+          로그아웃
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -66,6 +91,21 @@ function MiniLoginForm({ onLoginSuccess }) {
               placeholder="P/W"
               className="w-full border rounded p-2 text-center bg-gray-50"
             />
+
+            {/* 자동 로그인 체크박스 */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="rememberMe" className="text-sm text-gray-600">
+                자동 로그인
+              </label>
+            </div>
+
             {error && (
               <p className="text-red-500 text-xs text-center">{error}</p>
             )}

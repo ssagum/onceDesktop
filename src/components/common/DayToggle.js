@@ -8,7 +8,7 @@ const DayToggle = ({ text, isOn, onClick, disabled }) => {
           disabled
             ? "bg-gray-200 text-gray-500"
             : isOn
-            ? "bg-[#FBAB3A] text-white"
+            ? "bg-onceBlue text-white"
             : "bg-gray-100 text-gray-600"
         } 
         ${!disabled && "hover:opacity-80"}`}

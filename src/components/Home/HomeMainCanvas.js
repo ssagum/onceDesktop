@@ -118,69 +118,29 @@ export default function HomeMainCanvas() {
   const [isMiniMode, setIsMiniMode] = useState(false);
 
   useEffect(() => {
-    if (allUserTasks.length > 0) {
-      filterUserTasks(allUserTasks);
-    }
-  }, [currentDate]);
+    const fetchTasks = async () => {
+      try {
+        const userTasksResult = await getUserTasks({
+          department: userLevelData?.department,
+          date: currentDate,
+          ignoreSchedule: false,
+        });
 
-  useEffect(() => {
-    if (!userLevelData) return;
-
-    const departmentQuery = query(
-      collection(db, "tasks"),
-      where("assignee", "==", userLevelData.department)
-    );
-
-    const roleQuery = query(
-      collection(db, "tasks"),
-      where("assignee", "==", userLevelData.role)
-    );
-
-    const departmentUnsubscribe = onSnapshot(
-      departmentQuery,
-      (snapshot) => {
-        const departmentTasks = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        fetchRoleTasks(departmentTasks);
-      },
-      (error) => {
-        console.error("Error fetching department tasks:", error);
+        console.log(
+          `사용자 업무 조회 결과: ${userTasksResult.length}개`,
+          userTasksResult
+        );
+        setAllUserTasks(userTasksResult);
+        setFilteredTasks(userTasksResult);
+      } catch (error) {
+        console.error("사용자 업무 가져오기 오류:", error);
       }
-    );
-
-    const fetchRoleTasks = (departmentTasks) => {
-      onSnapshot(
-        roleQuery,
-        (snapshot) => {
-          const roleTasks = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-
-          const allTasks = [...departmentTasks];
-          roleTasks.forEach((task) => {
-            if (!allTasks.some((t) => t.id === task.id)) {
-              allTasks.push(task);
-            }
-          });
-
-          setAllUserTasks(allTasks);
-
-          filterUserTasks(allTasks);
-        },
-        (error) => {
-          console.error("Error fetching role tasks:", error);
-        }
-      );
     };
 
-    return () => {
-      departmentUnsubscribe();
-    };
-  }, [userLevelData]);
+    if (userLevelData?.department) {
+      fetchTasks();
+    }
+  }, [userLevelData?.department, currentDate]);
 
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
@@ -199,7 +159,7 @@ export default function HomeMainCanvas() {
 
     console.log("현재 선택된 날짜:", currentDateOnly);
 
-    const filteredTasks = tasks.filter((task) => {
+    let filteredByDate = tasks.filter((task) => {
       let taskStartDate, taskEndDate;
 
       try {
@@ -245,10 +205,110 @@ export default function HomeMainCanvas() {
     });
 
     console.log(
-      `총 ${tasks.length}개 업무 중 ${filteredTasks.length}개가 날짜 필터 통과`
+      `총 ${tasks.length}개 업무 중 ${filteredByDate.length}개가 날짜 필터 통과`
     );
 
-    filteredTasks.sort((a, b) => {
+    const dayOfWeek = currentDateOnly.getDay();
+    const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+    const todayName = dayNames[dayOfWeek];
+
+    const finalFiltered = filteredByDate.filter((task) => {
+      // 디버깅: 요일/주기 필터링 상세 로그
+      console.log(`업무 [${task.title}] 주기 필터링 체크:`, {
+        cycle: task.cycle,
+        days: task.days,
+        todayName,
+        포함여부: task.days?.includes(todayName),
+      });
+
+      // 매일 실행되는 업무
+      if (task.cycle === "daily" || task.cycle === "매일") {
+        console.log(`업무 [${task.title}]: 매일 수행 업무로 통과`);
+        return true;
+      }
+
+      // 주간 또는 격주 업무 - 요일만 체크하고 격주 패턴은 일단 무시
+      // 실제로는 격주 패턴 계산이 필요하지만, 우선 요일만으로 필터링
+      if (
+        (task.cycle === "weekly" ||
+          task.cycle === "매주" ||
+          task.cycle === "biweekly" ||
+          task.cycle === "격주") &&
+        task.days &&
+        Array.isArray(task.days)
+      ) {
+        const dayMatches = task.days.includes(todayName);
+        console.log(
+          `업무 [${task.title}]: ${task.cycle} 업무, 요일 일치: ${dayMatches}`
+        );
+
+        // 주간 업무는 요일만 확인
+        if (task.cycle === "weekly" || task.cycle === "매주") {
+          return dayMatches;
+        }
+
+        // 격주 업무는 주차 계산 필요
+        if (
+          (task.cycle === "biweekly" || task.cycle === "격주") &&
+          dayMatches
+        ) {
+          try {
+            // 시작일 가져오기
+            let startDate;
+            if (task.startDate instanceof Date) {
+              startDate = new Date(task.startDate.getTime());
+            } else if (task.startDate?.seconds) {
+              startDate = new Date(task.startDate.seconds * 1000);
+            } else {
+              startDate = new Date(task.startDate);
+            }
+
+            // 날짜를 00:00:00으로 설정하여 계산 정확도 높임
+            startDate.setHours(0, 0, 0, 0);
+            const currentDateCopy = new Date(currentDateOnly.getTime());
+            currentDateCopy.setHours(0, 0, 0, 0);
+
+            // 두 날짜 사이의 일수 계산
+            const timeDiff = Math.abs(
+              currentDateCopy.getTime() - startDate.getTime()
+            );
+            const diffDays = Math.floor(timeDiff / (1000 * 3600 * 24));
+
+            // 주차 계산 (0부터 시작)
+            const weeksFromStart = Math.floor(diffDays / 7);
+
+            // 짝수 주차(0, 2, 4...)인지 홀수 주차(1, 3, 5...)인지 확인
+            const isEvenWeek = weeksFromStart % 2 === 0;
+            console.log(
+              `업무 [${task.title}]: 격주 업무, 시작일로부터 ${diffDays}일, ${weeksFromStart}주차, 표시여부: ${isEvenWeek}`
+            );
+
+            // 0, 2, 4... 주차에 업무 표시 (첫 주 포함, 다음 주 제외, 다다음 주 포함...)
+            return isEvenWeek;
+          } catch (error) {
+            console.error(`업무 [${task.title}]: 격주 계산 중 오류:`, error);
+            // 오류 발생 시 안전하게 처리
+            return dayMatches;
+          }
+        }
+
+        return dayMatches;
+      }
+
+      // 월간 업무
+      if (task.cycle === "monthly" || task.cycle === "매월") {
+        console.log(`업무 [${task.title}]: 월간 업무로 통과`);
+        return true;
+      }
+
+      // 기타 주기 유형
+      console.log(`업무 [${task.title}]: 기타 업무 유형으로 통과`);
+      return true;
+    });
+
+    console.log(`요일/주기 필터링 후 최종 업무: ${finalFiltered.length}개`);
+
+    finalFiltered.sort((a, b) => {
       const dateA = a.startDate?.seconds
         ? new Date(a.startDate.seconds * 1000)
         : new Date(a.startDate);
@@ -258,7 +318,7 @@ export default function HomeMainCanvas() {
       return dateA - dateB;
     });
 
-    setFilteredTasks(filteredTasks);
+    setFilteredTasks(finalFiltered);
   };
 
   const handlePrevDay = () => {
@@ -287,23 +347,16 @@ export default function HomeMainCanvas() {
     try {
       await addTask(newTask);
 
-      if (userLevelData) {
-        const departmentTasks = await getTasksByAssignee(
-          userLevelData.department
-        );
-        const roleTasks = await getTasksByAssignee(userLevelData.role);
+      const userTasksResult = await getUserTasks({
+        department: userLevelData?.department,
+        date: currentDate,
+        ignoreSchedule: false,
+      });
 
-        const allTasks = [...departmentTasks];
-        roleTasks.forEach((task) => {
-          if (!allTasks.some((t) => t.id === task.id)) {
-            allTasks.push(task);
-          }
-        });
-
-        filterUserTasks(allTasks);
-      }
+      setAllUserTasks(userTasksResult);
+      setFilteredTasks(userTasksResult);
     } catch (error) {
-      console.error("Error adding task:", error);
+      console.error("업무 추가 중 오류:", error);
     }
   };
 
@@ -386,28 +439,20 @@ export default function HomeMainCanvas() {
 
   const handleTaskEdit = async (editedTask) => {
     try {
-      await updateTask(editedTask.id, editedTask);
+      await updateTask(editedTask);
 
-      if (userLevelData) {
-        const departmentTasks = await getTasksByAssignee(
-          userLevelData.department
-        );
-        const roleTasks = await getTasksByAssignee(userLevelData.role);
+      const userTasksResult = await getUserTasks({
+        department: userLevelData?.department,
+        date: currentDate,
+        ignoreSchedule: false,
+      });
 
-        const allTasks = [...departmentTasks];
-        roleTasks.forEach((task) => {
-          if (!allTasks.some((t) => t.id === task.id)) {
-            allTasks.push(task);
-          }
-        });
-
-        filterUserTasks(allTasks);
-      }
-
+      setAllUserTasks(userTasksResult);
+      setFilteredTasks(userTasksResult);
       setShowTaskAdd(false);
       setSelectedTask(null);
     } catch (error) {
-      console.error("Error editing task:", error);
+      console.error("업무 수정 중 오류:", error);
     }
   };
 
@@ -415,26 +460,18 @@ export default function HomeMainCanvas() {
     try {
       await deleteTask(taskId);
 
-      if (userLevelData) {
-        const departmentTasks = await getTasksByAssignee(
-          userLevelData.department
-        );
-        const roleTasks = await getTasksByAssignee(userLevelData.role);
+      const userTasksResult = await getUserTasks({
+        department: userLevelData?.department,
+        date: currentDate,
+        ignoreSchedule: false,
+      });
 
-        const allTasks = [...departmentTasks];
-        roleTasks.forEach((task) => {
-          if (!allTasks.some((t) => t.id === task.id)) {
-            allTasks.push(task);
-          }
-        });
-
-        filterUserTasks(allTasks);
-      }
-
+      setAllUserTasks(userTasksResult);
+      setFilteredTasks(userTasksResult);
       setShowTaskAdd(false);
       setSelectedTask(null);
     } catch (error) {
-      console.error("Error deleting task:", error);
+      console.error("업무 삭제 중 오류:", error);
     }
   };
 
@@ -469,20 +506,6 @@ export default function HomeMainCanvas() {
     };
 
     checkFirestoreTasks();
-  }, []);
-
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        console.log("HomeMainCanvas: 업무 목록을 가져오는 중...");
-        const userTasksResult = await getUserTasks();
-        setAllUserTasks(userTasksResult);
-      } catch (error) {
-        console.error("Error fetching tasks:", error);
-      }
-    };
-
-    fetchTasks();
   }, []);
 
   const toggleMiniMode = () => {

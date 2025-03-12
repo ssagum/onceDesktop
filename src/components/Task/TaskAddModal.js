@@ -105,8 +105,24 @@ function TaskAddModal({
     if (task) {
       try {
         // task가 있으면 task 데이터로 초기화
-        setSelectedDays(task.days || []);
+        // 요일 배열 처리 로직 개선
+        const daysList = task.days || [];
+        console.log("요일 데이터 확인:", {
+          원본: task.days,
+          처리후: daysList,
+          type: Array.isArray(daysList) ? "배열" : typeof daysList,
+        });
+
+        // 배열이 아니거나 비어있는 경우 빈 배열로 초기화
+        setSelectedDays(Array.isArray(daysList) ? daysList : []);
         setSelectedCycle(task.cycle || "매일");
+        // 나머지 필드 초기화 코드...
+
+        // 추가: 주기가 '매일'인 경우 자동으로 모든 요일 선택
+        if (task.cycle === "매일" || task.cycle === "daily") {
+          setSelectedDays(["월", "화", "수", "목", "금", "토", "일"]);
+        }
+
         setTitle(task.title || "");
         setWriter(task.writer || "");
         setAssignee(task.assignee || "");
@@ -458,6 +474,22 @@ function TaskAddModal({
       return;
     }
 
+    // 작성자 필드 검증
+    if (!writer) {
+      showToast("작성자를 선택해주세요.", "warning");
+      return;
+    }
+
+    // 주기가 매일이 아닌 경우 요일 선택 검증
+    if (
+      (category === "반복성" || category === "이벤트성") &&
+      selectedCycle !== "매일" &&
+      (!selectedDays || selectedDays.length === 0)
+    ) {
+      showToast("요일을 하나 이상 선택해주세요.", "warning");
+      return;
+    }
+
     // 새 업무 객체 생성
     const newTask = {
       id: mode === "edit" && task ? task.id : Date.now().toString(), // 편집 시 기존 ID 유지, 새 업무는 새 ID 생성
@@ -739,28 +771,37 @@ function TaskAddModal({
                     </div>
                   </InfoRow>
                 )}
-                {category === "반복성" && selectedCycle !== "매일" && (
-                  <InfoRow className="flex flex-row mb-[20px]">
-                    <FormLabel
-                      label="요일"
-                      required={selectedCycle !== "매일"}
-                      className="mb-2"
-                    />
-                    <div className="flex flex-row gap-x-[10px] w-full">
-                      {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
-                        <DayToggle
-                          key={day}
-                          text={day}
-                          isOn={selectedDays.includes(day)}
-                          onClick={() => toggleDay(day)}
-                          disabled={
-                            !isFieldEditable || selectedCycle === "매일"
-                          }
-                        />
-                      ))}
-                    </div>
-                  </InfoRow>
-                )}
+                {category === "반복성" &&
+                  (selectedCycle !== "매일" || mode === "view") && (
+                    <InfoRow className="flex flex-row mb-[20px]">
+                      <FormLabel
+                        label="요일"
+                        required={selectedCycle !== "매일" && isFieldEditable}
+                        className="mb-2"
+                      />
+                      {/* 매일 주기이면서 view 모드일 때 요일 정보 텍스트로 표시 */}
+                      {selectedCycle === "매일" && mode === "view" ? (
+                        <div className="flex items-center text-gray-700">
+                          모든 요일 (매일)
+                        </div>
+                      ) : (
+                        <div className="flex flex-row gap-x-[10px] w-full">
+                          {["월", "화", "수", "목", "금", "토", "일"].map(
+                            (day) => (
+                              <DayToggle
+                                key={day}
+                                text={day}
+                                isOn={selectedDays.includes(day)}
+                                onClick={() => toggleDay(day)}
+                              />
+                            )
+                          )}
+                        </div>
+                      )}
+                    </InfoRow>
+                  )}
+
+                {/* 1회성 업무는 요일 설정이 필요 없다는 메시지 표시 */}
                 {category === "1회성" && (
                   <InfoRow className="flex flex-row mb-[20px]">
                     <FormLabel label="요일" required={false} className="mb-2" />
@@ -769,26 +810,41 @@ function TaskAddModal({
                     </div>
                   </InfoRow>
                 )}
-                {category === "이벤트성" && selectedCycle !== "매일" && (
-                  <InfoRow className="flex flex-row mb-[20px]">
-                    <FormLabel label="요일" required={false} className="mb-2" />
-                    <div className="flex flex-row gap-x-[10px] w-full">
-                      {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
-                        <DayToggle
-                          key={day}
-                          text={day}
-                          isOn={selectedDays.includes(day)}
-                          onClick={() => toggleDay(day)}
-                          disabled={
-                            !isFieldEditable || selectedCycle === "매일"
-                          }
-                        />
-                      ))}
-                    </div>
-                  </InfoRow>
-                )}
+
+                {category === "이벤트성" &&
+                  (selectedCycle !== "매일" || mode === "view") && (
+                    <InfoRow className="flex flex-row mb-[20px]">
+                      <FormLabel
+                        label="요일"
+                        required={selectedCycle !== "매일" && isFieldEditable}
+                        className="mb-2"
+                      />
+                      {/* 매일 주기이면서 view 모드일 때 요일 정보 텍스트로 표시 */}
+                      {selectedCycle === "매일" && mode === "view" ? (
+                        <div className="flex items-center text-gray-700">
+                          모든 요일 (매일)
+                        </div>
+                      ) : (
+                        <div className="flex flex-row gap-x-[10px] w-full">
+                          {["월", "화", "수", "목", "금", "토", "일"].map(
+                            (day) => (
+                              <DayToggle
+                                key={day}
+                                text={day}
+                                isOn={selectedDays.includes(day)}
+                                onClick={() => toggleDay(day)}
+                              />
+                            )
+                          )}
+                        </div>
+                      )}
+                    </InfoRow>
+                  )}
+
+                {/* 매일 주기일 때 요일 설정 불필요 메시지 (편집 모드에서만) */}
                 {(category === "이벤트성" || category === "반복성") &&
-                  selectedCycle === "매일" && (
+                  selectedCycle === "매일" &&
+                  mode !== "view" && (
                     <InfoRow className="flex flex-row mb-[20px]">
                       <FormLabel
                         label="요일"

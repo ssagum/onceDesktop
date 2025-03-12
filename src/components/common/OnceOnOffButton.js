@@ -16,7 +16,7 @@ const OnceOnOffButton = ({
           : "bg-white text-onceBlue border-onceBlue"
       } border-2 w-full rounded-md h-[40px] flex justify-center items-center ${
         disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-      } ${className}`}
+      } select-none ${className}`}
     >
       {text}
     </div>

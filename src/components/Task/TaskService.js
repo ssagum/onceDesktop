@@ -15,7 +15,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { format, parse } from "date-fns";
-import { convertToFirestoreDate } from "../../utils/dateUtils";
+import { convertToFirestoreDate, formatSafeDate } from "../../utils/dateUtils";
 
 // Task 컬렉션 레퍼런스
 const tasksCollectionRef = () => collection(db, "tasks");
@@ -758,16 +758,140 @@ export const debugShowAllTasks = async () => {
 
 /**
  * 사용자(부서/직급)에 할당된 업무 목록을 가져옵니다.
+ * 사용자의 부서와 일치하는 업무만 필터링하고,
+ * 요일(days)과 주기(cycle)를 고려하여 오늘 수행해야 하는 업무만 반환합니다.
+ *
+ * @param {Object} options - 필터링 옵션
+ * @param {string} options.department - 사용자의 부서
+ * @param {Date} options.date - 기준 날짜 (기본값: 오늘)
+ * @param {boolean} options.ignoreSchedule - true인 경우 요일과 주기를 무시하고 모든 업무 반환
+ * @returns {Promise<Array>} 필터링된 업무 목록
  */
-export const getUserTasks = async () => {
+export const getUserTasks = async (options = {}) => {
   try {
-    // 일단 모든 업무를 가져옵니다
+    // 기본 옵션 설정
+    const { department, date = new Date(), ignoreSchedule = false } = options;
+
+    // 모든 업무를 가져옵니다
     const allTasks = await getAllTasks();
     console.log(`총 ${allTasks.length}개의 업무가 있습니다.`);
 
-    // 필요시 여기서 사용자 정보에 따라 필터링할 수 있습니다
-    // 현재는 모든 업무를 반환합니다
-    return allTasks;
+    // 필터링할 요일 확인 (0: 일, 1: 월, 2: 화, 3: 수, 4: 목, 5: 금, 6: 토)
+    const dayOfWeek = date.getDay();
+    const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+    const todayName = dayNames[dayOfWeek];
+
+    // 오늘 날짜의 일자 (1-31)
+    const dayOfMonth = date.getDate();
+
+    // 필터링 함수
+    const filterTasks = (task) => {
+      // 1. 부서 필터링 (부서가 제공된 경우)
+      if (department) {
+        // 부서 필드의 불일치 문제 해결: task.department 또는 task.assignee 둘 중 하나라도 일치하면 통과
+        const isDepartmentMatch =
+          task.department === department || task.assignee === department;
+        if (!isDepartmentMatch) {
+          console.log(
+            `업무 [${
+              task.title || task.id
+            }] 부서 불일치: 요청=${department}, 업무 부서=${
+              task.department
+            }, 담당자=${task.assignee}`
+          );
+          return false;
+        }
+      }
+
+      // 스케줄 무시 옵션이 활성화된 경우 부서만 체크하고 반환
+      if (ignoreSchedule) {
+        return true;
+      }
+
+      // 2. 요일 및 주기 필터링
+
+      // 2.1 매일 실행되는 업무 (한글/영문 모두 처리)
+      if (task.cycle === "daily" || task.cycle === "매일") {
+        return true;
+      }
+
+      // 2.2 특정 요일에 실행되는 업무 (한글/영문 모두 처리)
+      if (
+        (task.cycle === "weekly" ||
+          task.cycle === "매주" ||
+          task.cycle === "biweekly" ||
+          task.cycle === "격주") &&
+        task.days &&
+        Array.isArray(task.days)
+      ) {
+        // 요일이 일치하는지 확인
+        const dayMatches = task.days.includes(todayName);
+
+        // 요일이 일치하지 않으면 바로 false 반환
+        if (!dayMatches) {
+          return false;
+        }
+
+        // 주간 업무는 요일만 확인
+        if (task.cycle === "weekly" || task.cycle === "매주") {
+          return true;
+        }
+
+        // 격주 업무는 주차 계산 필요
+        if (task.cycle === "biweekly" || task.cycle === "격주") {
+          try {
+            // 시작일 가져오기
+            let startDate;
+            if (task.startDate instanceof Date) {
+              startDate = new Date(task.startDate.getTime());
+            } else if (task.startDate?.seconds) {
+              startDate = new Date(task.startDate.seconds * 1000);
+            } else {
+              startDate = new Date(task.startDate);
+            }
+
+            // 두 날짜 사이의 일수 계산
+            const timeDiff = Math.abs(date.getTime() - startDate.getTime());
+            const diffDays = Math.floor(timeDiff / (1000 * 3600 * 24));
+
+            // 주차 계산 (0부터 시작)
+            const weeksFromStart = Math.floor(diffDays / 7);
+
+            // 짝수 주차(0, 2, 4...)인지 홀수 주차(1, 3, 5...)인지 확인
+            // 0, 2, 4... 주차에 업무 표시 (첫 주 포함, 다음 주 제외, 다다음 주 포함...)
+            return weeksFromStart % 2 === 0;
+          } catch (error) {
+            console.error("격주 계산 중 오류:", error);
+            // 오류 발생 시 안전하게 처리
+            return true;
+          }
+        }
+
+        return dayMatches;
+      }
+
+      // 2.3 특정 날짜에 실행되는 업무 (매월 X일) (한글/영문 모두 처리)
+      if (
+        (task.cycle === "monthly" || task.cycle === "매월") &&
+        task.dayOfMonth
+      ) {
+        return dayOfMonth === parseInt(task.dayOfMonth);
+      }
+
+      // 2.4 cycle 값이 없거나 'none'/'1회성'인 경우, 항상 표시
+      if (!task.cycle || task.cycle === "none" || task.cycle === "1회성") {
+        return true;
+      }
+
+      // 2.5 기타 주기 유형은 기본적으로 표시
+      return true;
+    };
+
+    // 필터링된 업무 반환
+    const filteredTasks = allTasks.filter(filterTasks);
+    console.log(`필터링된 업무: ${filteredTasks.length}개`);
+
+    return filteredTasks;
   } catch (error) {
     console.error("사용자 업무 가져오기 오류:", error);
     return [];
@@ -867,4 +991,9 @@ export const getTaskCompleters = async (taskId, date) => {
     console.error("완료자 조회 중 오류:", error);
     return [];
   }
+};
+
+// 날짜 형식화 유틸리티 함수
+const formatDateForTask = (date) => {
+  return formatSafeDate(date, "yyyy-MM-dd");
 };

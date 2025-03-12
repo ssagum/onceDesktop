@@ -42,7 +42,7 @@ import { db } from "../../firebase";
 import { collection, query, onSnapshot, where } from "firebase/firestore";
 import JcyTable from "../common/JcyTable";
 import { useToast } from "../../contexts/ToastContext"; // Toast 메시지 사용을 위한 훅 추가
-import DateViewModal from "./DateViewModal";
+import DateViewModal from "./DateViewModal"; // 외부 DateViewModal 컴포넌트 import
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -325,6 +325,7 @@ export function ToDoDragComponent({
   tasks,
   onViewHistory,
   onTaskClick,
+  selectedFolderId,
 }) {
   const totalSlots = 9; // 고정 셀 개수 (3×3)
 
@@ -374,11 +375,13 @@ export function ToDoDragComponent({
 
   // 날짜별 보기 모달 열기
   const handleOpenDateModal = () => {
+    console.log("날짜별 보기 모달 열기");
     setShowDateModal(true);
   };
 
   // 날짜별 보기 모달 닫기
   const handleCloseDateModal = () => {
+    console.log("날짜별 보기 모달 닫기");
     setShowDateModal(false);
   };
 
@@ -540,15 +543,14 @@ export function ToDoDragComponent({
         </div>
       </div>
 
-      {/* 날짜별 보기 모달 */}
-      {showDateModal && (
-        <DateViewModal
-          isVisible={showDateModal}
-          onClose={handleCloseDateModal}
-          column={column}
-          tasks={tasks}
-        />
-      )}
+      {/* 날짜별 보기 모달 - isVisible 속성 직접 전달 */}
+      <DateViewModal
+        isVisible={showDateModal}
+        onClose={handleCloseDateModal}
+        column={column}
+        tasks={tasks}
+        selectedFolderId={selectedFolderId}
+      />
     </div>
   );
 }
@@ -1541,7 +1543,7 @@ function TaskMainCanvas() {
   };
 
   return (
-    <div className="w-full flex flex-col h-full bg-white min-w-[1100px] min-h-[900px] rounded-xl px-[40px] py-[30px]">
+    <div className="w-full flex flex-col h-full bg-white min-h-[900px] rounded-xl px-[40px] py-[30px]">
       <TitleZone className="w-full mb-[34px] flex flex-row justify-between items-center">
         <div className="flex items-center">
           <span className="text-[34px] font-semibold">업무분장</span>
@@ -1603,6 +1605,7 @@ function TaskMainCanvas() {
                   tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
                   onViewHistory={handleViewTaskHistory}
                   onTaskClick={handleTaskClick}
+                  selectedFolderId={selectedFolderId}
                 />
               );
             })()}
@@ -1730,12 +1733,12 @@ function TaskMainCanvas() {
           </>
         </DndContext>
       ) : (
-        /* 게시판 모드 컴포넌트 */
+        /* 게시판 모드 컴포넌트 - 모든 tasks를 전달하도록 수정 */
         <TaskBoardView
-          tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
+          tasks={tasks} // 필터링된 목록이 아닌 전체 tasks를 전달
           onViewHistory={handleViewTaskHistory}
           onTaskClick={handleTaskClick}
-          selectedFolderId={selectedFolderId} // selectedFolderId를 전달
+          selectedFolderId={selectedFolderId}
         />
       )}
 

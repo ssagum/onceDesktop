@@ -57,7 +57,7 @@ export default function ToDo({
             />
           ))
         ) : (
-          <div className="text-center text-gray-500 py-8">
+          <div className="text-center text-gray-500 py-8 select-none">
             표시할 업무가 없습니다.
           </div>
         )}
@@ -379,7 +379,7 @@ function SingleTodoItem({
       <div
         className={`h-[66px] flex flex-row w-full items-center bg-onceBackground mb-[4px] pr-[10px] ${
           isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
-        }`}
+        } select-none`}
         onClick={isDraggable ? undefined : handleClick}
       >
         <ColorZone
@@ -390,7 +390,7 @@ function SingleTodoItem({
 
         <TextZone className="flex-1 px-[20px] flex flex-col justify-center">
           <span
-            className={`font-medium ${
+            className={`font-medium truncate ${
               isCompletedForCurrentDate() ? "line-through text-gray-500" : ""
             }`}
           >

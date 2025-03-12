@@ -63,7 +63,9 @@ const RenderDays = ({ standardWidth }) => {
         }}
         key={i}
       >
-        <p className="text-[12px]">{date[i]}</p>
+        <p className={`text-[12px] ${i === 0 ? "text-red-500" : ""}`}>
+          {date[i]}
+        </p>
       </div>
     );
   }
@@ -102,6 +104,7 @@ const RenderCells = ({
     for (let i = 0; i < 7; i++) {
       formattedDate = format(day, "d");
       const cloneDay = new Date(day);
+      const isSunday = i === 0;
 
       // 반복성 업무는 시작일부터 무기한으로 표시
       const isRepeatingTask =
@@ -157,7 +160,9 @@ const RenderCells = ({
                 borderRadius: "100%",
               }}
             >
-              <p>{formattedDate}</p>
+              <p className={isSunday && !isInRange ? "text-red-500" : ""}>
+                {formattedDate}
+              </p>
             </div>
           </div>
         </section>
