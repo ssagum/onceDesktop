@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { registerUser } from "../../utils/UserAuth";
+import { format } from "date-fns";
 
 // FormField 컴포넌트를 함수 외부로 분리
 const FormField = ({ label, required, children, className = "" }) => (
@@ -26,8 +27,77 @@ function SignupModal({ isOpen, onClose }) {
   const [address, setAddress] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [hireDate, setHireDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  // 필수 필드가 모두 입력되었는지 확인하는 상태 추가
+  const [isFormValid, setIsFormValid] = useState(false);
+
+  // 모든 입력 필드 초기화 함수
+  const resetForm = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setName("");
+    setIdNumberFront("");
+    setIdNumberBack("");
+    setPhoneFirst("010");
+    setPhoneMiddle("");
+    setPhoneLast("");
+    setDepartment("");
+    setAddress("");
+    setBankName("");
+    setAccountNumber("");
+    setHireDate(format(new Date(), "yyyy-MM-dd"));
+    setIsFormValid(false);
+    setError("");
+  };
+
+  // 모달 닫기 핸들러
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  // 필수 필드 검증 함수
+  const checkFormValidity = () => {
+    const isValid =
+      email &&
+      email.includes("@") &&
+      password &&
+      password === confirmPassword &&
+      name &&
+      idNumberFront &&
+      idNumberBack &&
+      phoneMiddle &&
+      phoneLast &&
+      department &&
+      address &&
+      bankName &&
+      accountNumber;
+
+    setIsFormValid(isValid);
+    return isValid;
+  };
+
+  // 각 입력 필드가 변경될 때마다 폼 유효성 검사
+  useEffect(() => {
+    checkFormValidity();
+  }, [
+    email,
+    password,
+    confirmPassword,
+    name,
+    idNumberFront,
+    idNumberBack,
+    phoneMiddle,
+    phoneLast,
+    department,
+    address,
+    bankName,
+    accountNumber,
+    hireDate,
+  ]);
 
   // ItemRegistrationZone 스타일의 핸들러
   const handleChange = (e) => {
@@ -71,6 +141,9 @@ function SignupModal({ isOpen, onClose }) {
       case "accountNumber":
         setAccountNumber(value);
         break;
+      case "hireDate":
+        setHireDate(value);
+        break;
       default:
         break;
     }
@@ -78,46 +151,34 @@ function SignupModal({ isOpen, onClose }) {
 
   const handleDepartmentSelect = (dept) => {
     setDepartment(dept);
+    // 부서 선택 후 폼 유효성 다시 검사
+    setTimeout(() => checkFormValidity(), 0);
   };
 
   const validateForm = () => {
-    if (!email || !email.includes("@")) {
-      setError("유효한 이메일을 입력해주세요");
-      return false;
+    const isValid = checkFormValidity();
+    if (!isValid) {
+      if (!email || !email.includes("@")) {
+        setError("유효한 이메일을 입력해주세요");
+      } else if (!password) {
+        setError("비밀번호를 입력해주세요");
+      } else if (password !== confirmPassword) {
+        setError("비밀번호가 일치하지 않습니다");
+      } else if (!name) {
+        setError("이름을 입력해주세요");
+      } else if (!idNumberFront || !idNumberBack) {
+        setError("주민번호를 입력해주세요");
+      } else if (!phoneMiddle || !phoneLast) {
+        setError("연락처를 입력해주세요");
+      } else if (!department) {
+        setError("부서를 선택해주세요");
+      } else if (!address) {
+        setError("주소를 입력해주세요");
+      } else if (!bankName || !accountNumber) {
+        setError("급여계좌 정보를 입력해주세요");
+      }
     }
-    if (!password) {
-      setError("비밀번호를 입력해주세요");
-      return false;
-    }
-    if (password !== confirmPassword) {
-      setError("비밀번호가 일치하지 않습니다");
-      return false;
-    }
-    if (!name) {
-      setError("이름을 입력해주세요");
-      return false;
-    }
-    if (!idNumberFront || !idNumberBack) {
-      setError("주민번호를 입력해주세요");
-      return false;
-    }
-    if (!phoneMiddle || !phoneLast) {
-      setError("연락처를 입력해주세요");
-      return false;
-    }
-    if (!department) {
-      setError("부서를 선택해주세요");
-      return false;
-    }
-    if (!address) {
-      setError("주소를 입력해주세요");
-      return false;
-    }
-    if (!bankName || !accountNumber) {
-      setError("급여계좌 정보를 입력해주세요");
-      return false;
-    }
-    return true;
+    return isValid;
   };
 
   // 이름과 생년월일로 사용자 ID 생성
@@ -151,19 +212,40 @@ function SignupModal({ isOpen, onClose }) {
           bankName: bankName || "",
           accountNumber: accountNumber || "",
         },
+        role: "팀원", // 기본 역할 설정
+        // 사용자 휴가 정보 초기화
+        usedVacationDays: 0,
       };
 
-      const result = await registerUser(email, password, name, additionalData);
+      // 입사일을 전달하도록 변경
+      const result = await registerUser(
+        email,
+        password,
+        name,
+        hireDate,
+        null,
+        additionalData
+      );
 
       if (result.success) {
         alert("회원가입이 완료되었습니다. 로그인해주세요.");
+        resetForm(); // 성공 시에도 폼 초기화
         onClose();
       } else {
+        // 서버에서 반환한 구체적인 오류 메시지 표시
         setError(result.message || "회원가입 중 오류가 발생했습니다.");
+        console.error("회원가입 실패:", result.message);
       }
     } catch (error) {
-      setError("회원가입 중 오류가 발생했습니다.");
-      console.error(error);
+      console.error("회원가입 오류:", error);
+      // 오류 메시지를 더 구체적으로 표시
+      if (error.message) {
+        setError(`회원가입 중 오류가 발생했습니다: ${error.message}`);
+      } else {
+        setError(
+          "회원가입 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -179,7 +261,7 @@ function SignupModal({ isOpen, onClose }) {
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-[34px] font-bold">회원가입</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700"
           >
             <svg
@@ -369,6 +451,18 @@ function SignupModal({ isOpen, onClose }) {
             </div>
           </FormField>
 
+          {/* 입사일 필드 추가 */}
+          <FormField label="입사일" required={true}>
+            <input
+              type="date"
+              name="hireDate"
+              value={hireDate}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </FormField>
+
           {/* 에러 메시지 */}
           {error && (
             <div className="text-red-500 text-center text-sm mt-2">{error}</div>
@@ -379,7 +473,11 @@ function SignupModal({ isOpen, onClose }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-[48px] border border-[#002855] text-[#002855] py-3 rounded-md hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
+              className={`w-full h-[48px] border border-[#002855] py-3 rounded-md font-medium transition-colors ${
+                isFormValid
+                  ? "bg-[#002855] text-white hover:bg-[#001e42]"
+                  : "text-[#002855] hover:bg-gray-50"
+              } disabled:opacity-50`}
             >
               {isLoading ? "처리 중..." : "회원가입"}
             </button>

@@ -18,12 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import styled from "styled-components";
-import { format } from "date-fns";
-import { collection, query, onSnapshot, where } from "firebase/firestore";
-
-// 커스텀 컴포넌트
 import DragGoalFolder from "./DragGoalFolder";
-import DroppableFolder from "./DroppableFolder";
 import ModalTemplate from "../common/ModalTemplate";
 import { cancel } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
@@ -31,11 +26,7 @@ import { JcyCalendar } from "../common/JcyCalendar";
 import NameCoin from "../common/NameCoin";
 import TaskAddModal from "./TaskAddModal";
 import TaskRecordModal from "./TaskRecordModal";
-import ToDo from "../common/ToDo";
-import JcyTable from "../common/JcyTable";
-import DateViewModal from "./DateViewModal";
-
-// 서비스 및 컨텍스트
+import { format } from "date-fns";
 import {
   getAllTasks,
   getTasksByDate,
@@ -46,8 +37,12 @@ import {
   deleteTask,
   updateTask,
 } from "./TaskService";
+import ToDo from "../common/ToDo";
 import { db } from "../../firebase";
-import { useToast } from "../../contexts/ToastContext";
+import { collection, query, onSnapshot, where } from "firebase/firestore";
+import JcyTable from "../common/JcyTable";
+import { useToast } from "../../contexts/ToastContext"; // Toast 메시지 사용을 위한 훅 추가
+import DateViewModal from "./DateViewModal";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -144,6 +139,19 @@ const priorityBadgeColors = {
   하: "bg-green-100 text-green-800 border-green-200",
 };
 
+// 초기 할 일 데이터
+const initialTasks = {
+  "task-1": { id: "task-1", content: "할 일 1" },
+  "task-2": { id: "task-2", content: "할 일 2" },
+  "task-3": { id: "task-3", content: "할 일 3" },
+  "task-4": { id: "task-4", content: "할 일 4" },
+  "task-5": { id: "task-5", content: "할 일 5" },
+  "task-6": { id: "task-6", content: "할 일 6" },
+  "task-7": { id: "task-7", content: "할 일 7" },
+  "task-8": { id: "task-8", content: "할 일 8" },
+  "task-9": { id: "task-9", content: "할 일 9" },
+};
+
 // 초기 컬럼 데이터 - 부서와 역할명만 유지
 const initialColumns = {
   미배정: {
@@ -208,11 +216,19 @@ const initialColumns = {
   },
 };
 
-// 폴더 그룹 배열 정의 - 컴포넌트 외부로 호이스팅
-const folderGroups = [
-  ["미배정", "원장"],
-  ["원무과장", "간호팀장", "물리치료팀장", "방사선팀장"],
-  ["간호팀", "원무팀", "물리치료팀", "방사선팀", "경영지원팀"],
+// 화면에 보여줄 컬럼 순서
+const columnOrder = [
+  "미배정",
+  "경영지원팀장",
+  "원무과장",
+  "간호팀장",
+  "물리치료팀장",
+  "방사선팀장",
+  "경영지원팀",
+  "원무팀",
+  "간호팀",
+  "물리치료팀",
+  "방사선팀",
 ];
 
 /* ==============================================
@@ -280,8 +296,6 @@ function SortableTask({ id, task, containerId, onViewHistory, onClick }) {
         type: "item",
         task,
         containerId,
-        realContainerId: task?.assignee || containerId, // 실제 담당자/폴더 ID
-        isTaskItem: true, // 이것이 Task 아이템임을 명시
       },
     });
 
@@ -311,7 +325,6 @@ export function ToDoDragComponent({
   tasks,
   onViewHistory,
   onTaskClick,
-  selectedFolderId,
 }) {
   const totalSlots = 9; // 고정 셀 개수 (3×3)
 
@@ -361,15 +374,21 @@ export function ToDoDragComponent({
 
   // 날짜별 보기 모달 열기
   const handleOpenDateModal = () => {
-    console.log("날짜별 보기 모달 열기");
     setShowDateModal(true);
   };
 
   // 날짜별 보기 모달 닫기
   const handleCloseDateModal = () => {
-    console.log("날짜별 보기 모달 닫기");
     setShowDateModal(false);
   };
+
+  // 디버그 로그 추가 - 컴포넌트가 렌더링될 때마다 출력
+  console.log(`ToDoDragComponent 렌더링 [${column.id}]:`, {
+    tasks_length: safeTasks.length,
+    column_id: column.id,
+    column_title: column.title,
+    pageData,
+  });
 
   // 현재 페이지에 표시할 작업 ID들
   const taskIdsToUse = safeTasks
@@ -521,14 +540,15 @@ export function ToDoDragComponent({
         </div>
       </div>
 
-      {/* 날짜별 보기 모달 - isVisible 속성 직접 전달 */}
-      <DateViewModal
-        isVisible={showDateModal}
-        onClose={handleCloseDateModal}
-        column={column}
-        tasks={tasks}
-        selectedFolderId={selectedFolderId}
-      />
+      {/* 날짜별 보기 모달 */}
+      {showDateModal && (
+        <DateViewModal
+          isVisible={showDateModal}
+          onClose={handleCloseDateModal}
+          column={column}
+          tasks={tasks}
+        />
+      )}
     </div>
   );
 }
@@ -920,7 +940,7 @@ function TaskMainCanvas() {
       setFilteredTasks(tasks);
       console.log("전체 작업 표시:", tasks.length);
     }
-  }, [tasks, selectedFolderId]);
+  }, [tasks, selectedFolderId]); // selectedFolderId 의존성 추가
 
   // Toast 메시지를 사용하기 위한 훅
   const { showToast } = useToast();
@@ -952,29 +972,39 @@ function TaskMainCanvas() {
       console.log("폴더 선택 해제, 미배정으로 전환");
 
       // 미배정 폴더로 전환 시 해당 작업 목록을 즉시 필터링
-      // if (tasks && Array.isArray(tasks)) {
-      //   const unassignedTasks = tasks.filter(
-      //     (task) => !task.assignee || task.assignee === "미배정"
-      //   );
-      //   setFilteredTasks(unassignedTasks);
-      // }
+      if (tasks && Array.isArray(tasks)) {
+        const unassignedTasks = tasks.filter(
+          (task) => !task.assignee || task.assignee === "미배정"
+        );
+        setFilteredTasks(unassignedTasks);
+      }
     } else {
       // 새 폴더 선택
       setSelectedFolderId(folderId);
+      console.log("새 폴더 선택:", folderId);
+
       // 새 폴더 선택 시 해당 작업 목록을 즉시 필터링
-      // if (tasks && Array.isArray(tasks)) {
-      //   const newFilteredTasks = tasks.filter((task) => {
-      //     const taskAssignee = (task.assignee || "").trim();
-      //     const newFolderId = folderId.trim();
-      //     return taskAssignee.toLowerCase() === newFolderId.toLowerCase();
-      //   });
-      //   // 필터링된 결과를 설정 (업무가 없어도 빈 배열을 설정)
-      //   setFilteredTasks(newFilteredTasks);
-      // }
+      if (tasks && Array.isArray(tasks)) {
+        const newFilteredTasks = tasks.filter((task) => {
+          const taskAssignee = (task.assignee || "").trim();
+          const newFolderId = folderId.trim();
+          return taskAssignee.toLowerCase() === newFolderId.toLowerCase();
+        });
+
+        // 필터링된 결과를 설정 (업무가 없어도 빈 배열을 설정)
+        setFilteredTasks(newFilteredTasks);
+
+        // 디버그 로그 추가
+        console.log(`폴더 [${folderId}] 선택 - 필터링된 업무:`, {
+          총업무수: tasks.length,
+          필터링결과: newFilteredTasks.length,
+          폴더ID: folderId,
+        });
+      }
     }
 
     // 페이지 초기화
-    // setCurrentPage(1);
+    setCurrentPage(1);
   };
 
   // Firebase에서 모든 업무 실시간 감지
@@ -1215,24 +1245,7 @@ function TaskMainCanvas() {
   };
 
   const handleDragStart = (event) => {
-    try {
-      const taskId = event.active.id;
-      const taskData = getTaskById(taskId);
-
-      // 드래그 시작 정보 로깅
-      console.log("🔄 드래그 시작:", {
-        taskId,
-        taskTitle: taskData?.title,
-        containerId:
-          event.active.data.current?.containerId ||
-          event.active.data.current?.sortable?.containerId,
-        currentAssignee: taskData?.assignee || "미배정",
-      });
-
-      setActiveTaskId(event.active.id);
-    } catch (error) {
-      console.error("드래그 시작 중 오류:", error);
-    }
+    setActiveTaskId(event.active.id);
   };
 
   // 폴더의 ID를 명시적으로 확인하는 함수
@@ -1274,123 +1287,23 @@ function TaskMainCanvas() {
     }
 
     const taskId = active.id;
-
-    // containerId 추출 로직 개선
-    // 1. data.current.sortable.containerId (SortableContext에서 올 때)
-    // 2. data.current.containerId (일반 드래그 아이템일 때)
-    const activeContainer =
-      active.data.current?.sortable?.containerId ||
-      active.data.current?.containerId;
-    const overContainer =
-      over.data.current?.sortable?.containerId ||
-      over.data.current?.containerId ||
-      over.id;
-
-    // 실제 담당자(assignee) 결정을 위한 ID 추출
-    // Sortable- 접두사가 있는 경우 해당 컨테이너의 data.current.containerId 또는 data.current.assignee 사용
-    const getActualAssignee = (container, dataObj) => {
-      // 폴더 타입 먼저 확인 (더 명시적인 정보)
-      if (dataObj?.folderType === "DragGoalFolder" || dataObj?.isRealFolder) {
-        console.log(
-          "📂 실제 폴더 감지:",
-          dataObj.assignee || dataObj.containerId || container
-        );
-        return dataObj.assignee || dataObj.containerId || container;
-      }
-
-      // Sortable- 접두사가 있는 경우
-      if (
-        container &&
-        typeof container === "string" &&
-        container.startsWith("Sortable-")
-      ) {
-        // 데이터 객체에서 직접 containerId나 task.assignee 확인
-        const containerId = dataObj?.containerId;
-        const taskAssignee = dataObj?.task?.assignee;
-        const realContainerId = dataObj?.realContainerId;
-
-        // 우선순위: realContainerId > containerId > taskAssignee
-        if (realContainerId && typeof realContainerId === "string") {
-          return realContainerId;
-        }
-
-        // 그 다음 컨테이너 ID가 있으면 그것을 사용
-        if (
-          containerId &&
-          typeof containerId === "string" &&
-          !containerId.startsWith("Sortable-")
-        ) {
-          return containerId;
-        }
-
-        // 작업의 assignee가 있으면 그것을 사용
-        if (taskAssignee) {
-          return taskAssignee;
-        }
-
-        // 그 외의 경우 폴더 title 또는 원래 ID 반환
-        return dataObj?.assignee || columns[container]?.title || container;
-      }
-
-      // 기본 컨테이너 - 그대로 반환
-      return container;
-    };
-
-    // 향상된 폴더 ID 확인 함수
-    const isActualFolder = (id, dataObj) => {
-      // 1. 직접적으로 폴더임을 표시하는 데이터가 있는 경우
-      if (dataObj?.folderType === "DragGoalFolder" || dataObj?.isRealFolder) {
-        console.log("✅ 폴더 확인 성공 (명시적 데이터):", dataObj);
-        return true;
-      }
-
-      // 2. 컨테이너의 type이 "container"인 경우
-      if (dataObj?.type === "container") {
-        console.log("✅ 폴더 확인 성공 (container 타입):", id);
-        return true;
-      }
-
-      // 3. ID로 폴더 확인 (initialColumns에 있는 경우)
-      const isFolderById = isFolder(id);
-      if (isFolderById) {
-        console.log("✅ 폴더 확인 성공 (ID 기반):", id);
-      }
-
-      return isFolderById;
-    };
+    const activeContainer = active.data.current?.sortable?.containerId;
+    const overContainer = over.data.current?.sortable?.containerId || over.id;
 
     // 새 담당자 결정
-    const newAssignee = getActualAssignee(overContainer, over.data.current);
-
-    console.log("드래그 앤 드롭 정보:", {
-      taskId,
-      activeContainerId: activeContainer,
-      overContainerId: overContainer,
-      actualAssignee: newAssignee,
-      activeType: active.data.current?.type,
-      overType: over.data.current?.type,
-      isOverFolder: isActualFolder(overContainer, over.data.current),
-      isSortable: isSortableContainer(overContainer),
-    });
+    const newAssignee =
+      over.data.current?.assignee ||
+      columns[overContainer]?.title ||
+      overContainer;
 
     // 드래그된 아이템이 task이고, 드랍 컨테이너가 담당자 폴더인 경우
     if (
-      (active.data.current?.type === "task" ||
-        active.data.current?.type === "item") &&
-      (over.data.current?.type === "container" ||
-        isActualFolder(overContainer, over.data.current))
+      active.data.current?.type === "task" &&
+      over.data.current?.type === "container"
     ) {
-      // 오버 컨테이너 재설정 - 실제 폴더 ID 사용
-      const actualOverContainer = getActualAssignee(
-        overContainer,
-        over.data.current
-      );
-
       // 컬럼 유효성 검사
-      if (!columns[actualOverContainer]) {
-        console.error(
-          `컬럼을 찾을 수 없습니다: ${actualOverContainer} (원래 ID: ${overContainer})`
-        );
+      if (!columns[overContainer]) {
+        console.error(`컬럼을 찾을 수 없습니다: ${overContainer}`);
         setActiveTaskId(null);
         return;
       }
@@ -1400,14 +1313,8 @@ function TaskMainCanvas() {
         await updateTaskAssignee(taskId, newAssignee, false);
         showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
 
-        // 현재 작업의 담당자 확인
-        const taskData = getTaskById(taskId);
-        const currentAssignee = taskData?.assignee || "미배정";
-
-        console.log(`🔄 업무 담당 변경: ${currentAssignee} -> ${newAssignee}`);
-
         // 업무가 같은 컨테이너로 이동된 경우 UI 업데이트만 하고 종료
-        if (currentAssignee === newAssignee) {
+        if (activeContainer === overContainer) {
           setActiveTaskId(null);
           return;
         }
@@ -1415,25 +1322,33 @@ function TaskMainCanvas() {
         // 컬럼 상태 업데이트를 위한 변경 사항 준비
         const updates = {};
 
-        // 출발 컨테이너(기존 담당자)에서 작업 제거
-        if (currentAssignee && columns[currentAssignee]) {
-          const sourceTaskIds = columns[currentAssignee].taskIds.filter(
+        // 출발 컨테이너에서 작업 제거
+        if (activeContainer && columns[activeContainer]) {
+          const sourceTaskIds = columns[activeContainer].taskIds.filter(
             (id) => id !== taskId
           );
-          updates[currentAssignee] = sourceTaskIds;
-          console.log(`🗑️ 기존 담당자(${currentAssignee})에서 업무 제거`);
+          updates[activeContainer] = sourceTaskIds;
+        } else if (activeContainer && isSortableContainer(activeContainer)) {
+          // Sortable 컨테이너인 경우, 작업의 이전 담당자 찾기
+          const taskData = getTaskById(taskId);
+          if (taskData && taskData.assignee && columns[taskData.assignee]) {
+            const prevAssignee = taskData.assignee;
+            const sourceTaskIds = columns[prevAssignee].taskIds.filter(
+              (id) => id !== taskId
+            );
+            updates[prevAssignee] = sourceTaskIds;
+          }
         }
 
-        // 도착 컨테이너(새 담당자)에 작업 추가
-        if (columns[newAssignee]) {
-          // 이미 이 taskId가 새 담당자에 있지 않은 경우에만 추가
-          if (!columns[newAssignee].taskIds.includes(taskId)) {
-            const destTaskIds = [...columns[newAssignee].taskIds, taskId];
-            updates[newAssignee] = destTaskIds;
-            console.log(`➕ 새 담당자(${newAssignee})에 업무 추가`);
+        // 도착 컨테이너에 작업 추가
+        if (columns[overContainer]) {
+          // 이미 이 taskId가 overContainer에 있지 않은 경우에만 추가
+          if (!columns[overContainer].taskIds.includes(taskId)) {
+            const destTaskIds = [...columns[overContainer].taskIds, taskId];
+            updates[overContainer] = destTaskIds;
           } else {
             // 이미 있는 경우 기존 배열 유지
-            updates[newAssignee] = [...columns[newAssignee].taskIds];
+            updates[overContainer] = [...columns[overContainer].taskIds];
           }
         }
 
@@ -1449,7 +1364,7 @@ function TaskMainCanvas() {
     }
 
     // 목적지가 폴더인 경우를 처리
-    if (isActualFolder(overContainer, over.data.current)) {
+    if (isFolder(overContainer)) {
       try {
         // 담당자 업데이트
         await updateTaskAssignee(taskId, newAssignee, false);
@@ -1473,11 +1388,9 @@ function TaskMainCanvas() {
           // Sortable 컨테이너인 경우, 작업의 이전 담당자 찾기
           const taskData = getTaskById(taskId);
           if (taskData && taskData.assignee && columns[taskData.assignee]) {
-            const prevAssignee = taskData.assignee;
-            const sourceTaskIds = columns[prevAssignee].taskIds.filter(
-              (id) => id !== taskId
-            );
-            updates[prevAssignee] = sourceTaskIds;
+            updates[taskData.assignee] = columns[
+              taskData.assignee
+            ].taskIds.filter((id) => id !== taskId);
           }
         }
 
@@ -1485,8 +1398,10 @@ function TaskMainCanvas() {
         if (columns[overContainer]) {
           // 이미 이 taskId가 overContainer에 있지 않은 경우에만 추가
           if (!columns[overContainer].taskIds.includes(taskId)) {
-            const destTaskIds = [...columns[overContainer].taskIds, taskId];
-            updates[overContainer] = destTaskIds;
+            updates[overContainer] = [
+              ...columns[overContainer].taskIds,
+              taskId,
+            ];
           } else {
             // 이미 있는 경우 기존 배열 유지
             updates[overContainer] = [...columns[overContainer].taskIds];
@@ -1626,7 +1541,7 @@ function TaskMainCanvas() {
   };
 
   return (
-    <div className="w-full flex flex-col h-full bg-white min-h-[900px] rounded-xl px-[40px] py-[30px]">
+    <div className="w-full flex flex-col h-full bg-white min-w-[1100px] min-h-[900px] rounded-xl px-[40px] py-[30px]">
       <TitleZone className="w-full mb-[34px] flex flex-row justify-between items-center">
         <div className="flex items-center">
           <span className="text-[34px] font-semibold">업무분장</span>
@@ -1665,6 +1580,7 @@ function TaskMainCanvas() {
       {viewMode === "dnd" ? (
         <DndContext
           sensors={sensors}
+          collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
@@ -1687,7 +1603,6 @@ function TaskMainCanvas() {
                   tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
                   onViewHistory={handleViewTaskHistory}
                   onTaskClick={handleTaskClick}
-                  selectedFolderId={selectedFolderId}
                 />
               );
             })()}
@@ -1726,847 +1641,76 @@ function TaskMainCanvas() {
             </PaginationZone>
 
             {/* 폴더 구조 */}
-            {/* 폴더 구조 */}
             <div className="flex flex-row gap-x-[20px]">
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DroppableFolder
-                  id="미배정"
+                <DragGoalFolder
                   column={columns.미배정}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "미배정"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "미배정" ? "fill-blue-100" : ""
-                          } ${
-                            isOver && selectedFolderId === "미배정"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "미배정"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "미배정"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            미배정
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "미배정" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "미배정"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "미배정"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.미배정.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "미배정" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "미배정"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "미배정"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.미배정.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="원장"
+                />
+                <DragGoalFolder
                   column={columns.원장}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "원장"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "원장" ? "fill-blue-100" : ""
-                          } ${
-                            isOver && selectedFolderId === "원장"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "원장"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원장"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            원장
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "원장" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "원장"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "원장"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.원장.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "원장" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "원장"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원장"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.원장.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
+                />
+                {/* 원장님 col에 미배정 폴더 추가 */}
               </div>
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DroppableFolder
-                  id="원무과장"
+                <DragGoalFolder
                   column={columns.원무과장}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "원무과장"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "원무과장"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "원무과장"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "원무과장"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원무과장"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            원무과장
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "원무과장" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "원무과장"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "원무과장"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.원무과장.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "원무과장" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "원무과장"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원무과장"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.원무과장.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="간호팀장"
+                />
+                <DragGoalFolder
                   column={columns.간호팀장}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "간호팀장"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "간호팀장"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "간호팀장"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "간호팀장"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "간호팀장"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            간호팀장
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "간호팀장" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "간호팀장"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "간호팀장"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.간호팀장.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "간호팀장" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "간호팀장"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "간호팀장"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.간호팀장.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="물리치료팀장"
+                />
+                <DragGoalFolder
                   column={columns.물리치료팀장}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "물리치료팀장"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "물리치료팀장"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "물리치료팀장"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "물리치료팀장"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "물리치료팀장"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            물리치료팀장
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "물리치료팀장" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "물리치료팀장"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "물리치료팀장"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.물리치료팀장.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "물리치료팀장" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "물리치료팀장"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "물리치료팀장"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.물리치료팀장.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="방사선팀장"
+                />
+                <DragGoalFolder
                   column={columns.방사선팀장}
-                  isSelected={selectedFolderId === "방사선팀장"}
+                  tasks={tasks}
                   onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "방사선팀장"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "방사선팀장"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "방사선팀장"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "방사선팀장"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            방사선팀장
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "방사선팀장" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "방사선팀장"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "방사선팀장"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.방사선팀장.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "방사선팀장" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "방사선팀장"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "방사선팀장"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.방사선팀장.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
+                  isSelected={selectedFolderId === "방사선팀장"}
+                />
               </div>
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DroppableFolder
-                  id="간호팀"
+                <DragGoalFolder
                   column={columns.간호팀}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "간호팀"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "간호팀" ? "fill-blue-100" : ""
-                          } ${
-                            isOver && selectedFolderId === "간호팀"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "간호팀"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "간호팀"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            간호팀
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "간호팀" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "간호팀"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "간호팀"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.간호팀.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "간호팀" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "간호팀"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "간호팀"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.간호팀.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="원무팀"
+                />
+                <DragGoalFolder
                   column={columns.원무팀}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "원무팀"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "원무팀" ? "fill-blue-100" : ""
-                          } ${
-                            isOver && selectedFolderId === "원무팀"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "원무팀"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원무팀"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            원무팀
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "원무팀" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "원무팀"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "원무팀"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.원무팀.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "원무팀" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "원무팀"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "원무팀"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.원무팀.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="물리치료팀"
+                />
+                <DragGoalFolder
                   column={columns.물리치료팀}
+                  tasks={tasks}
+                  onClick={handleFolderSelect}
                   isSelected={selectedFolderId === "물리치료팀"}
-                  onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "물리치료팀"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "물리치료팀"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "물리치료팀"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "물리치료팀"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            물리치료팀
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "물리치료팀" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "물리치료팀"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "물리치료팀"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.물리치료팀.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "물리치료팀" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "물리치료팀"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "물리치료팀"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.물리치료팀.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
-                <DroppableFolder
-                  id="방사선팀"
+                />
+                <DragGoalFolder
                   column={columns.방사선팀}
-                  isSelected={selectedFolderId === "방사선팀"}
+                  tasks={tasks}
                   onClick={handleFolderSelect}
-                >
-                  {({ isOver }) => (
-                    <>
-                      <svg
-                        className="w-[198px] h-[33px]"
-                        viewBox="0 0 198 33"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <polygon
-                          points="0,0 154,0 198,33 0,33"
-                          className={`fill-white stroke-onceHover stroke-[8] ${
-                            isOver ? "fill-blue-50" : ""
-                          } ${
-                            selectedFolderId === "방사선팀"
-                              ? "fill-blue-100"
-                              : ""
-                          } ${
-                            isOver && selectedFolderId === "방사선팀"
-                              ? "fill-blue-200"
-                              : ""
-                          }`}
-                        />
-                        <foreignObject x="0" y="0" width="143" height="33">
-                          <div
-                            xmlns="http://www.w3.org/1999/xhtml"
-                            className={`flex items-center justify-center w-full h-full text-black border-l-[8px] ${
-                              isOver ? "border-blue-400" : "border-onceHover"
-                            } ${
-                              selectedFolderId === "방사선팀"
-                                ? "font-bold border-blue-500"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "방사선팀"
-                                ? "border-blue-600"
-                                : ""
-                            }`}
-                          >
-                            방사선팀
-                          </div>
-                        </foreignObject>
-                      </svg>
-                      <div
-                        className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
-                          selectedFolderId === "방사선팀" && !isOver
-                            ? "bg-blue-100"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId !== "방사선팀"
-                            ? "bg-blue-50"
-                            : ""
-                        } ${
-                          isOver && selectedFolderId === "방사선팀"
-                            ? "bg-blue-200"
-                            : ""
-                        }`}
-                      >
-                        {columns.방사선팀.taskIds?.length > 0 && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              selectedFolderId === "방사선팀" && !isOver
-                                ? "bg-blue-200"
-                                : "bg-gray-200"
-                            } ${
-                              isOver && selectedFolderId !== "방사선팀"
-                                ? "bg-blue-100"
-                                : ""
-                            } ${
-                              isOver && selectedFolderId === "방사선팀"
-                                ? "bg-blue-300"
-                                : ""
-                            }`}
-                          >
-                            {`+${columns.방사선팀.taskIds.length}`}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </DroppableFolder>
+                  isSelected={selectedFolderId === "방사선팀"}
+                />
               </div>
             </div>
+
             <DragOverlay>
               {activeTaskId && (
                 <div className="p-2 bg-white rounded shadow">
@@ -2586,12 +1730,12 @@ function TaskMainCanvas() {
           </>
         </DndContext>
       ) : (
-        /* 게시판 모드 컴포넌트 - 모든 tasks를 전달하도록 수정 */
+        /* 게시판 모드 컴포넌트 */
         <TaskBoardView
-          tasks={tasks} // 필터링된 목록이 아닌 전체 tasks를 전달
+          tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
           onViewHistory={handleViewTaskHistory}
           onTaskClick={handleTaskClick}
-          selectedFolderId={selectedFolderId}
+          selectedFolderId={selectedFolderId} // selectedFolderId를 전달
         />
       )}
 

@@ -5,8 +5,7 @@ import { FiSettings } from "react-icons/fi";
 import UserChipText from "./common/UserChipText";
 import { departmentArray, locationOptions, roleOptions } from "../datas/users";
 import { Link } from "react-router-dom";
-import MiniLoginForm from "./common/MiniLoginForm";
-import MiniDevTools from "./common/MiniDevTools";
+import LoginPCModal from "./common/LoginPCModal";
 
 function PCAllocation() {
   const {
@@ -28,20 +27,10 @@ function PCAllocation() {
   const defaultLocation =
     userLevelData?.location || locationOptions[defaultDepartment][0];
 
-  // 초기 departmentLeader는 defaultRole에 "장"이 포함되어 있는지 여부로 설정
-  const [departmentLeader, setDepartmentLeader] = useState(
-    defaultRole.includes("장")
-  );
+  // 모달 상태 관리
   const [modalOpen, setModalOpen] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  const [department, setDepartment] = useState(defaultDepartment);
-  const [role, setRole] = useState(defaultRole);
-  const [location, setLocation] = useState(defaultLocation);
-  const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("login"); // 모달에서의 활성 탭: "login" 또는 "pc"
-
-  // 권한 레벨 정보
-  const [userRoleLevel, setUserRoleLevel] = useState("guest");
+  const [activeTab, setActiveTab] = useState("login"); // 초기 탭 상태
+  const [userRoleLevel, setUserRoleLevel] = useState("guest"); // 권한 레벨 정보
 
   // PC 할당이 필요한 상태인지 확인하는 함수
   const needsSetup =
@@ -55,36 +44,25 @@ function PCAllocation() {
     }
   }, [isLoggedIn, getUserRoleLevel]);
 
+  // 모달 열기
   const openModal = (tab = "login") => {
     setModalOpen(true);
     setActiveTab(tab);
   };
 
+  // 모달 닫기
   const closeModal = () => {
     setModalOpen(false);
-    setMessage("");
-    setAdminPasswordInput("");
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // departmentLeader는 이미 자동 업데이트 되었으므로 그대로 전송
-    const newData = { department, role, location, departmentLeader };
-    const success = updateUserLevelData(newData, adminPasswordInput);
-    if (success) {
-      setMessage("PC 할당 완료");
-      // 모달을 잠시 보여준 후 닫기
-      setTimeout(() => {
-        closeModal();
-      }, 1000);
-    } else {
-      setMessage("패스워드가 틀렸습니다");
-    }
   };
 
   // 로그인 성공 후 모달 닫기
-  const updateAfterLogin = () => {
+  const handleLoginSuccess = () => {
     closeModal();
+  };
+
+  // PC 할당 제출 처리
+  const handlePCAllocationSubmit = (newData, adminPassword) => {
+    return updateUserLevelData(newData, adminPassword);
   };
 
   return (
@@ -149,134 +127,17 @@ function PCAllocation() {
           </div>
         )}
       </div>
-      {/* 모달: 로그인/PC할당 통합 */}
-      {modalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-md w-[320px]">
-            <div className="flex justify-between items-center mb-2">
-              <div></div>
-              <button
-                onClick={closeModal}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                X
-              </button>
-            </div>
 
-            {/* 탭 선택 UI */}
-            <div className="flex border-b mb-4">
-              <button
-                className={`py-2 px-4 ${
-                  activeTab === "login"
-                    ? "border-b-2 border-onceBlue text-onceBlue"
-                    : "text-gray-500"
-                }`}
-                onClick={() => setActiveTab("login")}
-              >
-                로그인
-              </button>
-              <button
-                className={`py-2 px-4 ${
-                  activeTab === "pc"
-                    ? "border-b-2 border-onceBlue text-onceBlue"
-                    : "text-gray-500"
-                }`}
-                onClick={() => setActiveTab("pc")}
-              >
-                PC 할당
-              </button>
-            </div>
-
-            {/* 컨텐츠 영역 */}
-            {activeTab === "login" ? (
-              <MiniLoginForm onLoginSuccess={updateAfterLogin} />
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-3">
-                {/* 부서 선택 */}
-                <div className="flex flex-row items-center">
-                  <label className="block text-sm w-[50px]">부서:</label>
-                  <select
-                    value={department}
-                    onChange={(e) => {
-                      const newDept = e.target.value;
-                      setDepartment(newDept);
-                      // 부서 변경 시 역할과 위치의 기본값을 업데이트하고,
-                      // 역할에 "장" 문자가 포함되어 있는지에 따라 부서 리더 값을 자동 설정
-                      const newRole = roleOptions[newDept][0];
-                      setRole(newRole);
-                      setDepartmentLeader(newRole.includes("장"));
-                      setLocation(locationOptions[newDept][0]);
-                    }}
-                    className="w-full border rounded px-2 py-1"
-                  >
-                    {departmentArray.map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 역할 선택 */}
-                {/* <div className="flex flex-row items-center">
-                  <label className="block text-sm w-[50px]">역할:</label>
-                  <select
-                    value={role}
-                    onChange={(e) => {
-                      const newRole = e.target.value;
-                      setRole(newRole);
-                      // 역할 변경 시 "장" 문자가 포함되어 있으면 자동 체크
-                      setDepartmentLeader(newRole.includes("장"));
-                    }}
-                    className="w-full border rounded px-2 py-1"
-                  >
-                    {(roleOptions[department] || []).map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </div> */}
-
-                {/* 위치 선택 */}
-                <div className="flex flex-row items-center">
-                  <label className="block text-sm w-[50px]">위치:</label>
-                  <select
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full border rounded px-2 py-1"
-                  >
-                    {(locationOptions[department] || []).map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 관리자 패스워드 입력 */}
-                <div>
-                  <label className="block text-sm">Admin Password:</label>
-                  <input
-                    type="password"
-                    value={adminPasswordInput}
-                    onChange={(e) => setAdminPasswordInput(e.target.value)}
-                    className="w-full border rounded px-2 py-1"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-onceBlue text-white py-2 rounded"
-                >
-                  저장
-                </button>
-              </form>
-            )}
-            {message && <p className="mt-2 text-center text-sm">{message}</p>}
-          </div>
-        </div>
-      )}
+      {/* 통합 로그인/PC할당 모달 */}
+      <LoginPCModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        onLoginSuccess={handleLoginSuccess}
+        onPCAllocationSubmit={handlePCAllocationSubmit}
+        defaultDepartment={defaultDepartment}
+        defaultRole={defaultRole}
+        defaultLocation={defaultLocation}
+      />
     </div>
   );
 }

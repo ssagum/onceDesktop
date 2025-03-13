@@ -3,7 +3,7 @@ import { IoFilterOutline } from "react-icons/io5";
 import { MdClose } from "react-icons/md";
 
 const FilterButton = ({ selectedFilters, onReset, onClick }) => {
-  const hasFilters = selectedFilters.length > 0;
+  const hasFilters = selectedFilters && selectedFilters.length > 0;
 
   return (
     <div className="relative flex items-center">
@@ -26,20 +26,20 @@ const FilterButton = ({ selectedFilters, onReset, onClick }) => {
       </button>
 
       {/* 필터 초기화 버튼 */}
-      {/* {hasFilters && (
+      {hasFilters && onReset && (
         <button
           onClick={onReset}
           className="ml-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-all"
         >
           <MdClose size={16} />
         </button>
-      )} */}
+      )}
     </div>
   );
 };
 
-const FilterChips = ({ selectedFilters, removeFilter }) => {
-  if (selectedFilters.length === 0) return null;
+const FilterChips = ({ selectedFilters = [], removeFilter }) => {
+  if (!selectedFilters || selectedFilters.length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">

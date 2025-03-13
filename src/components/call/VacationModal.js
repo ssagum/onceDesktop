@@ -4,7 +4,14 @@ import styled from "styled-components";
 import { cancel } from "../../assets";
 import OnceOnOffButton from "../common/OnceOnOffButton";
 import { db } from "../../firebase.js";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
 import { useToast } from "../../contexts/ToastContext";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import { JcyCalendar } from "../common/JcyCalendar";
@@ -15,9 +22,19 @@ import {
   parseISO,
   getDay,
   differenceInDays,
+  differenceInMonths,
+  differenceInCalendarMonths,
+  isBefore,
+  isAfter,
 } from "date-fns";
 import WhoSelector from "../common/WhoSelector";
 import DateTimeSelector from "./DateTimeSelector";
+import LoginPCModal from "../common/LoginPCModal";
+import {
+  getUserVacationInfo,
+  updateUserVacationDays,
+  getUserVacationHistory,
+} from "../../utils/vacationUtils";
 
 const ModalHeaderZone = styled.div``;
 const TopSection = styled.div`
@@ -129,7 +146,7 @@ const StyledTextarea = styled.textarea`
   border-radius: 6px;
   padding: 12px;
   width: 100%;
-  height: 120px;
+  height: 80px;
   resize: none;
   background-color: #f9fafb;
   transition: border-color 0.2s;
@@ -255,13 +272,21 @@ const TimeInput = styled.input`
 `;
 
 export default function VacationModal({ isVisible, setIsVisible }) {
-  const { userLevelData } = useUserLevel();
+  const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
   const { showToast } = useToast();
 
   // 현재 날짜
   const today = new Date();
   const [startDate, setStartDate] = useState(format(today, "yyyy/MM/dd"));
   const [endDate, setEndDate] = useState(format(today, "yyyy/MM/dd"));
+
+  // 사용자 휴가 정보
+  const [userVacationInfo, setUserVacationInfo] = useState({
+    hireDate: null,
+    usedVacationDays: 0,
+    totalAccumulatedDays: 0,
+    remainingVacationDays: 0,
+  });
 
   // 폼 데이터 상태
   const [vacationForm, setVacationForm] = useState({
@@ -274,9 +299,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
   });
 
   // 신청자 및 대체자 상태
-  const [selectedApplicant, setSelectedApplicant] = useState([
-    userLevelData.id || "",
-  ]);
+  const [selectedApplicant, setSelectedApplicant] = useState([]);
   const [selectedReplacement, setSelectedReplacement] = useState([]);
 
   // JcyCalendar 참조
@@ -287,6 +310,77 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
   // 반차 여부 자동 감지
   const [dayTypes, setDayTypes] = useState({});
+
+  // 로그인 모달 관련 상태
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
+  // 입사일 기준 사용 가능한 휴가 일수 계산
+  const calculateTotalAccumulatedDays = (hireDate) => {
+    if (!hireDate) return 0;
+
+    const hireDateObj = new Date(hireDate);
+    const currentDate = new Date();
+
+    // 입사일이 현재보다 미래인 경우
+    if (isBefore(currentDate, hireDateObj)) return 0;
+
+    // 입사 후 지난 월 수 계산
+    const monthsSinceHire = differenceInCalendarMonths(
+      currentDate,
+      hireDateObj
+    );
+
+    // 매월 1일씩 발생하는 휴가일
+    return Math.max(0, monthsSinceHire);
+  };
+
+  // 사용자의 남은 휴가 일수 가져오기
+  const fetchUserVacationInfo = async () => {
+    if (!isLoggedIn || !currentUser || !currentUser.id) return;
+
+    try {
+      const vacationInfo = await getUserVacationInfo(currentUser.id);
+      if (vacationInfo) {
+        setUserVacationInfo(vacationInfo);
+      }
+    } catch (error) {
+      console.error("휴가 정보 조회 오류:", error);
+      showToast("휴가 정보를 불러오는 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  // 사용자 정보 업데이트
+  useEffect(() => {
+    if (isLoggedIn && currentUser) {
+      // 로그인된 사용자 정보로 신청자 필드 업데이트
+      setSelectedApplicant([currentUser.id]);
+      // 사용자의 휴가 정보 조회
+      fetchUserVacationInfo();
+    } else {
+      setSelectedApplicant([]);
+    }
+  }, [isLoggedIn, currentUser]);
+
+  // 로그인 모달 관련 함수들
+  const openLoginModal = () => {
+    setLoginModalOpen(true);
+  };
+
+  const closeLoginModal = () => {
+    setLoginModalOpen(false);
+  };
+
+  // 로그인 성공 처리
+  const handleLoginSuccess = () => {
+    closeLoginModal();
+  };
+
+  // PC 할당 처리 (더미 함수)
+  const handlePCAllocationSubmit = () => {
+    // VacationModal에서는 PC 할당 기능은 실제로 사용하지 않지만,
+    // 인터페이스 일관성을 위해 더미 함수 제공
+    return false;
+  };
 
   // 시작일과 종료일 사이의 모든 날짜를 생성하는 함수
   const generateDateRange = (start, end) => {
@@ -520,13 +614,6 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     setCalculatedDays(days);
   }, [dayTypes, vacationForm.holidayCount, vacationForm.vacationType]);
 
-  // 컴포넌트 마운트 시 신청자 초기화
-  useEffect(() => {
-    if (userLevelData && userLevelData.id) {
-      setSelectedApplicant([userLevelData.id]);
-    }
-  }, [userLevelData]);
-
   // 휴가 일수 계산 함수 수정
   const calculateVacationDays = () => {
     // 경조사인 경우 무조건 0일 반환
@@ -578,8 +665,9 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
   // 휴가 유형 변경 핸들러 개선
   const handleVacationTypeChange = (type) => {
-    // 만약 반차로 변경되는 경우, endDate를 startDate와 동일하게 설정
-    if (type === "반차" && startDate !== endDate) {
+    // 반차로 변경되는 경우, 날짜 하나만 선택하도록 설정
+    if (type === "반차") {
+      // 반차는 시작일과 종료일이 항상 동일하도록 설정
       setEndDate(startDate);
     }
 
@@ -607,6 +695,11 @@ export default function VacationModal({ isVisible, setIsVisible }) {
   const handleStartDateChange = (date) => {
     setStartDate(date);
 
+    // 반차 모드에서는 종료일도 함께 변경
+    if (vacationForm.vacationType === "반차") {
+      setEndDate(date);
+    }
+
     // 반차 모드에서도 일반 휴가와 동일하게 시작시간 설정
     const workHours = getWorkHours(date);
     setVacationForm((prev) => ({
@@ -617,9 +710,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
   // 종료일 변경 핸들러 개선
   const handleEndDateChange = (date) => {
-    // 반차 모드에서는 종료일 변경 불가 (시작일로 강제 설정)
+    // 반차 모드에서는 종료일 변경 불가
     if (vacationForm.vacationType === "반차") {
-      setEndDate(startDate);
       return;
     }
 
@@ -696,9 +788,51 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     setSelectedReplacement(selectedIds);
   };
 
+  // 잔여 휴가 일수 계산
+  const getRemainingVacationDays = () => {
+    return userVacationInfo.remainingVacationDays || 0;
+  };
+
+  // 필수 필드 검증 함수 추가
+  const validateRequiredFields = () => {
+    // 로그인 확인
+    if (!isLoggedIn) {
+      return false;
+    }
+
+    // 신청자 확인
+    if (selectedApplicant.length === 0) {
+      return false;
+    }
+
+    // 날짜 확인
+    if (!startDate || !endDate) {
+      return false;
+    }
+
+    // 사유 확인
+    if (!vacationForm.reason) {
+      return false;
+    }
+
+    // 휴가 일수가 0이면 경고 (경조사는 제외)
+    if (calculatedDays <= 0 && vacationForm.vacationType !== "경조사") {
+      return false;
+    }
+
+    return true;
+  };
+
   // 휴가 신청 제출 핸들러
   const handleSubmit = async () => {
     try {
+      // 로그인 확인
+      if (!isLoggedIn) {
+        showToast("로그인이 필요합니다.", "error");
+        openLoginModal();
+        return;
+      }
+
       // 필수 입력 검증
       if (selectedApplicant.length === 0) {
         showToast("신청자를 선택해주세요.", "error");
@@ -724,15 +858,29 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         return;
       }
 
+      // 잔여 휴가 일수 확인 (경조사는 제외)
+      if (vacationForm.vacationType !== "경조사") {
+        const remainingDays = getRemainingVacationDays();
+        if (calculatedDays > remainingDays) {
+          showToast(
+            `잔여 휴가일(${remainingDays}일)보다 많은 휴가를 신청할 수 없습니다.`,
+            "error"
+          );
+          return;
+        }
+      }
+
       // 날짜 형식 변환
       const formattedStartDate = startDate.replace(/\//g, "-");
       const formattedEndDate = endDate.replace(/\//g, "-");
 
       // 파이어베이스에 휴가 신청 데이터 추가
       const vacationData = {
-        userId: selectedApplicant[0],
-        userName: userLevelData.name || "익명",
-        department: userLevelData.location || "unknown",
+        userId: currentUser.id,
+        userName: currentUser.name || "익명",
+        email: currentUser.email || "",
+        department: userLevelData.department || "",
+        location: userLevelData.location || "",
         startDate: formattedStartDate,
         startTime: vacationForm.startTime,
         endDate: formattedEndDate,
@@ -750,6 +898,30 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
       const docRef = await addDoc(collection(db, "vacations"), vacationData);
       console.log("휴가 신청 성공:", docRef.id);
+
+      // 경조사가 아닌 경우에만 사용자 문서의 사용 휴가 일수 업데이트
+      if (vacationForm.vacationType !== "경조사") {
+        // 유틸리티 함수를 사용하여 휴가일 업데이트
+        const updated = await updateUserVacationDays(
+          currentUser.id,
+          calculatedDays
+        );
+
+        if (updated) {
+          // 성공적으로 업데이트된 경우 로컬 상태도 업데이트
+          setUserVacationInfo((prev) => ({
+            ...prev,
+            usedVacationDays: prev.usedVacationDays + calculatedDays,
+            remainingVacationDays: Math.max(
+              0,
+              prev.totalAccumulatedDays -
+                (prev.usedVacationDays + calculatedDays)
+            ),
+          }));
+        } else {
+          console.warn("휴가 일수 업데이트가 실패했습니다.");
+        }
+      }
 
       showToast("휴가 신청이 완료되었습니다.", "success");
       setIsVisible(false);
@@ -812,188 +984,245 @@ export default function VacationModal({ isVisible, setIsVisible }) {
   };
 
   return (
-    <ModalTemplate
-      isVisible={isVisible}
-      setIsVisible={setIsVisible}
-      showCancel={false}
-      modalClassName="rounded-xl"
-    >
-      <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
-        <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
-          <span className="text-[34px] font-bold">휴가신청</span>
-          <div className="flex flex-row items-center">
-            <img
-              onClick={() => setIsVisible(false)}
-              className="w-[30px]"
-              src={cancel}
-              alt="닫기"
-              style={{ cursor: "pointer" }}
-            />
-          </div>
-        </ModalHeaderZone>
-
-        {/* 상단 섹션 - 좌우 분할 */}
-        <TopSection>
-          {/* 좌상단 - 달력 */}
-          <LeftTopSection>
-            <JcyCalendar
-              key={calendarKey}
-              preStartDay={startDate}
-              preEndDay={endDate}
-              setTargetStartDay={handleStartDateChange}
-              setTargetEndDay={handleEndDateChange}
-              standardWidth="95%"
-              isEdit={true}
-              lockToday={false}
-              singleDateMode={vacationForm.vacationType === "반차"}
-              startDayOnlyMode={false}
-            />
-          </LeftTopSection>
-
-          {/* 우상단 - 신청 정보 */}
-          <RightTopSection>
-            <FormSection>
-              {/* 신청자 및 대체자 정보 - 한 행에 배치 */}
-              <FormRow>
-                <FormLabel required>신청자</FormLabel>
-                <FormValue className="flex-1">
-                  <WhoSelector
-                    who="신청자"
-                    selectedPeople={selectedApplicant}
-                    onPeopleChange={handleApplicantChange}
-                    singleSelectMode={true}
-                  />
-                </FormValue>
-                <FormLabel>대체자</FormLabel>
-                <FormValue className="flex-1">
-                  <WhoSelector
-                    who="대체자"
-                    selectedPeople={selectedReplacement}
-                    onPeopleChange={handleReplacementChange}
-                    singleSelectMode={true}
-                  />
-                </FormValue>
-              </FormRow>
-
-              {/* 잔여휴일과 사용휴일 - 모든 유형에서 표시 */}
-              <FormRow>
-                <FormLabel>잔여휴일</FormLabel>
-                <FormValue className="flex-1">
-                  <InfoBox highlight className="w-full">
-                    15일
-                  </InfoBox>
-                </FormValue>
-                <FormLabel>사용휴일</FormLabel>
-                <FormValue className="flex-1">
-                  <InfoBox highlight className="w-full">
-                    {renderCalculatedDays()}일
-                  </InfoBox>
-                </FormValue>
-              </FormRow>
-
-              {/* 공휴일 입력 필드 - 모든 유형에서 표시 */}
-              <FormRow>
-                <FormLabel>제외일수</FormLabel>
-                <FormValue className="flex-1">
-                  <NumberInput
-                    type="number"
-                    name="holidayCount"
-                    placeholder="공휴일 수"
-                    min="0"
-                    step="1"
-                    value={vacationForm.holidayCount}
-                    onChange={handleHolidayCountChange}
-                  />
-                </FormValue>
-              </FormRow>
-
-              <div className="px-4 w-full">
-                <InfoText>
-                  * 공휴일 및 회사 지정 휴무일 등 자동으로 제외되지 않는 날짜를
-                  수동으로 입력할 수 있습니다. 일요일은 자동으로 제외됩니다.
-                </InfoText>
-              </div>
-
-              {/* 휴가 타입 */}
-              <FormRow>
-                <FormLabel>휴가종류</FormLabel>
-                <FormValue className="flex-1">
-                  <div className="flex space-x-2">
-                    <TypeButton
-                      active={vacationForm.vacationType === "휴가"}
-                      onClick={() => handleVacationTypeChange("휴가")}
-                    >
-                      휴가
-                    </TypeButton>
-                    <TypeButton
-                      active={vacationForm.vacationType === "반차"}
-                      onClick={() => handleVacationTypeChange("반차")}
-                    >
-                      반차
-                    </TypeButton>
-                    <TypeButton
-                      active={vacationForm.vacationType === "경조사"}
-                      onClick={() => handleVacationTypeChange("경조사")}
-                    >
-                      경조사
-                    </TypeButton>
-                  </div>
-                </FormValue>
-              </FormRow>
-
-              {/* 날짜 선택과 시간 선택을 합친 row로 수정 */}
-              <FormRow>
-                <FormLabel>시작일시</FormLabel>
-                <FormValue className="flex-1">
-                  <DateTimeSelector
-                    dateValue={startDate}
-                    timeValue={vacationForm.startTime}
-                    onDateChange={handleStartDateChange}
-                    onTimeChange={handleTimeChange}
-                    timeName="startTime"
-                  />
-                </FormValue>
-              </FormRow>
-
-              <FormRow>
-                <FormLabel>종료일시</FormLabel>
-                <FormValue className="flex-1">
-                  <DateTimeSelector
-                    dateValue={endDate}
-                    timeValue={vacationForm.endTime}
-                    onDateChange={handleEndDateChange}
-                    onTimeChange={handleTimeChange}
-                    timeName="endTime"
-                    disabled={vacationForm.vacationType === "반차"}
-                  />
-                </FormValue>
-              </FormRow>
-            </FormSection>
-          </RightTopSection>
-        </TopSection>
-
-        {/* 하단 섹션 - 사유 입력 */}
-        <BottomSection>
-          <FormSection>
-            <FormRow>
-              <FormLabel required>사유</FormLabel>
-              <FormValue>
-                <StyledTextarea
-                  name="reason"
-                  value={vacationForm.reason}
-                  onChange={handleInputChange}
-                  placeholder="휴가 사유를 입력해주세요."
+    <>
+      <ModalTemplate
+        isVisible={isVisible}
+        setIsVisible={setIsVisible}
+        showCancel={false}
+        modalClassName="rounded-xl"
+      >
+        {!isLoggedIn ? (
+          <div className="flex flex-col items-center w-onceBigModal h-[400px] bg-white px-[40px] py-[30px] justify-center">
+            <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
+              <span className="text-[34px] font-bold">휴가신청</span>
+              <div className="flex flex-row items-center">
+                <img
+                  onClick={() => setIsVisible(false)}
+                  className="w-[30px]"
+                  src={cancel}
+                  alt="닫기"
+                  style={{ cursor: "pointer" }}
                 />
-              </FormValue>
-            </FormRow>
+              </div>
+            </ModalHeaderZone>
 
-            {/* 신청 버튼 */}
-            <FormRow className="justify-end mt-2">
-              <SubmitButton onClick={handleSubmit}>휴가신청</SubmitButton>
-            </FormRow>
-          </FormSection>
-        </BottomSection>
-      </div>
-    </ModalTemplate>
+            <h3 className="text-xl font-semibold mb-4">로그인이 필요합니다</h3>
+            <p className="text-gray-600 mb-6 text-center">
+              휴가 신청을 위해서는 로그인이 필요합니다.
+            </p>
+
+            <button
+              onClick={openLoginModal}
+              className="mt-4 px-6 py-3 bg-onceBlue text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
+            >
+              로그인하기
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
+            <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
+              <span className="text-[34px] font-bold">휴가신청</span>
+              <div className="flex flex-row items-center">
+                <img
+                  onClick={() => setIsVisible(false)}
+                  className="w-[30px]"
+                  src={cancel}
+                  alt="닫기"
+                  style={{ cursor: "pointer" }}
+                />
+              </div>
+            </ModalHeaderZone>
+
+            {/* 상단 섹션 - 좌우 분할 */}
+            <TopSection>
+              {/* 좌상단 - 달력 */}
+              <LeftTopSection>
+                <JcyCalendar
+                  key={calendarKey}
+                  preStartDay={startDate}
+                  preEndDay={endDate}
+                  setTargetStartDay={handleStartDateChange}
+                  setTargetEndDay={handleEndDateChange}
+                  standardWidth="95%"
+                  isEdit={true}
+                  lockToday={false}
+                  singleDateMode={vacationForm.vacationType === "반차"}
+                  startDayOnlyMode={false}
+                />
+              </LeftTopSection>
+
+              {/* 우상단 - 신청 정보 */}
+              <RightTopSection>
+                <FormSection>
+                  {/* 신청자 및 대체자 정보 - 한 행에 배치 */}
+                  <FormRow>
+                    <FormLabel required>신청자</FormLabel>
+                    <FormValue className="flex-1">
+                      <InfoBox highlight>
+                        {currentUser?.name || "사용자 정보 없음"}
+                      </InfoBox>
+                    </FormValue>
+                    <FormLabel>대체자</FormLabel>
+                    <FormValue className="flex-1">
+                      <WhoSelector
+                        who="대체자"
+                        selectedPeople={selectedReplacement}
+                        onPeopleChange={handleReplacementChange}
+                        singleSelectMode={true}
+                      />
+                    </FormValue>
+                  </FormRow>
+
+                  {/* 잔여휴일과 사용휴일 - 모든 유형에서 표시 (계산된 실제 값 사용) */}
+                  <FormRow>
+                    <FormLabel>잔여휴일</FormLabel>
+                    <FormValue className="flex-1">
+                      <InfoBox highlight className="w-full">
+                        {getRemainingVacationDays()}일
+                      </InfoBox>
+                    </FormValue>
+                    <FormLabel>사용휴일</FormLabel>
+                    <FormValue className="flex-1">
+                      <InfoBox highlight className="w-full">
+                        {renderCalculatedDays()}일
+                      </InfoBox>
+                    </FormValue>
+                  </FormRow>
+
+                  {/* 공휴일 입력 필드 - 모든 유형에서 표시 */}
+                  <FormRow>
+                    <FormLabel>제외일수</FormLabel>
+                    <FormValue className="flex-1">
+                      <NumberInput
+                        type="number"
+                        name="holidayCount"
+                        placeholder="공휴일 수"
+                        min="0"
+                        step="1"
+                        value={vacationForm.holidayCount}
+                        onChange={handleHolidayCountChange}
+                      />
+                    </FormValue>
+                  </FormRow>
+
+                  {/* 입사일 정보 표시 */}
+                  <FormRow>
+                    <FormLabel>입사일</FormLabel>
+                    <FormValue className="flex-1">
+                      <InfoBox className="w-full">
+                        {userVacationInfo.hireDate || "정보 없음"}
+                      </InfoBox>
+                    </FormValue>
+                  </FormRow>
+
+                  <div className="px-4 w-full">
+                    <InfoText>
+                      * 공휴일 및 회사 지정 휴무일 등 자동으로 제외되지 않는
+                      날짜를 수동으로 입력할 수 있습니다. 일요일은 자동으로
+                      제외됩니다.
+                    </InfoText>
+                  </div>
+
+                  {/* 휴가 타입 */}
+                  <FormRow>
+                    <FormLabel>휴가종류</FormLabel>
+                    <FormValue className="flex-1">
+                      <div className="flex space-x-2">
+                        <TypeButton
+                          active={vacationForm.vacationType === "휴가"}
+                          onClick={() => handleVacationTypeChange("휴가")}
+                        >
+                          휴가
+                        </TypeButton>
+                        <TypeButton
+                          active={vacationForm.vacationType === "반차"}
+                          onClick={() => handleVacationTypeChange("반차")}
+                        >
+                          반차
+                        </TypeButton>
+                        <TypeButton
+                          active={vacationForm.vacationType === "경조사"}
+                          onClick={() => handleVacationTypeChange("경조사")}
+                        >
+                          경조사
+                        </TypeButton>
+                      </div>
+                    </FormValue>
+                  </FormRow>
+
+                  {/* 날짜 선택과 시간 선택을 합친 row로 수정 */}
+                  <FormRow>
+                    <FormLabel>시작일시</FormLabel>
+                    <FormValue className="flex-1">
+                      <DateTimeSelector
+                        dateValue={startDate}
+                        timeValue={vacationForm.startTime}
+                        onDateChange={handleStartDateChange}
+                        onTimeChange={handleTimeChange}
+                        timeName="startTime"
+                      />
+                    </FormValue>
+                  </FormRow>
+
+                  <FormRow>
+                    <FormLabel>
+                      {vacationForm.vacationType === "반차"
+                        ? "종료시간"
+                        : "종료일시"}
+                    </FormLabel>
+                    <FormValue className="flex-1">
+                      <DateTimeSelector
+                        dateValue={endDate}
+                        timeValue={vacationForm.endTime}
+                        onDateChange={handleEndDateChange}
+                        onTimeChange={handleTimeChange}
+                        timeName="endTime"
+                        disableDate={vacationForm.vacationType === "반차"}
+                      />
+                    </FormValue>
+                  </FormRow>
+
+                  {/* 사유 입력 - 단순화된 버전 */}
+                  <FormRow>
+                    <FormLabel required>사유</FormLabel>
+                    <FormValue>
+                      <StyledTextarea
+                        name="reason"
+                        value={vacationForm.reason}
+                        onChange={handleInputChange}
+                        placeholder="휴가 사유를 입력해주세요."
+                      />
+                    </FormValue>
+                  </FormRow>
+                </FormSection>
+              </RightTopSection>
+            </TopSection>
+
+            {/* 하단 섹션 - RequestModal 스타일로 변경 */}
+            <BottomSection>
+              <div className="flex flex-row w-full justify-center px-[20px] mt-[50px]">
+                <div className="flex flex-row gap-x-[20px] w-full">
+                  <OnceOnOffButton
+                    text={"휴가신청"}
+                    onClick={handleSubmit}
+                    on={validateRequiredFields()}
+                    alertMessage="필수 항목을 모두 입력해주세요"
+                  />
+                </div>
+              </div>
+            </BottomSection>
+          </div>
+        )}
+      </ModalTemplate>
+
+      {/* 로그인/PC할당 통합 모달 - 별도의 모달로 렌더링 */}
+      <LoginPCModal
+        isOpen={loginModalOpen}
+        onClose={closeLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        onPCAllocationSubmit={handlePCAllocationSubmit}
+        defaultDepartment={userLevelData?.department || "간호팀"}
+      />
+    </>
   );
 }

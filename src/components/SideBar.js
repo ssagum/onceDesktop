@@ -160,8 +160,8 @@ export default function SideBar() {
           </Link>
           <Link to="/management">
             <RenderIndex
-              indexValue="관리"
-              nowURL={nowURL === "/management" ? "관리" : nowURL}
+              indexValue="병원현황"
+              nowURL={nowURL === "/management" ? "병원현황" : nowURL}
             />
           </Link>
         </IndexZone>

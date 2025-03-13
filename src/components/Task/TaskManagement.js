@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import {
   DndContext,
@@ -7,12 +7,16 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  DragOverlay,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
   horizontalListSortingStrategy,
+  useSortable,
 } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useDroppable } from "@dnd-kit/core";
 import TaskFolder from "./TaskFolder";
 import TaskItem from "./TaskItem";
 import DepartmentFolder from "./DepartmentFolder";
@@ -23,49 +27,134 @@ const Container = styled.div`
   flex-direction: column;
   width: 100%;
   height: 100%;
+  min-height: 900px;
+  background-color: white;
+  padding: 30px 40px;
+  border-radius: 12px;
   overflow: hidden;
 `;
 
-const TasksContainer = styled.div`
+const TitleZone = styled.div`
   display: flex;
-  flex-direction: column;
-  padding: 16px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 34px;
+`;
+
+const ToggleContainer = styled.div`
+  position: relative;
+  display: flex;
+  background-color: #f4f4f4;
+  border-radius: 20px;
+  margin-left: 16px;
+  padding: 4px;
+  width: 210px;
+  height: 36px;
+`;
+
+const ToggleSlider = styled.div`
+  position: absolute;
+  width: 105px;
+  height: 28px;
+  background: white;
+  border-radius: 16px;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateX(
+    ${(props) => (props.position === "left" ? "0" : "105px")}
+  );
+`;
+
+const ToggleOption = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 105px;
+  height: 28px;
+  font-size: 14px;
+  font-weight: ${(props) => (props.active ? "600" : "400")};
+  color: ${(props) => (props.active ? "#333" : "#888")};
+  z-index: 1;
+  cursor: pointer;
+  transition: color 0.3s ease;
+`;
+
+const ToggleIcon = styled.span`
+  margin-right: 4px;
+`;
+
+const TaskButton = styled.button`
+  background-color: #1a73e8;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  width: 160px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #1765cc;
+  }
+`;
+
+const GridContainer = styled.div`
+  position: relative;
   background-color: #f8f9fa;
+  padding: 16px;
   border-radius: 8px;
-  margin-bottom: 16px;
-  max-height: 50%;
-  overflow-y: auto;
+  height: 280px;
+  width: 100%;
+  margin-bottom: 20px;
+`;
+
+const GridCell = styled.div`
+  position: absolute;
+  width: 33.33%;
+  height: 33.33%;
+  padding: 4px;
+  box-sizing: border-box;
+  left: ${(props) => props.left};
+  top: ${(props) => props.top};
+`;
+
+const EmptyCell = styled.div`
+  width: 100%;
+  height: 100%;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+`;
+
+const FolderHeaderContainer = styled.div`
+  position: relative;
+  display: inline-block;
+  margin-bottom: -5px;
+`;
+
+const FolderHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 143px;
+  height: 33px;
+  border-left: 8px solid ${(props) => (props.selected ? "#3182ce" : "#e2e8f0")};
+  font-weight: ${(props) => (props.selected ? "bold" : "normal")};
 `;
 
 const DepartmentsContainer = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
-  padding: 16px;
-  overflow-x: auto;
-  border-top: 1px solid #e9ecef;
-  padding-top: 24px;
-  position: relative;
+  margin-bottom: 20px;
 `;
 
-const FoldersContainer = styled.div`
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  flex: 1;
-  overflow-y: auto;
-`;
-
-const SectionTitle = styled.h2`
-  font-size: 1.2rem;
+const SubTitle = styled.h2`
+  font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   color: #333;
-`;
-
-const TasksList = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
 `;
 
 const Notification = styled.div`
@@ -82,6 +171,85 @@ const Notification = styled.div`
   transform: translateY(${(props) => (props.show ? 0 : "20px")});
   transition: all 0.3s ease;
 `;
+
+// 중요도에 따른 색상 매핑
+const priorityColors = {
+  높음: "bg-red-400",
+  중간: "bg-yellow-400",
+  낮음: "bg-green-400",
+};
+
+// ToDoItem 컴포넌트
+function ToDoItem({ task, onClick }) {
+  // 중요도 기본값 설정
+  const priority = task?.priority || "중간";
+
+  // 클릭 핸들러
+  const handleClick = () => {
+    if (onClick && task) {
+      onClick(task);
+    }
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case "높음":
+        return "bg-red-400";
+      case "중간":
+        return "bg-yellow-400";
+      case "낮음":
+        return "bg-green-400";
+      default:
+        return "bg-gray-400";
+    }
+  };
+
+  return (
+    <div
+      className="h-[56px] flex flex-row w-full items-center bg-white mb-[4px] cursor-pointer shadow-sm rounded"
+      onClick={handleClick}
+    >
+      <div
+        className={`w-[6px] h-full rounded-l ${getPriorityColor(priority)}`}
+      />
+      <div className="flex-1 px-[12px]">
+        <span className="text-sm font-medium">
+          {task?.title || "제목 없음"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// SortableTask 컴포넌트
+function SortableTask({ id, task, containerId, onClick }) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({
+      id,
+      data: {
+        type: "task",
+        task,
+        containerId,
+      },
+    });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="cursor-grab flex items-center justify-center w-full h-full"
+    >
+      <ToDoItem task={task} onClick={onClick} />
+    </div>
+  );
+}
 
 // 초기 부서 데이터
 const initialDepartments = [
@@ -193,6 +361,10 @@ const TaskManagement = () => {
     show: false,
     message: "",
   });
+  const [viewMode, setViewMode] = useState("dnd"); // dnd 또는 board 모드
+  const [activeTaskId, setActiveTaskId] = useState(null); // 드래그 중인 태스크 ID
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(9);
 
   // dnd-kit 센서 설정
   const sensors = useSensors(
@@ -238,8 +410,15 @@ const TaskManagement = () => {
     return dept ? dept.name : "미지정";
   };
 
+  // 드래그 시작 핸들러
+  const handleDragStart = (event) => {
+    const { active } = event;
+    setActiveTaskId(active.id);
+  };
+
   // 드래그 종료시 핸들러
   const handleDragEnd = (event) => {
+    setActiveTaskId(null);
     const { active, over } = event;
 
     // 드래그 종료가 유효한 영역에서 발생하지 않았을 경우
@@ -254,20 +433,7 @@ const TaskManagement = () => {
     if (activeData?.type === "task") {
       const task = tasks.find((t) => t.id === activeId);
 
-      // 1. 태스크를 상태 폴더에 드래그한 경우 (상태 변경)
-      const targetFolder = folders.find((f) => f.id === overId);
-      if (task && targetFolder && task.status !== targetFolder.status) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === activeId ? { ...t, status: targetFolder.status } : t
-          )
-        );
-        showNotification(
-          `'${task.title}' 태스크 상태가 '${targetFolder.title}'로 변경되었습니다.`
-        );
-      }
-
-      // 2. 태스크를 부서 폴더에 드래그한 경우 (부서 변경)
+      // 태스크를 부서 폴더에 드래그한 경우 (부서 변경)
       const targetDept = departments.find((d) => d.id === overId);
       if (task && targetDept && task.department !== targetDept.id) {
         const oldDeptName = getDepartmentName(task.department);
@@ -294,59 +460,257 @@ const TaskManagement = () => {
     }
   };
 
+  // 태스크 클릭 핸들러
+  const handleTaskClick = (task) => {
+    console.log("태스크 클릭:", task);
+    // 여기에 태스크 상세보기나 편집 로직 추가 가능
+  };
+
   const filteredTasks = getFilteredTasks();
   const taskIds = filteredTasks.map((task) => task.id);
   const departmentIds = departments.map((dept) => dept.id);
 
+  // 현재 페이지에 표시할 작업 ID들
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
+
+  // 그리드 위치 계산
+  const gridPositions = [
+    { left: "0%", top: "0%" },
+    { left: "33.33%", top: "0%" },
+    { left: "66.66%", top: "0%" },
+    { left: "0%", top: "33.33%" },
+    { left: "33.33%", top: "33.33%" },
+    { left: "66.66%", top: "33.33%" },
+    { left: "0%", top: "66.66%" },
+    { left: "33.33%", top: "66.66%" },
+    { left: "66.66%", top: "66.66%" },
+  ];
+
+  // 9개 고정 슬롯 생성
+  const fixedSlots = useMemo(() => {
+    const totalSlots = 9;
+    return Array.from({ length: totalSlots }, (_, index) =>
+      paginatedTasks[index] ? paginatedTasks[index].id : `empty-${index}`
+    );
+  }, [paginatedTasks]);
+
   return (
     <Container>
-      <h1 className="text-2xl font-bold mb-4 px-4 pt-4">작업 관리</h1>
+      <TitleZone>
+        <div className="flex items-center">
+          <span className="text-[34px] font-semibold">작업 관리</span>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragEnd={handleDragEnd}
-      >
-        {/* 하단 부서 폴더 섹션 */}
-        <div>
-          <SectionTitle className="px-4">
-            부서별 분류 (태스크를 드래그하여 부서 변경)
-          </SectionTitle>
-          <DepartmentsContainer>
-            {departments.map((department) => (
-              <DepartmentFolder
-                key={department.id}
-                department={department}
-                taskCount={
-                  tasks.filter((task) => task.department === department.id)
-                    .length
-                }
-                isSelected={selectedDepartment?.id === department.id}
-                onSelect={() => handleSelectDepartment(department)}
-              />
-            ))}
-          </DepartmentsContainer>
+          {/* 모드 전환 토글 */}
+          <ToggleContainer>
+            <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
+            <ToggleOption
+              active={viewMode === "dnd"}
+              onClick={() => setViewMode("dnd")}
+            >
+              <ToggleIcon>🗂️</ToggleIcon>
+              드래그 모드
+            </ToggleOption>
+            <ToggleOption
+              active={viewMode === "board"}
+              onClick={() => setViewMode("board")}
+            >
+              <ToggleIcon>📋</ToggleIcon>
+              게시판 모드
+            </ToggleOption>
+          </ToggleContainer>
         </div>
+        <TaskButton>업무 추가하기 +</TaskButton>
+      </TitleZone>
 
-        {/* 폴더 섹션 - 선택적으로 사용할 수 있음 */}
-        <FoldersContainer>
-          <SectionTitle className="px-4 w-full">
-            상태별 분류 (태스크를 드래그하여 상태 변경)
-          </SectionTitle>
-          <div className="flex gap-4 w-full">
-            {folders.map((folder) => (
-              <TaskFolder
-                key={folder.id}
-                id={folder.id}
-                title={folder.title}
-                tasks={filteredTasks.filter(
-                  (task) => task.status === folder.status
-                )}
-              />
+      {viewMode === "dnd" ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <>
+            {/* 부서 폴더 섹션 - 위쪽으로 이동*/}
+            <div>
+              <SubTitle>부서별 분류 (태스크를 드래그하여 부서 변경)</SubTitle>
+              <DepartmentsContainer>
+                {departments.map((department) => (
+                  <DepartmentFolder
+                    key={department.id}
+                    department={department}
+                    taskCount={
+                      tasks.filter((task) => task.department === department.id)
+                        .length
+                    }
+                    isSelected={selectedDepartment?.id === department.id}
+                    onSelect={() => handleSelectDepartment(department)}
+                  />
+                ))}
+              </DepartmentsContainer>
+            </div>
+
+            {/* 폴더 라벨 */}
+            <FolderHeaderContainer>
+              <svg
+                className="w-[198px] h-[33px]"
+                viewBox="0 0 198 33"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <polygon
+                  points="0,0 154,0 198,33 0,33"
+                  className="fill-white stroke-gray-200 stroke-[1]"
+                />
+                <foreignObject x="0" y="0" width="143" height="33">
+                  <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    className="flex items-center justify-center w-full h-full text-black border-l-[8px] border-gray-400"
+                  >
+                    {selectedDepartment
+                      ? selectedDepartment.name
+                      : "전체 태스크"}
+                  </div>
+                </foreignObject>
+              </svg>
+            </FolderHeaderContainer>
+
+            {/* 태스크 그리드 */}
+            <GridContainer>
+              <SortableContext items={fixedSlots}>
+                {fixedSlots.map((id, index) => {
+                  const pos = gridPositions[index];
+                  const isEmpty = id.toString().startsWith("empty-");
+                  const taskData = isEmpty
+                    ? null
+                    : tasks.find((t) => t.id === id);
+
+                  return (
+                    <GridCell key={id} left={pos.left} top={pos.top}>
+                      {isEmpty ? (
+                        <EmptyCell />
+                      ) : (
+                        <SortableTask
+                          id={id}
+                          task={taskData}
+                          containerId={selectedDepartment?.id || "all"}
+                          onClick={handleTaskClick}
+                        />
+                      )}
+                    </GridCell>
+                  );
+                })}
+              </SortableContext>
+            </GridContainer>
+
+            {/* 페이지네이션 컨트롤 */}
+            {filteredTasks.length > itemsPerPage && (
+              <div className="flex justify-center mt-4 mb-6">
+                <button
+                  className="mx-1 px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
+                  disabled={currentPage === 1}
+                >
+                  이전
+                </button>
+                <span className="mx-2 py-1">
+                  {currentPage} /{" "}
+                  {Math.ceil(filteredTasks.length / itemsPerPage)}
+                </span>
+                <button
+                  className="mx-1 px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                  onClick={() =>
+                    setCurrentPage((prev) =>
+                      prev < Math.ceil(filteredTasks.length / itemsPerPage)
+                        ? prev + 1
+                        : prev
+                    )
+                  }
+                  disabled={
+                    currentPage >=
+                    Math.ceil(filteredTasks.length / itemsPerPage)
+                  }
+                >
+                  다음
+                </button>
+              </div>
+            )}
+
+            {/* 드래그 오버레이 */}
+            <DragOverlay>
+              {activeTaskId && (
+                <div className="p-2 bg-white rounded shadow">
+                  {(() => {
+                    const activeTask = tasks.find(
+                      (task) => task.id === activeTaskId
+                    );
+                    return (
+                      activeTask?.title ||
+                      activeTask?.content ||
+                      `태스크 ${activeTaskId}`
+                    );
+                  })()}
+                </div>
+              )}
+            </DragOverlay>
+          </>
+        </DndContext>
+      ) : (
+        // 게시판 모드 (미구현)
+        <div className="p-4 text-center">
+          <h3 className="text-lg font-medium">게시판 모드</h3>
+          <p className="text-gray-500 mt-2">
+            게시판 형태의 태스크 관리 뷰가 표시됩니다.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {filteredTasks.map((task) => (
+              <div
+                key={task.id}
+                className="p-3 border rounded flex justify-between items-center hover:bg-gray-50 cursor-pointer"
+                onClick={() => handleTaskClick(task)}
+              >
+                <div className="flex items-center">
+                  <div
+                    className={`w-2 h-10 rounded-l mr-3 ${
+                      task.priority === "높음"
+                        ? "bg-red-400"
+                        : task.priority === "중간"
+                        ? "bg-yellow-400"
+                        : "bg-green-400"
+                    }`}
+                  ></div>
+                  <div>
+                    <div className="font-medium">{task.title}</div>
+                    <div className="text-sm text-gray-500">{task.content}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs ${
+                      task.status === "todo"
+                        ? "bg-gray-200"
+                        : task.status === "in-progress"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-green-100 text-green-800"
+                    }`}
+                  >
+                    {task.status === "todo"
+                      ? "예정"
+                      : task.status === "in-progress"
+                      ? "진행 중"
+                      : "완료"}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {getDepartmentName(task.department)}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
-        </FoldersContainer>
-      </DndContext>
+        </div>
+      )}
 
       {/* 알림 메시지 */}
       <Notification show={notification.show}>

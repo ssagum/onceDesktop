@@ -85,7 +85,8 @@ export default function RequestModal({ isVisible, setIsVisible }) {
       isVisible={isVisible}
       setIsVisible={setIsVisible}
       showCancel={false}
-      modalClassName="rounded-xl">
+      modalClassName="rounded-xl"
+    >
       <div className="flex flex-col items-center w-onceBigModal h-onceBigModalH bg-white px-[40px] py-[30px]">
         <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center">
           <span className="text-[34px] font-bold">요청</span>

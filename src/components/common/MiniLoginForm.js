@@ -6,7 +6,7 @@ function MiniLoginForm({ onLoginSuccess }) {
   const { login, logout, isLoggedIn, currentUser } = useUserLevel();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSignupModal, setShowSignupModal] = useState(false);
