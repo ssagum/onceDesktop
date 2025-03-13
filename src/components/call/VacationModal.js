@@ -97,44 +97,29 @@ const FormValue = styled.div`
   align-items: center;
 `;
 
-const TypeButton = styled.button`
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-weight: 500;
-  transition: all 0.2s;
-  flex: 1;
-  text-align: center;
-  min-width: 70px;
-
-  ${({ active }) =>
-    active
-      ? `
-      background-color: #4299e1;
-      color: white;
-      border: 1px solid #4299e1;
-    `
-      : `
-      background-color: #f3f4f6;
-      color: #4b5563;
-      border: 1px solid #e5e7eb;
-    `}
-
-  &:hover {
-    ${({ active }) =>
-      !active &&
-      `
-      background-color: #e5e7eb;
-    `}
-  }
-`;
+// TypeButton을 일반 컴포넌트로 변경
+const TypeButton = ({ active, onClick, children }) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-[120px] py-2 px-3 rounded-md font-medium text-base transition-all duration-200 cursor-pointer border-2 ${
+        active
+          ? "bg-onceBlue text-white border-onceBlue"
+          : "bg-white text-onceBlue border-onceBlue"
+      }`}>
+      {children}
+    </button>
+  );
+};
 
 const InfoBox = styled.div`
   background-color: ${(props) => (props.highlight ? "#ebf5ff" : "#f9fafb")};
-  border: 1px solid ${(props) => (props.highlight ? "#90cdf4" : "#e5e7eb")};
+  border: 1px solid
+    ${(props) => (props.highlight ? "var(--once-blue)" : "#e5e7eb")};
   border-radius: 6px;
   padding: 8px 12px;
   font-weight: ${(props) => (props.highlight ? "600" : "400")};
-  color: ${(props) => (props.highlight ? "#3182ce" : "inherit")};
+  color: ${(props) => (props.highlight ? "var(--once-blue)" : "inherit")};
   display: flex;
   align-items: center;
   height: 40px;
@@ -153,7 +138,7 @@ const StyledTextarea = styled.textarea`
 
   &:focus {
     outline: none;
-    border-color: #4299e1;
+    border-color: var(--once-blue);
     box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
   }
 
@@ -164,7 +149,7 @@ const StyledTextarea = styled.textarea`
 
 const SubmitButton = styled.button`
   padding: 10px 20px;
-  background-color: #4299e1;
+  background-color: var(--once-blue);
   color: white;
   border-radius: 8px;
   font-weight: 600;
@@ -172,7 +157,7 @@ const SubmitButton = styled.button`
   min-width: 120px;
 
   &:hover {
-    background-color: #3182ce;
+    background-color: var(--once-blue);
     transform: translateY(-1px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   }
@@ -196,7 +181,7 @@ const NumberInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #4299e1;
+    border-color: var(--once-blue);
     box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
   }
 
@@ -266,7 +251,7 @@ const TimeInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #4299e1;
+    border-color: var(--once-blue);
     box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
   }
 `;
@@ -989,8 +974,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         isVisible={isVisible}
         setIsVisible={setIsVisible}
         showCancel={false}
-        modalClassName="rounded-xl"
-      >
+        modalClassName="rounded-xl">
         {!isLoggedIn ? (
           <div className="flex flex-col items-center w-onceBigModal h-[400px] bg-white px-[40px] py-[30px] justify-center">
             <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
@@ -1013,8 +997,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
             <button
               onClick={openLoginModal}
-              className="mt-4 px-6 py-3 bg-onceBlue text-white rounded-md font-medium hover:bg-blue-700 transition-colors"
-            >
+              className="mt-4 px-6 py-3 bg-onceBlue text-white rounded-md font-medium hover:bg-onceBlue transition-colors">
               로그인하기
             </button>
           </div>
@@ -1130,20 +1113,17 @@ export default function VacationModal({ isVisible, setIsVisible }) {
                       <div className="flex space-x-2">
                         <TypeButton
                           active={vacationForm.vacationType === "휴가"}
-                          onClick={() => handleVacationTypeChange("휴가")}
-                        >
+                          onClick={() => handleVacationTypeChange("휴가")}>
                           휴가
                         </TypeButton>
                         <TypeButton
                           active={vacationForm.vacationType === "반차"}
-                          onClick={() => handleVacationTypeChange("반차")}
-                        >
+                          onClick={() => handleVacationTypeChange("반차")}>
                           반차
                         </TypeButton>
                         <TypeButton
                           active={vacationForm.vacationType === "경조사"}
-                          onClick={() => handleVacationTypeChange("경조사")}
-                        >
+                          onClick={() => handleVacationTypeChange("경조사")}>
                           경조사
                         </TypeButton>
                       </div>
