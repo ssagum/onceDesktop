@@ -24,6 +24,11 @@ import {
   FaFile,
   FaSpinner,
 } from "react-icons/fa";
+import {
+  isHospitalOwner,
+  isSameUser,
+  isLeaderOrHigher,
+} from "../../utils/permissionUtils";
 
 // window.require 대신 contextBridge로 노출된 API 사용
 const electronAPI = window.electron;
@@ -36,8 +41,21 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   const { showToast } = useToast();
   const [downloadingFiles, setDownloadingFiles] = useState({});
 
-  // 모든 사용자에게 수정/삭제 권한 부여 (권한 검사 제거)
-  const canModify = true;
+  // 권한 확인 로직 수정
+  const canEdit =
+    userLevelData &&
+    notice &&
+    (isSameUser(userLevelData, notice.authorId) ||
+      (notice.author === userLevelData.name && !notice.authorId)); // authorId가 없고 author가 일치하는 경우도 허용
+
+  const canDelete =
+    userLevelData &&
+    notice &&
+    (isSameUser(userLevelData, notice.authorId) ||
+      (notice.author === userLevelData.name && !notice.authorId) || // authorId가 없고 author가 일치하는 경우도 허용
+      isHospitalOwner(userLevelData));
+
+  const canComment = !!userLevelData; // 로그인한 사용자만 댓글 작성 가능
 
   useEffect(() => {
     if (!notice?.id) return;
@@ -134,7 +152,16 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
 
   const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+
+    if (!canComment) {
+      showToast("댓글을 작성하려면 로그인이 필요합니다.", "error");
+      return;
+    }
+
+    if (newComment.trim() === "") {
+      showToast("댓글 내용을 입력해주세요.", "error");
+      return;
+    }
 
     try {
       await addDoc(collection(db, "comments"), {
@@ -166,6 +193,11 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   };
 
   const handleEdit = () => {
+    if (!canEdit) {
+      showToast("게시글 수정 권한이 없습니다.", "error");
+      return;
+    }
+
     if (onEdit && notice) {
       onEdit(notice);
       handleClose();
@@ -173,6 +205,11 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   };
 
   const handleDelete = async () => {
+    if (!canDelete) {
+      showToast("게시글 삭제 권한이 없습니다.", "error");
+      return;
+    }
+
     if (showConfirmDelete) {
       try {
         if (onDelete && notice) {
@@ -233,25 +270,27 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
         <div className="modal-header" style={headerStyle}>
           <h2 style={titleStyle}>공지사항</h2>
           <div style={headerButtonsStyle}>
-            {canModify && (
-              <>
-                <button
-                  onClick={handleEdit}
-                  style={editButtonStyle}
-                  title="게시글 수정">
-                  <FaPencilAlt /> 수정
-                </button>
-                <button
-                  onClick={handleDelete}
-                  style={
-                    showConfirmDelete
-                      ? confirmDeleteButtonStyle
-                      : deleteButtonStyle
-                  }
-                  title="게시글 삭제">
-                  <FaTrash /> {showConfirmDelete ? "삭제 확인" : "삭제"}
-                </button>
-              </>
+            {canEdit && (
+              <button
+                onClick={handleEdit}
+                style={editButtonStyle}
+                title="게시글 수정"
+              >
+                <FaPencilAlt /> 수정
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                style={
+                  showConfirmDelete
+                    ? confirmDeleteButtonStyle
+                    : deleteButtonStyle
+                }
+                title="게시글 삭제"
+              >
+                <FaTrash /> {showConfirmDelete ? "삭제 확인" : "삭제"}
+              </button>
             )}
             <button onClick={handleClose} style={closeButtonStyle}>
               ×
@@ -302,7 +341,8 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                           downloadingFiles[
                             image.name || `image_${index + 1}.jpg`
                           ]
-                        }>
+                        }
+                      >
                         {downloadingFiles[
                           image.name || `image_${index + 1}.jpg`
                         ] ? (
@@ -336,7 +376,8 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                         onClick={() => handleFileDownload(file.url, file.name)}
                         style={fileDownloadButtonStyle}
                         title="파일 다운로드"
-                        disabled={downloadingFiles[file.name]}>
+                        disabled={downloadingFiles[file.name]}
+                      >
                         {downloadingFiles[file.name] ? (
                           <FaSpinner
                             style={{ animation: "spin 1s linear infinite" }}
@@ -372,7 +413,8 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                         </span>
                         <button
                           onClick={() => handleDeleteComment(comment.id)}
-                          style={deleteCommentButtonStyle}>
+                          style={deleteCommentButtonStyle}
+                        >
                           삭제
                         </button>
                       </div>

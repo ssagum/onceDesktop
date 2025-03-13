@@ -9,7 +9,6 @@ import UserChipText from "../common/UserChipText";
 import ModeToggle from "../ModeToggle";
 import { db } from "../../firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import WhereSelector from "../common/WhereSelector.js";
 import PriorityToggle from "../common/PriorityToggle";
 import { useToast } from "../../contexts/ToastContext";
 
@@ -21,7 +20,8 @@ const ButtonZone = styled.div``;
 
 export default function RequestModal({ isVisible, setIsVisible }) {
   const { userLevelData } = useUserLevel();
-  const [receiverId, setReceiverId] = useState("");
+  const [receiverPeople, setReceiverPeople] = useState([]);
+  const [senderPeople, setSenderPeople] = useState([]);
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState("중");
   const [title, setTitle] = useState("");
@@ -29,16 +29,21 @@ export default function RequestModal({ isVisible, setIsVisible }) {
   // useToast 훅 사용
   const { showToast } = useToast();
 
-  // 호출 메시지 전송 함수
-  const sendCallMessage = async () => {
-    console.log("호출 시작:", {
-      receiverId,
-      senderId: userLevelData.location,
-      message: message || `${receiverId} 호출`,
+  // 요청 메시지 전송 함수
+  const sendRequestMessage = async () => {
+    console.log("요청 시작:", {
+      receiverPeople,
+      senderPeople,
+      message: message || `요청 메시지`,
     });
 
-    if (!receiverId) {
-      showToast("수신 부서를 선택해주세요.", "error");
+    if (receiverPeople.length === 0) {
+      showToast("수신자를 선택해주세요.", "error");
+      return;
+    }
+
+    if (senderPeople.length === 0) {
+      showToast("발신자를 선택해주세요.", "error");
       return;
     }
 
@@ -48,36 +53,41 @@ export default function RequestModal({ isVisible, setIsVisible }) {
     const formattedTime = `${hours}:${minutes}`;
 
     try {
-      const callData = {
-        title: title || `${receiverId} 호출`,
-        message: message || `${receiverId} 호출`,
-        receiverId: receiverId,
-        senderId: userLevelData.location,
+      const requestData = {
+        title: title || `요청`,
+        message: message || `요청 메시지`,
+        receiverPeople: receiverPeople,
+        senderPeople: senderPeople,
+        senderLocation: userLevelData.location,
         formattedTime,
         createdAt: Date.now(),
         createdAt2: serverTimestamp(),
-        [receiverId]: true,
-        [userLevelData.location]: true,
         priority: priority,
+        status: "대기중",
       };
 
-      console.log("저장할 데이터:", callData);
+      console.log("저장할 데이터:", requestData);
 
-      await addDoc(collection(db, "calls"), callData);
-      console.log("호출 메시지 저장 성공");
+      await addDoc(collection(db, "requests"), requestData);
+      console.log("요청 메시지 저장 성공");
 
-      showToast(`${receiverId} 호출하였습니다.`, "success");
+      showToast(`요청을 성공적으로 전송하였습니다.`, "success");
       setIsVisible(false);
       setMessage("");
       setTitle("");
+      setReceiverPeople([]);
     } catch (error) {
-      console.error("호출 에러 상세 정보:", error);
-      showToast("호출 전송에 실패했습니다.", "error");
+      console.error("요청 전송 에러 상세 정보:", error);
+      showToast("요청 전송에 실패했습니다.", "error");
     }
   };
 
-  const handleReceiverChange = (selectedValue) => {
-    setReceiverId(selectedValue);
+  const handleSenderChange = (selectedPeople) => {
+    setSenderPeople(selectedPeople);
+  };
+
+  const handleReceiverChange = (selectedPeople) => {
+    setReceiverPeople(selectedPeople);
   };
 
   return (
@@ -106,11 +116,19 @@ export default function RequestModal({ isVisible, setIsVisible }) {
             <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[60px]">
               발신:
             </label>
-            <WhereSelector disabled={true} value={userLevelData.location} />
+            <WhoSelector
+              who={"발신자"}
+              selectedPeople={senderPeople}
+              onPeopleChange={handleSenderChange}
+            />
             <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] ml-[40px]">
               수신:
             </label>
-            <WhereSelector value={receiverId} onChange={setReceiverId} />
+            <WhoSelector
+              who={"수신자"}
+              selectedPeople={receiverPeople}
+              onPeopleChange={handleReceiverChange}
+            />
           </div>
           <div className="flex flex-row items-center">
             <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] ml-[40px]">
@@ -146,20 +164,12 @@ export default function RequestModal({ isVisible, setIsVisible }) {
           />
         </ContentZone>
         <ButtonZone className="flex flex-row w-full justify-center px-[20px]">
-          {/* <div className="flex flex-row gap-x-[20px] w-full">
-            <OnceOnOffButton text={"수정"} />
-            <OnceOnOffButton text={"삭제"} />
-            <OnceOnOffButton text={"확인"} />
-          </div> */}
-          {/* <div className="flex flex-row gap-x-[20px] w-full">
-            <OnceOnOffButton text={"확인"} />
-          </div> */}
           <div className="flex flex-row gap-x-[20px] w-full">
             <OnceOnOffButton
-              text={"호출하기"}
-              onClick={sendCallMessage}
-              on={receiverId !== ""}
-              alertMessage="수신 위치를 선택해주세요"
+              text={"요청하기"}
+              onClick={sendRequestMessage}
+              on={receiverPeople.length > 0 && senderPeople.length > 0}
+              alertMessage="발신자와 수신자를 모두 선택해주세요"
             />
           </div>
         </ButtonZone>

@@ -9,6 +9,7 @@ import {
   doc,
   Timestamp,
   getDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 // 로그인 상태 관리를 위한 키
@@ -204,5 +205,39 @@ export const registerUser = async (
   } catch (error) {
     console.error("회원가입 오류:", error);
     return { success: false, message: "회원가입 중 오류가 발생했습니다." };
+  }
+};
+
+// 비밀번호 초기화 함수
+export const resetPassword = async (email) => {
+  try {
+    // 이메일로 사용자 찾기
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      return {
+        success: false,
+        message: "해당 이메일의 사용자를 찾을 수 없습니다.",
+      };
+    }
+
+    // 사용자 문서 참조
+    const userDoc = querySnapshot.docs[0];
+    const userRef = doc(db, "users", userDoc.id);
+
+    // 비밀번호를 1111로 초기화
+    await updateDoc(userRef, {
+      password: "1111",
+    });
+
+    return { success: true, message: "비밀번호가 초기화되었습니다." };
+  } catch (error) {
+    console.error("비밀번호 초기화 오류:", error);
+    return {
+      success: false,
+      message: "비밀번호 초기화 중 오류가 발생했습니다.",
+    };
   }
 };

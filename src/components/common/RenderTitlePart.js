@@ -59,7 +59,7 @@ export default function RenderTitlePart({
     setShowModal(false);
   };
 
-  // 게시글 삭제 함수 - 권한 검사 제거 (모든 사용자가 삭제 가능)
+  // 게시글 삭제 함수
   const handleDeleteNotice = async (noticeId) => {
     try {
       const noticeRef = doc(db, "notices", noticeId);
@@ -74,7 +74,7 @@ export default function RenderTitlePart({
     }
   };
 
-  // 게시글 수정 함수 - 모든 사용자가 수정 가능
+  // 게시글 수정 함수
   const handleEditNotice = (notice) => {
     if (onEditPost && notice) {
       onEditPost(notice);

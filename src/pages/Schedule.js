@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 import SideBar from "../components/SideBar";
-import ScheduleCalendar from "../components/Schedule/ScheduleCalendar";
 import ScheduleList from "../components/Schedule/ScheduleList";
 import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import WhoSelector from "../components/common/WhoSelector";
 import { useToast } from "../contexts/ToastContext";
+import { JcyCalendar } from "../components/common/JcyCalendar";
+import { format } from "date-fns";
 
 const MainZone = styled.div``;
 const LeftZone = styled.div``;
@@ -101,6 +102,7 @@ const Schedule = () => {
   const [selectedTeam, setSelectedTeam] = useState(teamData[0]);
   const [schedules, setSchedules] = useState(dummySchedules);
   const [isLoading, setIsLoading] = useState(false);
+  const [vacations, setVacations] = useState([]); // 휴가 정보를 저장할 상태 추가
 
   // 일정 입력 폼 상태
   const [scheduleForm, setScheduleForm] = useState({
@@ -163,8 +165,48 @@ const Schedule = () => {
     }
   };
 
+  // 휴가 정보를 Firebase에서 가져오는 함수
+  const fetchVacations = async () => {
+    try {
+      // 현재 날짜 기준 포맷
+      const formattedDate = format(currentDate, "yyyy-MM-dd");
+
+      // Firebase에서 휴가 정보 쿼리
+      const vacationsRef = collection(db, "vacations");
+      const q = query(
+        vacationsRef,
+        where("status", "==", "승인됨") // 승인된 휴가만 가져오기
+      );
+
+      const querySnapshot = await getDocs(q);
+      const vacationData = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // 날짜 문자열을 Date 객체로 변환
+        const startDate = new Date(data.startDate);
+        const endDate = new Date(data.endDate);
+
+        // 현재 선택된 날짜가 휴가 기간에 포함되는지 확인
+        if (currentDate >= startDate && currentDate <= endDate) {
+          vacationData.push({
+            id: doc.id,
+            ...data,
+            startDate,
+            endDate,
+          });
+        }
+      });
+
+      setVacations(vacationData);
+    } catch (error) {
+      console.error("휴가 정보를 가져오는 중 오류 발생:", error);
+    }
+  };
+
   useEffect(() => {
     fetchSchedules();
+    fetchVacations(); // 휴가 정보도 함께 가져오기
   }, [currentDate]);
 
   // 날짜 포맷 함수
@@ -186,6 +228,40 @@ const Schedule = () => {
       if (member) return member;
     }
     return null;
+  };
+
+  // 휴가 정보를 일정 형태로 변환하여 기존 일정과 병합
+  const mergeVacationsWithSchedules = () => {
+    // 기존 일정 복사
+    const mergedSchedules = [...schedules];
+
+    // 휴가 정보를 일정 형태로 변환하여 추가
+    vacations.forEach((vacation) => {
+      // 휴가 일정 생성
+      const vacationSchedule = {
+        id: `vacation-${vacation.id}`,
+        date: new Date(vacation.startDate),
+        startTime: vacation.startTime,
+        endTime: vacation.endTime,
+        type: "휴가",
+        title: `${vacation.vacationType} - ${vacation.userName}`,
+        memberId: vacation.userId,
+        isVacation: true, // 휴가 플래그 추가
+      };
+
+      // 병합된 일정에 추가
+      mergedSchedules.push(vacationSchedule);
+    });
+
+    return mergedSchedules;
+  };
+
+  // 담당자 선택기 핸들러 추가
+  const handlePeopleChange = (type) => (selectedPeople) => {
+    setScheduleForm((prev) => ({
+      ...prev,
+      [type]: selectedPeople.length > 0 ? selectedPeople[0] : prev[type],
+    }));
   };
 
   // 새 일정 추가
@@ -319,6 +395,14 @@ const Schedule = () => {
     });
   };
 
+  // 캘린더에서 날짜 선택 시 처리 함수
+  const handleDateSelect = (dateStr) => {
+    const selectedDate = new Date(dateStr.replace(/\//g, "-"));
+    setCurrentDate(selectedDate);
+    // 날짜 변경 시 휴가 정보도 갱신
+    fetchVacations();
+  };
+
   return (
     <div className="flex flex-row w-full h-screen">
       <div className="w-[310px] h-full flex flex-col">
@@ -327,12 +411,20 @@ const Schedule = () => {
       <MainZone className="w-full flex flex-row justify-evenly items-center bg-onceBackground p-[20px] h-screen">
         {/* 왼쪽 영역: 캘린더 및 폼 */}
         <LeftZone className="w-[442px] mr-6 bg-white rounded-[21px] h-full overflow-y-auto px-[20px] py-[20px]">
-          {/* 캘린더 */}
-          <ScheduleCalendar
-            currentDate={currentDate}
-            setCurrentDate={setCurrentDate}
-            appointments={schedules}
+          {/* 캘린더 - JcyCalendar로 변경 */}
+          <JcyCalendar
+            preStartDay={format(currentDate, "yyyy/MM/dd")}
+            preEndDay={format(currentDate, "yyyy/MM/dd")}
+            setTargetStartDay={handleDateSelect}
+            setTargetEndDay={handleDateSelect}
+            standardWidth="100%"
+            isEdit={true}
+            lockToday={false}
+            singleDateMode={true}
+            startDayOnlyMode={false}
+            displayType="day"
           />
+
           {/* 일정 유형 선택 */}
           <div className="flex flex-row w-full gap-x-2 px-2 mt-2">
             <button
@@ -370,6 +462,11 @@ const Schedule = () => {
                 <WhoSelector
                   who={"담당자"}
                   disabled={scheduleForm.type === "휴가"}
+                  selectedPeople={
+                    scheduleForm.memberId ? [scheduleForm.memberId] : []
+                  }
+                  onPeopleChange={handlePeopleChange("memberId")}
+                  singleSelectMode={true}
                 />
               </div>
 
@@ -724,13 +821,6 @@ const Schedule = () => {
 
         {/* 오른쪽 영역: 팀 멤버별 일정 */}
         <RightZone className="flex-1 bg-white rounded-[21px] h-full p-5">
-          {/* <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">{selectedTeam.name}</h2>
-            <div>
-              <span className="text-lg">{formatDate(currentDate)}</span>
-            </div>
-          </div> */}
-
           {/* 팀 선택 탭 */}
           <div className="flex border-b mb-6 pb-2">
             {teamData.map((team) => (
@@ -752,18 +842,14 @@ const Schedule = () => {
           <ScheduleList
             currentDate={currentDate}
             selectedTeam={selectedTeam}
-            schedules={schedules}
+            schedules={mergeVacationsWithSchedules()} // 휴가 정보와 병합된 일정 전달
             onAddSchedule={(memberId) => {
-              // 해당 멤버로 폼 초기화
+              // WhoSelector 형식에 맞게 memberId 설정
               setScheduleForm({
                 ...scheduleForm,
                 memberId: memberId,
+                type: "예약", // 예약 모드로 자동 전환
               });
-              // 스크롤을 폼으로 이동
-              const formElement = document.getElementById("schedule-form");
-              if (formElement) {
-                formElement.scrollIntoView({ behavior: "smooth" });
-              }
             }}
             onEditSchedule={handleEditSchedule}
             onDeleteSchedule={handleDeleteSchedule}

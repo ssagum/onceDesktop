@@ -22,6 +22,7 @@ import { db } from "../firebase";
 import UserChipText from "./common/UserChipText";
 import { useUserLevel } from "../utils/UserLevelContext";
 import { useToast } from "../contexts/ToastContext";
+import { isLeaderOrHigher } from "../utils/permissionUtils";
 
 const COLORS = [
   { label: "검정", value: "#000000" },
@@ -63,11 +64,11 @@ const ALLOWED_FILE_TYPES = [
 
 const DEPARTMENTS = [
   { label: "전체", value: "전체" },
+  { label: "원장", value: "원장" },
+  { label: "간호", value: "간호" },
+  { label: "물리치료", value: "물리치료" },
   { label: "원무", value: "원무" },
   { label: "영상의학", value: "영상의학" },
-  { label: "방사능", value: "방사능" },
-  { label: "진료", value: "진료" },
-  { label: "물리치료", value: "물리치료" },
   { label: "경영지원", value: "경영지원" },
 ];
 
@@ -92,6 +93,8 @@ const TextEditorModal = ({
   handleSave,
   classification = "전체",
   noticeType = "regular",
+  isEditing = false, // 수정 모드인지 여부
+  editingPost = null, // 수정 중인 게시글 정보
 }) => {
   const { userLevelData } = useUserLevel();
   const editorRef = useRef(null);
@@ -107,25 +110,50 @@ const TextEditorModal = ({
   const [uploadedImages, setUploadedImages] = useState([]);
   const [currentFontSize, setCurrentFontSize] = useState("16px");
 
+  // 팀장급 이상 여부 확인
+  const isLeaderRole = userLevelData ? isLeaderOrHigher(userLevelData) : false;
+
   // useToast 훅 사용
   const { showToast } = useToast();
 
   // 초기 제목과 내용 설정
   useEffect(() => {
     if (show) {
-      setTitle("");
-      setIsPinned(false);
-      setSelectedDepartment(DEPARTMENTS[0].value);
-      setContent("");
+      // 수정 모드인 경우 기존 데이터로 초기화
+      if (isEditing && editingPost) {
+        setTitle(editingPost.title || "");
+        setIsPinned(editingPost.pinned || false);
+        setSelectedDepartment(
+          editingPost.classification || DEPARTMENTS[0].value
+        );
+        setContent(editingPost.content || "");
+        setUploadedFiles(editingPost.attachedFiles || []);
+        setUploadedImages(editingPost.attachedImages || []);
 
-      // 다음 렌더링 사이클에서 에디터 내용 초기화
-      setTimeout(() => {
-        if (editorRef.current) {
-          editorRef.current.innerHTML = "";
-        }
-      }, 0);
+        // 다음 렌더링 사이클에서 에디터 내용 초기화
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.innerHTML = editingPost.content || "";
+          }
+        }, 0);
+      } else {
+        // 새 게시글 작성 모드
+        setTitle("");
+        setIsPinned(false);
+        setSelectedDepartment(DEPARTMENTS[0].value);
+        setContent("");
+        setUploadedFiles([]);
+        setUploadedImages([]);
+
+        // 다음 렌더링 사이클에서 에디터 내용 초기화
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.innerHTML = "";
+          }
+        }, 0);
+      }
     }
-  }, [show, setContent]);
+  }, [show, setContent, isEditing, editingPost]);
 
   const execCommand = useCallback((command, value = null) => {
     if (command === "fontSize") {
@@ -533,6 +561,7 @@ const TextEditorModal = ({
         content: editorRef.current.innerHTML,
         createdAt: Date.now(),
         author: userLevelData?.name || "익명",
+        authorId: userLevelData?.id,
         classification: selectedDepartment,
         pinned: isPinned,
         noticeType: isPinned ? "notice" : "regular",
@@ -636,11 +665,32 @@ const TextEditorModal = ({
                 type="checkbox"
                 id="isPinned"
                 checked={isPinned}
-                onChange={(e) => setIsPinned(e.target.checked)}
+                onChange={(e) => {
+                  // 팀장급 이상만 공지사항 등록 가능
+                  if (e.target.checked && !isLeaderRole) {
+                    showToast(
+                      "공지사항 등록은 팀장급 이상만 가능합니다.",
+                      "error"
+                    );
+                    return;
+                  }
+                  setIsPinned(e.target.checked);
+                }}
                 className="h-4 w-4 mr-2"
+                disabled={!isLeaderRole}
               />
-              <label htmlFor="isPinned" className="text-sm font-medium">
+              <label
+                htmlFor="isPinned"
+                className={`text-sm font-medium ${
+                  !isLeaderRole ? "text-gray-400" : ""
+                }`}
+              >
                 공지사항으로 등록 (상단에 고정됩니다)
+                {!isLeaderRole && (
+                  <span className="text-xs text-red-500 ml-2">
+                    (팀장급 이상 권한 필요)
+                  </span>
+                )}
               </label>
             </div>
           </div>

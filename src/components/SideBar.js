@@ -22,6 +22,9 @@ import {
 } from "firebase/firestore";
 import PCAllocation from "./PCAllocation";
 import packageJson from "../../package.json";
+import { useContext } from "react";
+import { useUserLevel } from "../utils/UserLevelContext";
+import { isHospitalOwner } from "../utils/permissionUtils";
 
 const TopZone = styled.div``;
 const LoginZone = styled.div``;
@@ -61,6 +64,7 @@ export default function SideBar() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const correctCode = "240550"; // 이곳에 실제 인증번호를 설정하세요
+  const { userLevelData, currentUser } = useUserLevel();
 
   const handleCodeInputChange = (e) => {
     setVerificationCode(e.target.value);
@@ -158,12 +162,14 @@ export default function SideBar() {
               nowURL={nowURL === "/schedule" ? "예약관리" : nowURL}
             />
           </Link>
-          <Link to="/management">
-            <RenderIndex
-              indexValue="병원현황"
-              nowURL={nowURL === "/management" ? "병원현황" : nowURL}
-            />
-          </Link>
+          {isHospitalOwner(userLevelData) && (
+            <Link to="/management">
+              <RenderIndex
+                indexValue="병원현황"
+                nowURL={nowURL === "/management" ? "병원현황" : nowURL}
+              />
+            </Link>
+          )}
         </IndexZone>
         <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
           <span className="text-onceGray text-once18">

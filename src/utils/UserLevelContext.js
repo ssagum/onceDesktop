@@ -1,11 +1,12 @@
 // UserLevelContext.js
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { checkPermissions, hasPermission } from "./permissionUtils";
+import { isHospitalOwner, isLeaderOrHigher } from "./permissionUtils";
 import {
   getCurrentUser,
   loginUser,
   logoutUser,
   registerUser,
+  resetPassword,
 } from "./UserAuth";
 
 const UserLevelContext = createContext();
@@ -157,12 +158,27 @@ export function UserLevelProvider({ children }) {
       return false;
     }
 
-    return hasPermission(userLevelData, requiredPermission);
+    // 권한에 따라 다른 체크 로직을 적용
+    switch (requiredPermission) {
+      case "HOSPITAL_OWNER":
+        return isHospitalOwner(userLevelData);
+      case "LEADER_OR_HIGHER":
+        return isLeaderOrHigher(userLevelData);
+      default:
+        // 기본적으로는 로그인한 사용자 모두 접근 가능
+        return true;
+    }
   };
 
   // 회원가입 기능
   const register = async (email, password, name, additionalData = {}) => {
     const result = await registerUser(email, password, name, additionalData);
+    return result;
+  };
+
+  // 비밀번호 초기화 기능
+  const resetUserPassword = async (email) => {
+    const result = await resetPassword(email);
     return result;
   };
 
@@ -225,21 +241,23 @@ export function UserLevelProvider({ children }) {
   return (
     <UserLevelContext.Provider
       value={{
+        department: userLevelData.department,
+        location: userLevelData.location,
+        role: userLevelData.role,
+        departmentLeader: userLevelData.departmentLeader,
         userLevelData,
-        updateUserLevelData,
-        checkUserPermission,
-        checkPermissions: (type) => checkPermissions[type](userLevelData),
-        resetPCData, // PC 정보만 초기화하는 함수
-        // 인증 관련 추가
-        currentUser,
         isLoggedIn: !!currentUser,
+        currentUser,
+        isAutoLoginEnabled,
+        isLoading,
         login,
         logout,
         register,
-        isAutoLoginEnabled,
-        setIsAutoLoginEnabled,
-        isLoading,
-        getUserRoleLevel, // 권한 레벨 확인 기능
+        resetUserPassword,
+        updateUserLevelData,
+        resetPCData,
+        canAccess: checkUserPermission,
+        getUserRoleLevel,
       }}
     >
       {children}

@@ -50,6 +50,7 @@ import {
 import TaskRecordModal from "../Task/TaskRecordModal";
 import { useToast } from "../../contexts/ToastContext";
 import VacationModal from "../call/VacationModal";
+import StockRequestModal from "../Warehouse/StockRequestModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -116,6 +117,7 @@ export default function HomeMainCanvas() {
   const [timerModalOn, setTimerModalOn] = useState(false);
   const { showToast } = useToast();
   const [isMiniMode, setIsMiniMode] = useState(false);
+  const [stockRequestModalOn, setStockRequestModalOn] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -602,7 +604,9 @@ export default function HomeMainCanvas() {
                   </div>
                 ) : (
                   <div className="w-[240px] flex flex-row justify-between">
-                    <Square title={"비품신청"} />
+                    <div onClick={() => setStockRequestModalOn(true)}>
+                      <Square title={"비품신청"} />
+                    </div>
                     <div onClick={() => setVacationModalOn(true)}>
                       <Square title={"휴가신청"} />
                     </div>
@@ -647,6 +651,10 @@ export default function HomeMainCanvas() {
       <RequestModal
         isVisible={requestModalOn}
         setIsVisible={setRequestModalOn}
+      />
+      <StockRequestModal
+        isVisible={stockRequestModalOn}
+        setIsVisible={setStockRequestModalOn}
       />
       <TaskRecordModal
         isVisible={showTaskHistory}

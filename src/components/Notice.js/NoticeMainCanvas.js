@@ -6,13 +6,17 @@ import {
   onSnapshot,
   doc,
   deleteDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import styled from "styled-components";
 import JcyTable from "../common/JcyTable";
 import RenderTitlePart from "../common/RenderTitlePart";
 import NoticeShowModal from "./NoticeShowModal";
+import TextEditorModal from "../TextEditorModal";
 import { useToast } from "../../contexts/ToastContext";
+import { useUserLevel } from "../../utils/UserLevelContext";
+import { isLeaderOrHigher } from "../../utils/permissionUtils";
 
 // === styled-components 영역 ===
 
@@ -27,7 +31,10 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
   const itemsPerPage = 10;
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [editingNotice, setEditingNotice] = useState(null);
   const { showToast } = useToast();
+  const { userLevelData } = useUserLevel();
 
   useEffect(() => {
     const q = query(collection(db, "notices"), orderBy("createdAt", "desc"));
@@ -63,8 +70,39 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
 
   // 게시글 수정 함수
   const handleEditNotice = (notice) => {
-    if (onEditPost && notice) {
-      onEditPost(notice);
+    setEditingNotice(notice);
+    setShowEditorModal(true);
+  };
+
+  // 게시글 저장 함수 (수정)
+  const handleSaveEditedNotice = async (postData) => {
+    try {
+      if (editingNotice && editingNotice.id) {
+        // 기존 게시글 업데이트 로직 (Firebase 등)
+        const noticeRef = doc(db, "notices", editingNotice.id);
+
+        await updateDoc(noticeRef, {
+          ...postData,
+          updatedAt: Date.now(),
+        });
+
+        showToast("게시글이 수정되었습니다.", "success");
+      }
+    } catch (error) {
+      console.error("Error updating notice:", error);
+      showToast("게시글 수정에 실패했습니다.", "error");
+    }
+  };
+
+  // 게시글 작성 함수 수정 - 로그인 체크 추가
+  const handleCreatePost = () => {
+    if (!userLevelData) {
+      showToast("게시글 작성은 로그인이 필요합니다.", "error");
+      return;
+    }
+
+    if (onCreatePost) {
+      onCreatePost();
     }
   };
 
@@ -102,7 +140,7 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
     });
 
   const renderRow = (row) => (
-    <RenderTitlePart row={row} onEditPost={onEditPost} />
+    <RenderTitlePart row={row} onEditPost={handleEditNotice} />
   );
 
   const handleNoticeClick = (notice) => {
@@ -115,7 +153,7 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
       <TitleZone className="w-full mb-[20px] flex flex-row justify-between items-center">
         <span className="text-[34px] font-semibold">게시판</span>
         <button
-          onClick={onCreatePost}
+          onClick={handleCreatePost}
           className="px-4 py-2 bg-[#002D5D] text-white rounded-lg"
         >
           게시글 작성
@@ -141,6 +179,16 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
         notice={selectedNotice}
         onEdit={handleEditNotice}
         onDelete={handleDeleteNotice}
+      />
+      {/* 수정용 텍스트 에디터 모달 */}
+      <TextEditorModal
+        show={showEditorModal}
+        handleClose={() => setShowEditorModal(false)}
+        content={editingNotice?.content || ""}
+        setContent={() => {}}
+        handleSave={handleSaveEditedNotice}
+        isEditing={true}
+        editingPost={editingNotice}
       />
     </div>
   );
