@@ -7,6 +7,7 @@ import {
   Tray,
   nativeImage,
   dialog,
+  Notification,
 } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
@@ -39,6 +40,11 @@ if (!gotTheLock) {
   let tray = null;
 
   const createWindow = () => {
+    // Windows 10에서 토스트 알림을 위한 AppUserModelID 설정
+    if (process.platform === 'win32') {
+      app.setAppUserModelId("삼성원스정형외과");
+    }
+    
     // CSP 설정 강화 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       // 개발 환경에서는 웹팩 핫 리로딩을 위해 'unsafe-eval' 허용
@@ -104,7 +110,7 @@ if (!gotTheLock) {
     });
 
     // Open the DevTools.
-    // mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
   };
 
   // 시스템 트레이 아이콘 생성
@@ -216,18 +222,39 @@ if (!gotTheLock) {
     }
   }
 
+  // 알림 중복 방지를 위한 타임스탬프 저장
+  let lastNotificationTime = 0;
+  
   // Firebase 알림 처리를 위한 IPC 통신
   ipcMain.on("show-notification", (event, message) => {
-    // 알림음 재생하는 코드 실행
-    mainWindow.webContents.send("play-notification-sound");
-
-    // 시스템 알림 표시 (선택사항)
-    dialog.showMessageBox({
-      type: "info",
-      title: "새 알림",
-      message: message,
-      buttons: ["확인"],
-    });
+    console.log("알림 요청 받음:", message);
+    
+    // 중복 실행 방지 (500ms 이내 재실행 방지)
+    const now = Date.now();
+    if (now - lastNotificationTime < 500) {
+      console.log("최근에 알림이 표시되어 무시함 (중복 방지)");
+      return;
+    }
+    
+    // 알림 시간 업데이트
+    lastNotificationTime = now;
+    
+    // 가장 단순한 방법으로 dialog만 사용하여 알림 표시
+    if (mainWindow) {
+      try {
+        dialog.showMessageBox({
+          type: "info",
+          title: "호출 알림",
+          message: message,
+          buttons: ["확인"],
+        });
+        console.log("알림 표시됨 (dialog 사용)");
+      } catch (error) {
+        console.error("dialog 표시 실패:", error);
+      }
+    } else {
+      console.error("메인 창이 없음, 알림을 표시할 수 없습니다.");
+    }
   });
 
   // 파일 다운로드 처리
@@ -336,9 +363,23 @@ if (!gotTheLock) {
     );
 
     if (isDevelopment) {
-      // timerWindow.webContents.openDevTools();
+      timerWindow.webContents.openDevTools();
     }
   }
+
+  // 테스트용 IPC 통신 추가
+  ipcMain.on("test-ipc", (event, message) => {
+    console.log("테스트 IPC 메시지 수신:", message);
+    event.reply("test-ipc-reply", "메인 프로세스에서 응답: " + message);
+    
+    // 알림 테스트
+    dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "IPC 테스트",
+      message: "IPC 통신 테스트 성공: " + message,
+      buttons: ["확인"],
+    });
+  });
 
   // IPC 통신 설정
   ipcMain.on("open-timer-window", () => {

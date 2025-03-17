@@ -136,6 +136,60 @@ export default function CallModal({ isVisible, setIsVisible }) {
               on={receiverId !== ""}
               alertMessage="수신 위치를 선택해주세요"
             />
+            <OnceOnOffButton
+              text={"알림 테스트"}
+              onClick={() => {
+                console.log("알림 테스트 시작");
+                console.log("window.electron 확인:", window.electron);
+                
+                // 1. 브라우저 네이티브 알림 테스트
+                try {
+                  if (window.Notification && window.Notification.permission === "granted") {
+                    new window.Notification("브라우저 알림 테스트", {
+                      body: "브라우저 API를 통한 알림 테스트입니다."
+                    });
+                    console.log("브라우저 알림 표시됨");
+                  } else if (window.Notification) {
+                    window.Notification.requestPermission().then(permission => {
+                      if (permission === "granted") {
+                        new window.Notification("브라우저 알림 테스트", {
+                          body: "브라우저 API를 통한 알림 테스트입니다."
+                        });
+                      }
+                    });
+                  }
+                } catch (e) {
+                  console.error("브라우저 알림 실패:", e);
+                }
+                
+                // 2. Electron IPC 알림 테스트
+                if (window.electron && window.electron.sendNotification) {
+                  console.log("sendNotification 함수 호출");
+                  window.electron.sendNotification("테스트 알림 메시지입니다.");
+                  console.log("sendNotification 함수 호출 완료");
+                } else {
+                  console.error("electron API를 찾을 수 없음");
+                  
+                  // 3. 토스트 알림 표시 (showToast는 컴포넌트에서 가져온 함수)
+                  showToast("Electron API가 없습니다. 알림을 표시할 수 없습니다.", "error");
+                }
+              }}
+              on={true}
+            />
+            <OnceOnOffButton
+              text={"IPC 테스트"}
+              onClick={() => {
+                console.log("IPC 테스트 시작");
+                if (window.electron && window.electron.testIPC) {
+                  console.log("testIPC 함수 호출");
+                  window.electron.testIPC("테스트 메시지");
+                  console.log("testIPC 함수 호출 완료");
+                } else {
+                  console.error("IPC 테스트 함수를 찾을 수 없음");
+                }
+              }}
+              on={true}
+            />
           </div>
         </ButtonZone>
       </div>

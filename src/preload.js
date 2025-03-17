@@ -26,22 +26,19 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("download-complete", completeListener);
   },
+  testIPC: (message) => {
+    console.log("preload.js: testIPC 호출됨", message);
+    ipcRenderer.send("test-ipc", message);
+    
+    ipcRenderer.once("test-ipc-reply", (event, response) => {
+      console.log("preload.js: IPC 응답 수신", response);
+      alert("IPC 테스트 응답: " + response);
+    });
+  }
 });
 
-// 알림 소리 재생을 위한 리스너
+// 알림 소리 재생을 위한 리스너 - 소리는 App.js에서 재생하므로 여기서는 제거
 ipcRenderer.on("play-notification-sound", () => {
-  // 시스템 비프음 또는 "알림" 소리를 사용
-  if (window.Audio) {
-    try {
-      const context = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = context.createOscillator();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 800;
-      oscillator.connect(context.destination);
-      oscillator.start();
-      setTimeout(() => oscillator.stop(), 300);
-    } catch (e) {
-      console.error("오디오 재생 실패:", e);
-    }
-  }
+  // oscillator 코드 제거 - App.js에서 notification 소리가 이미 재생됨
+  console.log("알림 이벤트 수신됨 - 소리는 App.js에서 재생");
 });
