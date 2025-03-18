@@ -195,9 +195,7 @@ function DateViewModal({
                   {/* 날짜별 업무 목록 */}
                   <div className="p-2 flex-1 overflow-y-auto bg-gray-50">
                     {isLoading ? (
-                      <div className="text-center text-gray-500 my-4">
-                        해당 날짜에 등록된 업무가 없습니다
-                      </div>
+                      <div className="text-center text-gray-500 my-4"></div>
                     ) : getTasksForDate(date).length === 0 ? (
                       <div className="text-center text-gray-500 my-4">
                         해당 날짜에 등록된 업무가 없습니다

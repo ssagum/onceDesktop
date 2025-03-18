@@ -124,7 +124,7 @@ const Parking = () => {
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <div className="w-full">
-            <h2 className="text-2xl font-bold mb-4 self-start">주차 서비스</h2>
+            <h2 className="text-2xl font-bold mb-4 self-start">주차등록</h2>
           </div>
           <WebViewContainer>
             <webview
