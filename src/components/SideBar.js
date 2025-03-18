@@ -162,6 +162,12 @@ export default function SideBar() {
               nowURL={nowURL === "/schedule" ? "예약관리" : nowURL}
             />
           </Link>
+          <Link to="/parking">
+            <RenderIndex
+              indexValue="주차등록"
+              nowURL={nowURL === "/parking" ? "주차등록" : nowURL}
+            />
+          </Link>
           {isHospitalOwner(userLevelData) && (
             <Link to="/management">
               <RenderIndex

@@ -27,7 +27,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
     // 두 번째 인스턴스가 실행되었을 때 기존 창을 활성화
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -41,28 +41,32 @@ if (!gotTheLock) {
 
   const createWindow = () => {
     // Windows 10에서 토스트 알림을 위한 AppUserModelID 설정
-    if (process.platform === 'win32') {
+    if (process.platform === "win32") {
       app.setAppUserModelId("삼성원스정형외과");
     }
-    
+
     // CSP 설정 강화 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       // 개발 환경에서는 웹팩 핫 리로딩을 위해 'unsafe-eval' 허용
       const cspHeader = isDevelopment
         ? "default-src 'self';" +
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com;" +
-          "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com ws: webpack:;" +
+          "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com ws: webpack: http://*.iparking.co.kr https://*.iparking.co.kr;" +
           "worker-src 'self' blob:;" +
-          "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
+          "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com http://*.iparking.co.kr https://*.iparking.co.kr;" +
           "style-src 'self' 'unsafe-inline';" +
-          "font-src 'self' data:;"
+          "font-src 'self' data:;" +
+          "frame-src 'self' http://members.iparking.co.kr https://members.iparking.co.kr;" +
+          "form-action 'self' http://*.iparking.co.kr https://*.iparking.co.kr;"
         : "default-src 'self';" +
           "script-src 'self';" +
-          "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;" +
+          "connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com http://*.iparking.co.kr https://*.iparking.co.kr;" +
           "worker-src 'self' blob:;" +
-          "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com;" +
+          "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com https://*.firebasestorage.app https://firebasestorage.googleapis.com http://*.iparking.co.kr https://*.iparking.co.kr;" +
           "style-src 'self' 'unsafe-inline';" +
-          "font-src 'self' data:;";
+          "font-src 'self' data:;" +
+          "frame-src 'self' http://members.iparking.co.kr https://members.iparking.co.kr;" +
+          "form-action 'self' http://*.iparking.co.kr https://*.iparking.co.kr;";
 
       callback({
         responseHeaders: {
@@ -91,6 +95,7 @@ if (!gotTheLock) {
         contextIsolation: true,
         webSecurity: true,
         sandbox: true,
+        webviewTag: true,
       },
     });
 
@@ -224,21 +229,21 @@ if (!gotTheLock) {
 
   // 알림 중복 방지를 위한 타임스탬프 저장
   let lastNotificationTime = 0;
-  
+
   // Firebase 알림 처리를 위한 IPC 통신
   ipcMain.on("show-notification", (event, message) => {
     console.log("알림 요청 받음:", message);
-    
+
     // 중복 실행 방지 (500ms 이내 재실행 방지)
     const now = Date.now();
     if (now - lastNotificationTime < 500) {
       console.log("최근에 알림이 표시되어 무시함 (중복 방지)");
       return;
     }
-    
+
     // 알림 시간 업데이트
     lastNotificationTime = now;
-    
+
     // 가장 단순한 방법으로 dialog만 사용하여 알림 표시
     if (mainWindow) {
       try {
@@ -266,7 +271,10 @@ if (!gotTheLock) {
       const decodedFileName = decodeURIComponent(fileName);
 
       // 윈도우용 한글 파일명 처리
-      const normalizedFileName = Buffer.from(decodedFileName, "utf8").toString();
+      const normalizedFileName = Buffer.from(
+        decodedFileName,
+        "utf8"
+      ).toString();
 
       // 사용자에게 저장할 위치 선택 요청
       const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
@@ -371,7 +379,7 @@ if (!gotTheLock) {
   ipcMain.on("test-ipc", (event, message) => {
     console.log("테스트 IPC 메시지 수신:", message);
     event.reply("test-ipc-reply", "메인 프로세스에서 응답: " + message);
-    
+
     // 알림 테스트
     dialog.showMessageBox(mainWindow, {
       type: "info",
