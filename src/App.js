@@ -101,7 +101,7 @@ const App = () => {
             }
 
             if (window.electron && window.electron.sendNotification) {
-              const notificationMsg = `${data.senderId}에서 호출: ${data.message}`;
+              const notificationMsg = `${data.senderId}: ${data.message}`;
               console.log("알림 메시지:", notificationMsg);
               try {
                 window.electron.sendNotification(notificationMsg);

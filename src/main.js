@@ -244,7 +244,7 @@ if (!gotTheLock) {
       try {
         dialog.showMessageBox({
           type: "info",
-          title: "호출 알림",
+          title: "삼성원스정형외과",
           message: message,
           buttons: ["확인"],
         });
