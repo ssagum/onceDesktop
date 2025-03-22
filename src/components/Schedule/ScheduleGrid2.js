@@ -31,18 +31,6 @@ const GridContainer = styled.div`
   min-height: 600px;
   box-sizing: border-box;
   width: 100%;
-
-  /* 세로 스크롤바만 숨기고 가로 스크롤바는 유지 */
-  &::-webkit-scrollbar:vertical {
-    display: none; /* Chrome, Safari, Edge */
-  }
-  /* Firefox - 가로 스크롤만 표시 */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
-  /* Firefox에서 세로 스크롤바만 숨기는 것은 불가능하므로 전체적으로 얇게 표시 */
-
-  /* IE와 Edge는 세로 스크롤바만 숨기는 방법이 없어 전체 스타일 적용 */
-  -ms-overflow-style: -ms-autohiding-scrollbar;
 `;
 
 const HeaderContainer = styled.div`

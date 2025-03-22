@@ -21,12 +21,21 @@ import {
   startOfWeek,
   nextMonday,
   previousMonday,
+  getMonth,
+  getYear,
+  setMonth,
+  setYear,
+  getWeeksInMonth,
+  getDaysInMonth,
+  startOfMonth,
+  endOfMonth,
 } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   IoChevronBack,
   IoChevronForward,
   IoCalendarOutline,
+  IoChevronDown,
 } from "react-icons/io5";
 
 const MainZone = styled.div`
@@ -140,6 +149,159 @@ const DateControlContainer = styled.div`
   padding-bottom: 8px;
 `;
 
+// 새로 추가된 스타일 컴포넌트
+const SheetSelectorContainer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 24px;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+`;
+
+const MonthSelector = styled.button`
+  min-width: 70px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #e0f2fe;
+  border: 2px solid ${(props) => (props.isOpen ? "#0369a1" : "#0ea5e9")};
+  border-radius: 8px;
+  color: #0c4a6e;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  margin-right: 10px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: #bae6fd;
+  }
+
+  &:focus-visible {
+    outline: 3px solid #38bdf8;
+    outline-offset: 2px;
+  }
+
+  svg {
+    margin-left: 4px;
+    transition: transform 0.2s ease;
+    transform: ${(props) => (props.isOpen ? "rotate(180deg)" : "rotate(0)")};
+    color: #0284c7;
+  }
+`;
+
+const MonthDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background-color: white;
+  border-radius: 8px;
+  width: 120px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px 0;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+`;
+
+/* 키프레임 애니메이션도 제거
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+*/
+
+const MonthOption = styled.button`
+  width: 100%;
+  text-align: left;
+  padding: 10px 16px;
+  cursor: pointer;
+  border: none;
+  background-color: transparent;
+  transition: all 0.15s;
+  font-size: 15px;
+
+  &:hover {
+    background-color: #f0f9ff;
+  }
+
+  &.selected {
+    background-color: #e0f2fe;
+    font-weight: 600;
+    color: #0c4a6e;
+    border-left: 3px solid #0ea5e9;
+  }
+`;
+
+const WeekTabsContainer = styled.div`
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  justify-content: space-between;
+`;
+
+const WeekTab = styled.button`
+  padding: 8px;
+  background-color: ${(props) => (props.isActive ? "#e0f2fe" : "transparent")};
+  border-radius: 8px;
+  color: ${(props) => (props.isActive ? "#0c4a6e" : "#475569")};
+  font-weight: ${(props) => (props.isActive ? "600" : "500")};
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: ${(props) =>
+    props.isActive ? "0 1px 2px rgba(0, 0, 0, 0.05)" : "none"};
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid ${(props) => (props.isActive ? "#0ea5e9" : "#e2e8f0")};
+  flex: 1;
+  margin: 0 3px;
+  min-width: 0;
+
+  &:hover {
+    background-color: ${(props) => (props.isActive ? "#bae6fd" : "#f1f5f9")};
+  }
+
+  &:focus-visible {
+    outline: 3px solid #38bdf8;
+    outline-offset: 2px;
+  }
+
+  &:first-child {
+    margin-left: 0;
+  }
+
+  &:last-child {
+    margin-right: 0;
+  }
+
+  .week-number {
+    margin-right: 4px;
+  }
+
+  .date-range {
+    font-size: 12px;
+    opacity: 0.9;
+  }
+`;
+
 // 의료진/직원 데이터 - 나중에 파이어베이스에서 가져오도록 변경 가능
 const staffData = [
   { id: "member1", name: "이기현", color: "#F59E0B" },
@@ -167,7 +329,45 @@ const Schedule = () => {
   const [displayDates, setDisplayDates] = useState([]);
   const { showToast } = useToast();
 
+  // 새로 추가된 상태 변수들
+  const [selectedMonth, setSelectedMonth] = useState(getMonth(new Date()));
+  const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
+  const [activeWeek, setActiveWeek] = useState(0);
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+
   const timeSlots = generateTimeSlots();
+
+  // 선택된 월의 주 수 계산
+  const getWeeksForMonth = () => {
+    const weeks = [];
+    const firstDay = startOfMonth(new Date(selectedYear, selectedMonth, 1));
+    const lastDay = endOfMonth(new Date(selectedYear, selectedMonth, 1));
+
+    // 첫째 주 시작일이 월요일이 아니면 이전 월의 날짜 포함
+    let startOfFirstWeek = startOfWeek(firstDay, { weekStartsOn: 1 }); // 월요일부터 시작
+
+    let currentDate = startOfFirstWeek;
+    let weekNumber = 0;
+
+    while (currentDate <= lastDay) {
+      const weekEnd = addDays(currentDate, 6);
+
+      weeks.push({
+        weekNumber: weekNumber,
+        start: new Date(currentDate),
+        end: new Date(weekEnd),
+        label: `${weekNumber + 1}주`,
+        dateRange: `${format(currentDate, "M/d")}-${format(weekEnd, "M/d")}`,
+      });
+
+      currentDate = addDays(currentDate, 7);
+      weekNumber++;
+    }
+
+    return weeks;
+  };
+
+  const weeks = getWeeksForMonth();
 
   // 표시할 월~토 날짜 계산
   useEffect(() => {
@@ -193,6 +393,14 @@ const Schedule = () => {
     }
     setDisplayDates(dates);
   }, [currentDate]);
+
+  // 월 변경 시 해당 월의 첫 주로 설정
+  useEffect(() => {
+    if (weeks.length > 0) {
+      const newDate = weeks[activeWeek].start;
+      setCurrentDate(newDate);
+    }
+  }, [selectedMonth, selectedYear, activeWeek]);
 
   // 일정 데이터 가져오기 (더미 데이터)
   useEffect(() => {
@@ -270,16 +478,71 @@ const Schedule = () => {
   // 이전 주로 이동
   const handlePrevDays = () => {
     setCurrentDate((prevDate) => addDays(prevDate, -7));
+    // 이전 주차로 변경
+    if (activeWeek > 0) {
+      setActiveWeek(activeWeek - 1);
+    } else {
+      // 이전 달의 마지막 주차로 변경
+      const prevMonth = selectedMonth === 0 ? 11 : selectedMonth - 1;
+      const prevYear = selectedMonth === 0 ? selectedYear - 1 : selectedYear;
+      setSelectedMonth(prevMonth);
+      setSelectedYear(prevYear);
+
+      // 임시로 이전 달의 주차 계산
+      const tempDate = new Date(prevYear, prevMonth, 1);
+      const weeksInPrevMonth = getWeeksForMonth(tempDate);
+      setActiveWeek(weeksInPrevMonth.length - 1);
+    }
   };
 
   // 다음 주로 이동
   const handleNextDays = () => {
     setCurrentDate((prevDate) => addDays(prevDate, 7));
+    // 다음 주차로 변경
+    if (activeWeek < weeks.length - 1) {
+      setActiveWeek(activeWeek + 1);
+    } else {
+      // 다음 달의 첫 주차로 변경
+      const nextMonth = selectedMonth === 11 ? 0 : selectedMonth + 1;
+      const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
+      setSelectedMonth(nextMonth);
+      setSelectedYear(nextYear);
+      setActiveWeek(0);
+    }
   };
 
   // 오늘로 이동
   const handleToday = () => {
-    setCurrentDate(new Date());
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedMonth(getMonth(today));
+    setSelectedYear(getYear(today));
+
+    // 오늘이 속한 주차 찾기
+    const todayWeeks = getWeeksForMonth();
+    const foundWeek = todayWeeks.findIndex(
+      (week) => today >= week.start && today <= week.end
+    );
+
+    setActiveWeek(foundWeek !== -1 ? foundWeek : 0);
+  };
+
+  // 월 변경 핸들러
+  const handleMonthChange = (month, year) => {
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    setActiveWeek(0); // 첫 주차로 리셋
+    setShowMonthDropdown(false);
+  };
+
+  // 주차 변경 핸들러
+  const handleWeekChange = (weekIndex) => {
+    setActiveWeek(weekIndex);
+  };
+
+  // 월 드롭다운 토글
+  const toggleMonthDropdown = () => {
+    setShowMonthDropdown(!showMonthDropdown);
   };
 
   // 일정 생성 핸들러
@@ -309,6 +572,41 @@ const Schedule = () => {
     showToast("일정이 삭제되었습니다.", "success");
   };
 
+  // 월 드롭다운 렌더링
+  const renderMonthDropdown = () => {
+    // 월 이름 배열
+    const monthNames = [
+      "1월",
+      "2월",
+      "3월",
+      "4월",
+      "5월",
+      "6월",
+      "7월",
+      "8월",
+      "9월",
+      "10월",
+      "11월",
+      "12월",
+    ];
+
+    return (
+      <MonthDropdown role="listbox" aria-label="월 선택">
+        {monthNames.map((name, index) => (
+          <MonthOption
+            key={`${selectedYear}-${index}`}
+            className={index === selectedMonth ? "selected" : ""}
+            onClick={() => handleMonthChange(index, selectedYear)}
+            role="option"
+            aria-selected={index === selectedMonth}
+          >
+            {name}
+          </MonthOption>
+        ))}
+      </MonthDropdown>
+    );
+  };
+
   return (
     <div className="flex flex-row w-full h-screen bg-onceBackground items-center">
       <div className="w-[250px] h-full flex flex-col">
@@ -326,39 +624,50 @@ const Schedule = () => {
               </div>
             ) : (
               <>
-                <DateControlContainer>
-                  <DateNavigation>
-                    <NavButton onClick={handlePrevDays}>
-                      <IoChevronBack />
-                    </NavButton>
-                    <TodayButton onClick={handleToday}>오늘</TodayButton>
-                    <NavButton onClick={handleNextDays}>
-                      <IoChevronForward />
-                    </NavButton>
-                    {displayDates.length > 0 && (
-                      <DateRange>
-                        {format(displayDates[0], "yyyy.MM.dd (EEE)", {
-                          locale: ko,
-                        })}{" "}
-                        -{" "}
-                        {format(displayDates[5], "yyyy.MM.dd (EEE)", {
-                          locale: ko,
-                        })}
-                      </DateRange>
-                    )}
-                  </DateNavigation>
-                </DateControlContainer>
-                <div style={{ overflow: "auto", width: "100%" }}>
-                  <ScheduleGrid
-                    dates={displayDates}
-                    timeSlots={timeSlots}
-                    staff={staffData}
-                    appointments={appointments}
-                    onAppointmentCreate={handleAppointmentCreate}
-                    onAppointmentUpdate={handleAppointmentUpdate}
-                    onAppointmentDelete={handleAppointmentDelete}
-                  />
-                </div>
+                <SheetSelectorContainer
+                  aria-label="월 및 주차 선택"
+                  className="mb-4"
+                >
+                  <MonthSelector
+                    onClick={toggleMonthDropdown}
+                    isOpen={showMonthDropdown}
+                    aria-haspopup="listbox"
+                    aria-expanded={showMonthDropdown}
+                    aria-label={`${selectedMonth + 1}월 선택됨`}
+                  >
+                    <span>{selectedMonth + 1}월</span>
+                    <IoChevronDown size={14} aria-hidden="true" />
+                    {showMonthDropdown && renderMonthDropdown()}
+                  </MonthSelector>
+
+                  <WeekTabsContainer role="tablist" aria-label="주차 선택">
+                    {weeks.map((week, index) => (
+                      <WeekTab
+                        key={`week-${index}`}
+                        isActive={index === activeWeek}
+                        onClick={() => handleWeekChange(index)}
+                        role="tab"
+                        aria-selected={index === activeWeek}
+                        id={`week-tab-${index}`}
+                        aria-controls={`week-panel-${index}`}
+                        title={week.dateRange}
+                      >
+                        <span className="week-number">{week.label}</span>
+                        <span className="date-range">{week.dateRange}</span>
+                      </WeekTab>
+                    ))}
+                  </WeekTabsContainer>
+                </SheetSelectorContainer>
+
+                <ScheduleGrid
+                  dates={displayDates}
+                  timeSlots={timeSlots}
+                  staff={staffData}
+                  appointments={appointments}
+                  onAppointmentCreate={handleAppointmentCreate}
+                  onAppointmentUpdate={handleAppointmentUpdate}
+                  onAppointmentDelete={handleAppointmentDelete}
+                />
               </>
             )}
           </GridContainer>
