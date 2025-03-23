@@ -1,4 +1,5 @@
 import React from "react";
+import { useToast } from "../../contexts/ToastContext";
 
 const OnceOnOffButton = ({
   text,
@@ -6,10 +7,24 @@ const OnceOnOffButton = ({
   onClick,
   className = "",
   disabled = false,
+  toastMessage,
 }) => {
+  const { showToast } = useToast();
+
+  const handleClick = () => {
+    if (disabled) return;
+
+    if (!on && toastMessage) {
+      showToast(toastMessage, "error");
+      return;
+    }
+
+    onClick();
+  };
+
   return (
     <div
-      onClick={disabled ? undefined : onClick}
+      onClick={handleClick}
       className={`${
         on
           ? "bg-onceBlue text-white border-onceBlue"
