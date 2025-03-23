@@ -441,7 +441,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
                       <PresetTitle>
                         {isEmptyPreset(preset)
                           ? `빈 프리셋 ${index - 3 > 0 ? index - 3 : index + 1}`
-                          : preset.receiver}
+                          :`To. ${preset.receiver}`}
                       </PresetTitle>
                       <PresetMessage>
                         {isEmptyPreset(preset)
