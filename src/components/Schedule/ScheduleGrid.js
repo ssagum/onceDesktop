@@ -270,17 +270,32 @@ const AppointmentBlock = styled.div`
     display: flex;
     flex-direction: column;
     height: 100%;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
   }
 
-  .patient-name {
-    font-size: 0.85em;
-    margin-top: 2px;
+  .title {
+    font-weight: 600;
+    font-size: 1em;
   }
 
   .time {
     font-size: 0.8em;
-    margin-top: auto;
+    margin-top: 4px;
     opacity: 0.9;
+  }
+  
+  /* 참고사항 표시용 삼각형 */
+  .notes-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 10px 10px 0;
+    border-color: transparent #ffffff transparent transparent;
   }
 `;
 
@@ -538,10 +553,9 @@ const ScheduleGrid = ({
   const [formPosition, setFormPosition] = useState({ left: 0, top: 0 });
   const [formData, setFormData] = useState({
     title: "",
-    patientName: "",
-    patientNumber: "",
     notes: "",
-    type: "예약",
+    duration: "30",
+    type: "예약"
   });
   const [editingAppointment, setEditingAppointment] = useState(null);
 
@@ -604,21 +618,48 @@ const ScheduleGrid = ({
   const cellHeight = 40;
   const headerHeight = 40 + 40; // 날짜 헤더(85px) + 직원 헤더(40px)
 
-  // 드래그 처리 함수 개선
-  const handleDragStart = (e, dateIndex, staffIndex, timeIndex) => {
+  // 마우스 상태 관련 변수 추가
+  const [mouseDown, setMouseDown] = useState(false);
+  const [clickedCell, setClickedCell] = useState(null);
+  const dragTimeoutRef = useRef(null);
+  const lastMoveRef = useRef({ dateIndex: -1, staffIndex: -1, timeIndex: -1 });
+
+  // 드래그 처리 함수 개선 - 클릭과 드래그 분리
+  const handleMouseDown = (e, dateIndex, staffIndex, timeIndex) => {
     e.preventDefault();
     setSelectedArea(null);
-    setDragArea({
-      dateIndex,
-      staffIndex,
-      startTimeIndex: timeIndex,
-      endTimeIndex: timeIndex,
-    });
-    setIsDragging(true);
+    setClickedCell({ dateIndex, staffIndex, timeIndex });
+    setMouseDown(true);
+    
+    // 마지막 이동 위치 초기화
+    lastMoveRef.current = { dateIndex, staffIndex, timeIndex };
+    
+    // 일정 시간 꾹 누르고 있으면 드래그 모드 시작 (200ms)
+    dragTimeoutRef.current = setTimeout(() => {
+      setDragArea({
+        dateIndex,
+        staffIndex,
+        startTimeIndex: timeIndex,
+        endTimeIndex: timeIndex,
+      });
+      setIsDragging(true);
+    }, 200);
   };
 
-  const handleDragMove = (e, dateIndex, staffIndex, timeIndex) => {
-    if (!isDragging) return;
+  const handleMouseMove = (e, dateIndex, staffIndex, timeIndex) => {
+    if (!mouseDown || !isDragging) return;
+
+    // 이전에 처리한 위치와 동일하면 처리하지 않음 (불필요한 상태 업데이트 방지)
+    if (
+      lastMoveRef.current.dateIndex === dateIndex &&
+      lastMoveRef.current.staffIndex === staffIndex &&
+      lastMoveRef.current.timeIndex === timeIndex
+    ) {
+      return;
+    }
+
+    // 마지막 이동 위치 업데이트
+    lastMoveRef.current = { dateIndex, staffIndex, timeIndex };
 
     // 같은 날짜와 같은 담당자 내에서만 드래그 허용
     if (
@@ -626,42 +667,129 @@ const ScheduleGrid = ({
       dragArea.staffIndex === staffIndex &&
       dragArea.startTimeIndex <= timeIndex
     ) {
-      setDragArea({
-        ...dragArea,
-        endTimeIndex: timeIndex,
+      setDragArea(prev => {
+        // 이전 상태와 동일하면 업데이트 하지 않음
+        if (prev.endTimeIndex === timeIndex) return prev;
+        return {
+          ...prev,
+          endTimeIndex: timeIndex,
+        };
       });
     }
   };
 
-  const handleDragEnd = () => {
-    if (!isDragging) return;
+  const handleMouseLeave = () => {
+    if (mouseDown) {
+      // 드래그 중이든 아니든 마우스 버튼이 눌린 상태로 영역을 떠나면
+      // 마지막으로 선택한 셀에 입력창 표시
+      if (isDragging) {
+        finalizeDragSelection();
+      } else if (clickedCell) {
+        selectSingleCell(clickedCell.dateIndex, clickedCell.staffIndex, clickedCell.timeIndex);
+      }
+    }
+    
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+    
+    setMouseDown(false);
+  };
 
+  const handleMouseUp = (e, dateIndex, staffIndex, timeIndex) => {
+    if (!mouseDown) return;
+    
+    // 드래그 타임아웃 클리어
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+    
+    if (isDragging) {
+      // 드래그 영역 처리
+      finalizeDragSelection();
+    } else {
+      // 클릭 처리 - 단일 셀 선택
+      selectSingleCell(dateIndex, staffIndex, timeIndex);
+    }
+    
+    setIsDragging(false);
+    setMouseDown(false);
+  };
+  
+  // 단일 셀 선택 함수
+  const selectSingleCell = (dateIndex, staffIndex, timeIndex) => {
     // 선택된 영역 저장
     setSelectedArea({
-      ...dragArea,
-      date: dates[dragArea.dateIndex],
-      staffId: staff[dragArea.staffIndex].id,
-      startTime: effectiveTimeSlots[dragArea.startTimeIndex],
-      endTime: getEndTime(effectiveTimeSlots[dragArea.endTimeIndex]),
+      dateIndex,
+      staffIndex,
+      startTimeIndex: timeIndex,
+      endTimeIndex: timeIndex,
+      date: dates[dateIndex],
+      staffId: staff[staffIndex].id,
+      startTime: effectiveTimeSlots[timeIndex],
+      endTime: getEndTime(effectiveTimeSlots[timeIndex]),
     });
 
     // 폼 데이터 초기화
     setFormData({
       title: "",
-      patientName: "",
-      patientNumber: "",
       notes: "",
-      type: "예약",
+      duration: "30",
+      type: "예약"
     });
 
-    // 폼 위치 계산 수정
+    // 폼 위치 계산
+    positionFormNearCell(dateIndex, staffIndex, timeIndex);
+    
+    setShowForm(true);
+    setEditingAppointment(null);
+  };
+  
+  // 드래그 선택 완료 함수
+  const finalizeDragSelection = () => {
+    if (!dragArea) return;
+    
+    const startTimeIndex = Math.min(dragArea.startTimeIndex, dragArea.endTimeIndex);
+    const endTimeIndex = Math.max(dragArea.startTimeIndex, dragArea.endTimeIndex);
+    
+    // 선택된 영역 저장
+    setSelectedArea({
+      ...dragArea,
+      startTimeIndex: startTimeIndex,
+      endTimeIndex: endTimeIndex,
+      date: dates[dragArea.dateIndex],
+      staffId: staff[dragArea.staffIndex].id,
+      startTime: effectiveTimeSlots[startTimeIndex],
+      endTime: getEndTime(effectiveTimeSlots[endTimeIndex]),
+    });
+
+    // 폼 데이터 초기화
+    setFormData({
+      title: "",
+      notes: "",
+      duration: (endTimeIndex - startTimeIndex + 1) * 30, // 선택한 셀 수에 따라 기본 소요시간 계산
+      type: "예약"
+    });
+
+    // 폼 위치 계산
+    positionFormNearCell(dragArea.dateIndex, dragArea.staffIndex, startTimeIndex);
+    
+    setIsDragging(false);
+    setShowForm(true);
+    setEditingAppointment(null);
+  };
+  
+  // 폼 위치 계산 함수
+  const positionFormNearCell = (dateIndex, staffIndex, timeIndex) => {
     const rect = gridRef.current.getBoundingClientRect();
-
+    
     // 셀 위치 계산 - 시간 열을 포함한 새 계산 방식
-    const startCol = dragArea.dateIndex * (staff.length + 1) + 1;
-    const colIndex = startCol + dragArea.staffIndex + 1; // 시간 열 다음부터 직원 열 시작
+    const startCol = dateIndex * (staff.length + 1) + 1;
+    const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
 
-    const cellSelector = `[data-cell-key="cell-${dragArea.dateIndex}-${dragArea.staffIndex}-${dragArea.startTimeIndex}"]`;
+    const cellSelector = `[data-cell-key="cell-${dateIndex}-${staffIndex}-${timeIndex}"]`;
     const cellElement = gridRef.current.querySelector(cellSelector);
 
     if (cellElement) {
@@ -674,77 +802,28 @@ const ScheduleGrid = ({
       // 대략적인 위치 계산
       setFormPosition({
         left: 250 + colIndex * minColumnWidth,
-        top: (dragArea.startTimeIndex + 3) * 40 + 5,
+        top: (timeIndex + 3) * 40 + 5,
       });
     }
-
-    setIsDragging(false);
-    setShowForm(true);
-    setEditingAppointment(null);
   };
 
-  // 유틸리티 함수 추가
-  const getEndTime = (time) => {
-    const [hour, minute] = time.split(":").map(Number);
-    let newHour = hour;
-    let newMinute = minute + 30;
-
-    if (newMinute >= 60) {
-      newHour += 1;
-      newMinute = 0;
-    }
-
-    return `${newHour.toString().padStart(2, "0")}:${newMinute
-      .toString()
-      .padStart(2, "0")}`;
-  };
-
-  // 저장 함수 개선
-  const handleSaveAppointment = () => {
-    if (!selectedArea) return;
-
-    const newAppointment = {
-      id: Date.now().toString(),
-      dateIndex: selectedArea.dateIndex,
-      date: format(selectedArea.date, "yyyy-MM-dd"),
-      staffId: selectedArea.staffId,
-      staffName: staff.find((s) => s.id === selectedArea.staffId)?.name || "",
-      startTime: selectedArea.startTime,
-      endTime: selectedArea.endTime,
-      title: formData.title,
-      patientName: formData.patientName,
-      patientNumber: formData.patientNumber,
-      notes: formData.notes,
-      type: formData.type,
-    };
-
-    // 이전 상태 저장 (실행 취소 기능용)
-    setPreviousActions([
-      ...previousActions,
-      {
-        type: "create",
-        oldData: null,
-        newData: newAppointment,
-      },
-    ]);
-
-    onAppointmentCreate(newAppointment);
-    setAppointments([...appointments, newAppointment]);
-    setShowForm(false);
-    setSelectedArea(null);
-  };
-
-  // 일정 수정 핸들러
+  // 일정 수정 핸들러 수정
   const handleEditAppointment = () => {
     if (!editingAppointment) return;
+
+    // 소요시간에 따라 endTime 계산
+    const startTime = editingAppointment.startTime;
+    const durationMinutes = parseInt(formData.duration, 10);
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = startMinutes + durationMinutes;
+    const endTime = minutesToTime(endMinutes);
 
     const updatedAppointment = {
       ...editingAppointment,
       title: formData.title,
-      patientName: formData.patientName,
-      patientNumber: formData.patientNumber,
       notes: formData.notes,
       type: formData.type,
+      endTime: endTime
     };
 
     // 이전 상태 저장 (실행 취소 기능용)
@@ -788,10 +867,9 @@ const ScheduleGrid = ({
     setEditingAppointment(appointment);
     setFormData({
       title: appointment.title,
-      patientName: appointment.patientName || "",
-      patientNumber: appointment.patientNumber || "",
       notes: appointment.notes || "",
-      type: appointment.type || "예약",
+      duration: "30",
+      type: appointment.type || "예약"
     });
 
     // 폼 위치 계산 수정
@@ -837,10 +915,9 @@ const ScheduleGrid = ({
       setEditingAppointment(null);
       setFormData({
         title: "",
-        patientName: "",
-        patientNumber: "",
         notes: "",
-        type: "예약",
+        duration: "30",
+        type: "예약"
       });
     }
   };
@@ -871,17 +948,6 @@ const ScheduleGrid = ({
     }
   };
 
-  // 키보드 이벤트 리스너 등록
-  useEffect(() => {
-    document.addEventListener("keydown", handleUndo);
-    document.addEventListener("mousedown", handleOutsideClick);
-
-    return () => {
-      document.removeEventListener("keydown", handleUndo);
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, [previousActions]);
-
   // 드래그 영역 계산
   const getDragArea = () => {
     if (!isDragging || !dragArea) return null;
@@ -903,10 +969,54 @@ const ScheduleGrid = ({
     };
   };
 
+  // 드래그 중인 영역 렌더링
+  const renderDragArea = () => {
+    if (!isDragging || !dragArea) return null;
+    
+    const area = {
+      startTimeIndex: Math.min(dragArea.startTimeIndex, dragArea.endTimeIndex),
+      endTimeIndex: Math.max(dragArea.startTimeIndex, dragArea.endTimeIndex),
+      dateIndex: dragArea.dateIndex,
+      staffIndex: dragArea.staffIndex
+    };
+    
+    const { dateIndex, staffIndex, startTimeIndex, endTimeIndex } = area;
+    
+    // 시간 표시 계산 - 여기서 불필요한 계산 제거
+    const startTime = effectiveTimeSlots[startTimeIndex];
+    const endTime = getEndTime(effectiveTimeSlots[endTimeIndex]);
+    const timeDisplay = `${startTime} - ${endTime}`;
+    
+    const style = getSelectedCellStyle(dateIndex, staffIndex, startTimeIndex, endTimeIndex);
+    
+    return (
+      <div
+        style={{
+          ...style,
+          backgroundColor: "rgba(66, 139, 202, 0.2)",
+          border: "2px dashed rgba(66, 139, 202, 0.6)",
+          borderRadius: "4px",
+          margin: "2px",
+          zIndex: 4,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "column",
+          fontSize: "14px",
+          color: "#2d3748",
+          fontWeight: 600
+        }}
+      >
+        {"새 일정"}
+        <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '3px' }}>{timeDisplay}</div>
+      </div>
+    );
+  };
+
   // 변수명 변경하여 중복 방지
   const activeDragArea = getDragArea();
 
-  // 시간 그리드 셀 렌더링 함수 수정 - 시간 열 너비 50px로 변경
+  // 시간 그리드 셀 렌더링 함수 수정 - 이벤트 핸들러 업데이트
   const renderTimeGridCells = (timeIndex) => {
     let cells = [];
     const time = effectiveTimeSlots[timeIndex];
@@ -985,9 +1095,9 @@ const ScheduleGrid = ({
             alignItems: "center",
             fontSize: "0.8em",
             color: "#333",
-            minWidth: "50px", // 42px에서 50px로 변경
-            maxWidth: "50px", // 42px에서 50px로 변경
-            width: "50px", // 42px에서 50px로 변경
+            minWidth: "50px",
+            maxWidth: "50px",
+            width: "50px",
             height: "40px",
             overflow: "hidden",
           }}
@@ -996,16 +1106,22 @@ const ScheduleGrid = ({
         </Cell>
       );
 
-      // 직원 셀 추가
+      // 직원 셀 추가 - 이벤트 핸들러 함수 생성 방지
       staff.forEach((person, staffIndex) => {
         const colIndex = startCol + staffIndex + 1;
         const cellKey = `cell-${dateIndex}-${staffIndex}-${timeIndex}`;
+
+        // 이벤트 핸들러 조건 미리 계산
+        const canInteract = !isOutOfBusinessHours && !isBreakTimeForDay;
 
         cells.push(
           <Cell
             key={cellKey}
             data-cell-key={cellKey}
             isHalfHour={isHalfHour(time)}
+            data-date-index={dateIndex}
+            data-staff-index={staffIndex}
+            data-time-index={timeIndex}
             style={{
               gridColumn: colIndex,
               gridRow: timeIndex + 1,
@@ -1020,22 +1136,9 @@ const ScheduleGrid = ({
               opacity: isOutOfBusinessHours ? 0.5 : 1,
               minWidth: minColumnWidth,
               height: "40px",
+              pointerEvents: canInteract ? "auto" : "none",
             }}
-            onMouseDown={(e) =>
-              !isOutOfBusinessHours &&
-              !isBreakTimeForDay &&
-              handleDragStart(e, dateIndex, staffIndex, timeIndex)
-            }
-            onMouseMove={(e) =>
-              !isOutOfBusinessHours &&
-              !isBreakTimeForDay &&
-              handleDragMove(e, dateIndex, staffIndex, timeIndex)
-            }
-            onMouseUp={
-              !isOutOfBusinessHours && !isBreakTimeForDay
-                ? handleDragEnd
-                : undefined
-            }
+            className="schedule-cell"
           />
         );
       });
@@ -1044,7 +1147,7 @@ const ScheduleGrid = ({
     return cells;
   };
 
-  // 일정 렌더링 함수 수정 - 컬럼 인덱스 조정
+  // 일정 렌더링 함수 수정 - 참고사항 표시기 추가
   const renderAppointments = () => {
     return appointments.map((appointment) => {
       const dateIndex = appointment.dateIndex;
@@ -1063,6 +1166,9 @@ const ScheduleGrid = ({
       const startCol = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
       const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
 
+      // 참고사항이 있는지 확인
+      const hasNotes = appointment.notes && appointment.notes.trim().length > 0;
+
       return (
         <AppointmentBlock
           key={`appointment-${appointment.id}`}
@@ -1075,14 +1181,27 @@ const ScheduleGrid = ({
           }}
           onClick={() => handleAppointmentClick(appointment)}
         >
+          {/* 참고사항 표시기 */}
+          {hasNotes && (
+            <div 
+              className="notes-indicator" 
+              title="참고사항 있음"
+              style={{
+                borderColor: `transparent ${
+                  appointment.type === "예약" ? "#ffffff" : 
+                  appointment.type === "일반" ? "#ffffff" : 
+                  appointment.type === "휴가" ? "#ffffff" : "#ffffff"
+                } transparent transparent`,
+                opacity: 0.9,
+                borderWidth: "0 12px 12px 0"
+              }}
+            />
+          )}
+          
           <div className="appointment-content">
-            <strong>{appointment.title}</strong>
-            {appointment.patientName && (
-              <div className="patient-name">{appointment.patientName}</div>
-            )}
+            <div className="title">{appointment.title}</div>
             <div className="time">
-              {formatTime(appointment.startTime)} -{" "}
-              {formatTime(appointment.endTime)}
+              {formatTime(appointment.startTime)} - {formatTime(appointment.endTime)}
             </div>
           </div>
         </AppointmentBlock>
@@ -1090,37 +1209,61 @@ const ScheduleGrid = ({
     });
   };
 
-  // 드래그 선택 영역 렌더링 함수 수정 - 컬럼 인덱스 조정
+  // 드래그 선택 영역 렌더링 함수 수정 - 텍스트 표시 추가
   const renderSelectionArea = () => {
     if (!selectedArea) return null;
 
-    const { dateIndex, staffIndex, startTimeIndex, endTimeIndex } =
-      selectedArea;
+    const { dateIndex, staffIndex, startTimeIndex, endTimeIndex } = selectedArea;
+    
+    // 시간 표시 계산
+    const startTime = effectiveTimeSlots[startTimeIndex];
+    const endTime = selectedArea.endTime || getEndTime(effectiveTimeSlots[endTimeIndex]);
+    const timeDisplay = `${startTime} - ${endTime}`;
 
-    // 컬럼 인덱스 계산 수정 - 각 날짜마다 시간 열 고려
-    const startCol = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
-    const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
-
-    const rowSpan = endTimeIndex - startTimeIndex + 1;
-
+    const style = getSelectedCellStyle(dateIndex, staffIndex, startTimeIndex, endTimeIndex);
+    
     return (
-      <SelectionArea
+      <div
         style={{
-          gridColumn: colIndex,
-          gridRow: `${startTimeIndex + 1} / span ${rowSpan}`,
+          ...style,
+          backgroundColor: "rgba(66, 139, 202, 0.2)",
+          border: "2px dashed rgba(66, 139, 202, 0.6)",
+          borderRadius: "4px",
+          margin: "2px",
+          zIndex: 4,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "column",
+          fontSize: "14px",
+          color: "#2d3748",
+          fontWeight: 600,
+          textAlign: "center"
         }}
-      />
+      >
+        {formData.title ? (
+          <div>
+            <div>{formData.title}</div>
+            <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '3px' }}>{timeDisplay}</div>
+          </div>
+        ) : (
+          "새 일정"
+        )}
+      </div>
     );
   };
 
-  // 추가 스타일 컴포넌트 정의
-  const SelectionArea = styled.div`
-    background-color: rgba(66, 139, 202, 0.2);
-    border: 2px dashed rgba(66, 139, 202, 0.6);
-    border-radius: 4px;
-    margin: 2px;
-    z-index: 4;
-  `;
+  // 드래그 시 스타일 직접 조작하는 함수 추가
+  const getSelectedCellStyle = (dateIndex, staffIndex, startTimeIndex, endTimeIndex) => {
+    // 컬럼 인덱스 계산
+    const startCol = dateIndex * (staff.length + 1) + 1;
+    const colIndex = startCol + staffIndex + 1;
+    
+    return {
+      gridColumn: colIndex,
+      gridRow: `${startTimeIndex + 1} / span ${endTimeIndex - startTimeIndex + 1}`,
+    };
+  };
 
   // 날짜 헤더 셀 렌더링 함수 수정 - 시간 열 너비 50px로 변경
   const renderDateHeaderCells = () => {
@@ -1217,8 +1360,143 @@ const ScheduleGrid = ({
     return cells;
   };
 
+  // 유틸리티 함수 추가
+  const getEndTime = (time) => {
+    const [hour, minute] = time.split(":").map(Number);
+    let newHour = hour;
+    let newMinute = minute + 30;
+
+    if (newMinute >= 60) {
+      newHour += 1;
+      newMinute = 0;
+    }
+
+    return `${newHour.toString().padStart(2, "0")}:${newMinute
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  // 저장 함수 수정
+  const handleSaveAppointment = () => {
+    if (!selectedArea) return;
+
+    // 소요시간에 따라 endTime 계산
+    const startTime = selectedArea.startTime;
+    const durationMinutes = parseInt(formData.duration, 10);
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = startMinutes + durationMinutes;
+    const endTime = minutesToTime(endMinutes);
+
+    const newAppointment = {
+      id: Date.now().toString(),
+      dateIndex: selectedArea.dateIndex,
+      date: format(selectedArea.date, "yyyy-MM-dd"),
+      staffId: selectedArea.staffId,
+      staffName: staff.find((s) => s.id === selectedArea.staffId)?.name || "",
+      startTime: selectedArea.startTime,
+      endTime: endTime,
+      title: formData.title,
+      notes: formData.notes,
+      type: formData.type,
+    };
+
+    // 이전 상태 저장 (실행 취소 기능용)
+    setPreviousActions([
+      ...previousActions,
+      {
+        type: "create",
+        oldData: null,
+        newData: newAppointment,
+      },
+    ]);
+
+    onAppointmentCreate(newAppointment);
+    setAppointments([...appointments, newAppointment]);
+    setShowForm(false);
+    setSelectedArea(null);
+  };
+
+  // useEffect 내부에 전역 이벤트 핸들러 추가 (셀 개별 이벤트 핸들러 대신 사용)
+  useEffect(() => {
+    document.addEventListener("keydown", handleUndo);
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    // 그리드에 이벤트 위임 설정
+    const grid = gridRef.current;
+    if (grid) {
+      const handleGridMouseDown = (e) => {
+        const cell = e.target.closest('.schedule-cell');
+        if (!cell) return;
+        
+        const dateIndex = parseInt(cell.dataset.dateIndex, 10);
+        const staffIndex = parseInt(cell.dataset.staffIndex, 10);
+        const timeIndex = parseInt(cell.dataset.timeIndex, 10);
+        
+        if (!isNaN(dateIndex) && !isNaN(staffIndex) && !isNaN(timeIndex)) {
+          handleMouseDown(e, dateIndex, staffIndex, timeIndex);
+        }
+      };
+      
+      const handleGridMouseMove = (e) => {
+        const cell = e.target.closest('.schedule-cell');
+        if (!cell) return;
+        
+        const dateIndex = parseInt(cell.dataset.dateIndex, 10);
+        const staffIndex = parseInt(cell.dataset.staffIndex, 10);
+        const timeIndex = parseInt(cell.dataset.timeIndex, 10);
+        
+        if (!isNaN(dateIndex) && !isNaN(staffIndex) && !isNaN(timeIndex)) {
+          handleMouseMove(e, dateIndex, staffIndex, timeIndex);
+        }
+      };
+      
+      const handleGridMouseUp = (e) => {
+        const cell = e.target.closest('.schedule-cell');
+        if (!cell) {
+          if (mouseDown) {
+            setMouseDown(false);
+            if (isDragging) {
+              finalizeDragSelection();
+            } else if (clickedCell) {
+              selectSingleCell(clickedCell.dateIndex, clickedCell.staffIndex, clickedCell.timeIndex);
+            }
+          }
+          return;
+        }
+        
+        const dateIndex = parseInt(cell.dataset.dateIndex, 10);
+        const staffIndex = parseInt(cell.dataset.staffIndex, 10);
+        const timeIndex = parseInt(cell.dataset.timeIndex, 10);
+        
+        if (!isNaN(dateIndex) && !isNaN(staffIndex) && !isNaN(timeIndex)) {
+          handleMouseUp(e, dateIndex, staffIndex, timeIndex);
+        }
+      };
+      
+      grid.addEventListener('mousedown', handleGridMouseDown);
+      grid.addEventListener('mousemove', handleGridMouseMove);
+      grid.addEventListener('mouseup', handleGridMouseUp);
+      
+      return () => {
+        document.removeEventListener("keydown", handleUndo);
+        document.removeEventListener("mousedown", handleOutsideClick);
+        grid.removeEventListener('mousedown', handleGridMouseDown);
+        grid.removeEventListener('mousemove', handleGridMouseMove);
+        grid.removeEventListener('mouseup', handleGridMouseUp);
+      };
+    }
+    
+    return () => {
+      document.removeEventListener("keydown", handleUndo);
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [previousActions]);
+
   return (
-    <GridContainer ref={gridRef}>
+    <GridContainer 
+      ref={gridRef}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* 헤더 부분 - 별도 컨테이너로 분리 */}
       <HeaderContainer>
         <HeaderRow columns={totalColumns} dates={dates} staff={staff}>
@@ -1245,8 +1523,11 @@ const ScheduleGrid = ({
         {/* 일정 렌더링 */}
         {renderAppointments()}
 
-        {/* 드래그 선택 영역 */}
-        {isDragging && renderSelectionArea()}
+        {/* 드래그 중인 영역 */}
+        {isDragging && renderDragArea()}
+        
+        {/* 선택된 영역 (드래그 완료 후) */}
+        {!isDragging && selectedArea && renderSelectionArea()}
       </GridContent>
 
       {/* 일정 입력 폼 */}
@@ -1306,42 +1587,40 @@ const ScheduleGrid = ({
             />
           </FormField>
 
-          {/* 환자 이름 */}
+          {/* 참고사항 */}
           <FormField>
-            <label>환자 이름</label>
-            <Input
-              type="text"
-              value={formData.patientName}
-              onChange={(e) =>
-                setFormData({ ...formData, patientName: e.target.value })
-              }
-              placeholder="환자 이름"
-            />
-          </FormField>
-
-          {/* 환자 번호 */}
-          <FormField>
-            <label>환자 번호</label>
-            <Input
-              type="text"
-              value={formData.patientNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, patientNumber: e.target.value })
-              }
-              placeholder="환자 번호"
-            />
-          </FormField>
-
-          {/* 메모 */}
-          <FormField>
-            <label>메모</label>
+            <label>참고사항</label>
             <TextArea
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
               }
-              placeholder="추가 메모..."
+              placeholder="참고사항 입력..."
             />
+          </FormField>
+
+          {/* 소요시간 */}
+          <FormField>
+            <label>소요시간 (분)</label>
+            <select
+              value={formData.duration}
+              onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: '#f8fafc'
+              }}
+            >
+              <option value="30">30분</option>
+              <option value="60">1시간</option>
+              <option value="90">1시간 30분</option>
+              <option value="120">2시간</option>
+              <option value="150">2시간 30분</option>
+              <option value="180">3시간</option>
+            </select>
           </FormField>
 
           {/* 버튼 영역 */}
@@ -1385,62 +1664,6 @@ const ScheduleGrid = ({
               </Button>
             )}
           </FormActions>
-
-          {/* 예약 세부 옵션 (12줄 추가) */}
-          <div
-            style={{
-              marginTop: "12px",
-              borderTop: "1px solid #edf2f7",
-              paddingTop: "12px",
-            }}
-          >
-            <h4 style={{ fontSize: "14px", margin: "0 0 8px 0" }}>추가 옵션</h4>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <input
-                type="checkbox"
-                id="send-notification"
-                style={{ marginRight: "8px" }}
-              />
-              <label htmlFor="send-notification" style={{ fontSize: "13px" }}>
-                예약 확인 메시지 발송
-              </label>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <input
-                type="checkbox"
-                id="recurring"
-                style={{ marginRight: "8px" }}
-              />
-              <label htmlFor="recurring" style={{ fontSize: "13px" }}>
-                정기 예약으로 설정
-              </label>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <input
-                type="checkbox"
-                id="reminder"
-                style={{ marginRight: "8px" }}
-              />
-              <label htmlFor="reminder" style={{ fontSize: "13px" }}>
-                예약 하루 전 알림 설정
-              </label>
-            </div>
-          </div>
         </AppointmentForm>
       )}
     </GridContainer>
