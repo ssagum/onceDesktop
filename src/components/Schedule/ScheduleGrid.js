@@ -1036,35 +1036,62 @@ const ScheduleGrid = ({
         const isToday =
           format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
         const dayOfWeekNumber = date.getDay();
+        const businessHour = businessHours[dayOfWeekNumber];
         const startCol = dateIndex * (staff.length + 1) + 1;
 
-        // 시간 표시 제한 로직
+        // 시간 표시 제한 로직 추가
         const timeHour = parseInt(time.split(":")[0], 10);
         const timeMinute = parseInt(time.split(":")[1], 10);
         const timeInMinutes = timeHour * 60 + timeMinute;
 
+        // 요일별 표시 시간 제한
         let shouldShowTime = true;
+
         if (
           dayOfWeekNumber === 1 ||
           dayOfWeekNumber === 3 ||
           dayOfWeekNumber === 5
         ) {
+          // 월수금: 19시 30분까지
           shouldShowTime = timeInMinutes <= 19 * 60;
         } else if (dayOfWeekNumber === 2 || dayOfWeekNumber === 4) {
+          // 화목: 20시까지
           shouldShowTime = timeInMinutes <= 20 * 60;
         } else if (dayOfWeekNumber === 6) {
+          // 토요일: 14시까지
           shouldShowTime = timeInMinutes <= 14 * 60;
         } else if (dayOfWeekNumber === 0) {
+          // 일요일: 정기휴무 - 시간 표시 안함
           shouldShowTime = false;
         }
 
+        // 영업 시간 외인지 확인
         const isOutOfBusinessHours = !shouldShowTime || dayOfWeekNumber === 0;
-        const isBreakTimeForDay =
-          (timeIndex === 9 || timeIndex === 10) &&
-          dayOfWeekNumber !== 0 &&
-          dayOfWeekNumber !== 6;
 
-        // 시간 열
+        // 휴게시간 로직 변경 - 행 인덱스로 판단
+        const isBreakTimeForDay =
+          (timeIndex === 9 || timeIndex === 10) && // 10번째와 11번째 행 (0-based index)
+          dayOfWeekNumber !== 0 &&
+          dayOfWeekNumber !== 6; // 일요일과 토요일 제외
+
+        // 특정 행에 대한 시간 표시 조정
+        let displayTime = time;
+        if (timeIndex === 8) {
+          // 9번째 행 (0-based index)
+          displayTime = "13:00";
+        } else if (timeIndex === 11) {
+          // 12번째 행 (0-based index)
+          displayTime = "14:00";
+        } else if (
+          (timeIndex === 9 || timeIndex === 10) &&
+          dayOfWeekNumber !== 6 &&
+          dayOfWeekNumber !== 0
+        ) {
+          // 휴게시간 행 (10, 11번째) - 토요일과 일요일 제외
+          displayTime = timeIndex === 9 ? "점심" : "시간";
+        }
+
+        // 각 날짜별 시간 열 추가 - 너비 50px로 변경
         cells.push(
           <Cell
             key={`time-col-${dateIndex}-${timeIndex}`}
@@ -1086,11 +1113,11 @@ const ScheduleGrid = ({
               overflow: "hidden",
             }}
           >
-            {shouldShowTime ? time : ""}
+            {shouldShowTime ? displayTime : ""}
           </Cell>
         );
 
-        // 직원 셀
+        // 직원 셀 추가
         staff.forEach((person, staffIndex) => {
           const colIndex = startCol + staffIndex + 1;
           const cellKey = `cell-${dateIndex}-${staffIndex}-${timeIndex}`;
