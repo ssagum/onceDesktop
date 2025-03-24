@@ -535,7 +535,7 @@ const SelectionArea = styled.div`
 
 const SelectedCell = styled.div`
   position: absolute;
-  background-color: rgba(66, 153, 225, 0.15);
+  background-color: rgba(66, 153, 235, 0.15);
   border: 2px solid #4299e1;
   pointer-events: none;
   z-index: 4;
@@ -725,6 +725,7 @@ const ScheduleGrid = ({
     if (!isSelecting) return;
 
     setIsSelecting(false);
+    setCurrentCell(null);
     const cell = { dateIndex, staffIndex, timeIndex };
 
     // 선택 영역이 있는 경우
@@ -1269,7 +1270,7 @@ const ScheduleGrid = ({
 
   // 선택된 셀 렌더링 함수 수정
   const renderSelectedCell = () => {
-    if (!currentCell) return null;
+    if (!currentCell || isSelecting) return null;
 
     const { dateIndex, staffIndex, timeIndex } = currentCell;
     const startCol = dateIndex * (staff.length + 1) + 1;
