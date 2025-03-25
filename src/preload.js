@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electron", {
   openTimerWindow: () => ipcRenderer.send("open-timer-window"),
+  openChatWindow: () => ipcRenderer.send("open-chat-window"),
   sendNotification: (message) => {
     ipcRenderer.send("show-notification", message);
   },
@@ -29,12 +30,12 @@ contextBridge.exposeInMainWorld("electron", {
   testIPC: (message) => {
     console.log("preload.js: testIPC 호출됨", message);
     ipcRenderer.send("test-ipc", message);
-    
+
     ipcRenderer.once("test-ipc-reply", (event, response) => {
       console.log("preload.js: IPC 응답 수신", response);
       alert("IPC 테스트 응답: " + response);
     });
-  }
+  },
 });
 
 // 알림 소리 재생을 위한 리스너 - 소리는 App.js에서 재생하므로 여기서는 제거

@@ -5,6 +5,7 @@ import {
   locationOptions,
   roleOptions,
 } from "../../datas/users";
+import OnceOnOffButton from "./OnceOnOffButton";
 
 /**
  * 로그인과 PC할당 기능을 하나의 모달로 통합한 컴포넌트
@@ -37,6 +38,7 @@ const LoginPCModal = ({
   );
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [message, setMessage] = useState("");
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
 
   // 초기 탭 설정
   const changeActiveTab = (tab) => {
@@ -62,22 +64,35 @@ const LoginPCModal = ({
             : "")
       );
       setAdminPasswordInput("");
+      setIsPasswordValid(false);
       setMessage("");
     }
   }, [isOpen, defaultDepartment, defaultRole, defaultLocation]);
 
+  // 비밀번호 변경 처리
+  useEffect(() => {
+    setIsPasswordValid(adminPasswordInput.trim().length > 0);
+  }, [adminPasswordInput]);
+
   // PC 할당 폼 제출 처리
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+
+    if (!isPasswordValid) {
+      setMessage("관리자 패스워드를 입력해주세요");
+      return;
+    }
+
     const newData = { department, role, location, departmentLeader };
-    const success = onPCAllocationSubmit(newData, adminPasswordInput);
+    // 비동기 작업으로 처리하고 await 추가
+    const success = await onPCAllocationSubmit(newData, adminPasswordInput);
 
     if (success) {
       setMessage("PC 할당 완료");
-      // 모달을 잠시 보여준 후 닫기
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      // 즉시 모달 닫기
+      onClose();
     } else {
       setMessage("패스워드가 틀렸습니다");
     }
@@ -198,12 +213,15 @@ const LoginPCModal = ({
               />
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-onceBlue text-white py-2 rounded"
-            >
-              저장
-            </button>
+            <div className="w-full">
+              <OnceOnOffButton
+                text="저장"
+                on={isPasswordValid}
+                onClick={handleSubmit}
+                disabled={!isPasswordValid}
+                toastMessage="관리자 패스워드를 입력해주세요"
+              />
+            </div>
           </form>
         )}
         {message && <p className="mt-2 text-center text-sm">{message}</p>}

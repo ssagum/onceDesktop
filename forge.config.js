@@ -65,6 +65,14 @@ module.exports = {
                 js: "./src/preload.js",
               },
             },
+            {
+              html: "./src/chat.html",
+              js: "./src/chat.js",
+              name: "chat_window",
+              preload: {
+                js: "./src/preload.js",
+              },
+            },
           ],
         },
       },

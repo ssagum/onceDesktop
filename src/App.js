@@ -27,6 +27,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import Management from "./pages/Managemnet";
 import { useUserLevel } from "./utils/UserLevelContext";
 import Parking from "./pages/Parking";
+import { initializeChatRooms } from "./components/Chat/ChatService";
 // TODO: Add SDKs for Firebase products that you want to use
 
 // 앱 시작 시간 기록 (처음 실행 시 이전 메시지 알림 방지용)
@@ -133,6 +134,19 @@ const App = () => {
 
     return () => unsubscribe();
   }, [userLevelData]);
+
+  // Firebase 채팅방 초기화
+  useEffect(() => {
+    const initializeChat = async () => {
+      try {
+        await initializeChatRooms();
+      } catch (error) {
+        console.error("채팅방 초기화 오류:", error);
+      }
+    };
+
+    initializeChat();
+  }, []);
 
   return (
     <ToastProvider>

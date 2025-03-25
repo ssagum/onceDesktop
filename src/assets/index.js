@@ -15,8 +15,9 @@ import search from "./search.svg";
 import cancel from "./cancel.svg";
 import chevronBackward from "./chevronBackward.svg";
 import chevronForward from "./chevronForward.svg";
-
+import chatting from "./chatting.svg";
 export {
+  chatting,
   chevronBackward,
   chevronForward,
   cancel,

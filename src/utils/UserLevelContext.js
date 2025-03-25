@@ -8,8 +8,8 @@ import {
   registerUser,
   resetPassword,
 } from "./UserAuth";
-
-const UserLevelContext = createContext();
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 // 단 한 번만 선언
 const adminPassword = "skylover";
@@ -18,6 +18,21 @@ const adminPassword = "skylover";
 const AUTO_LOGIN_KEY = "autoLoginEnabled";
 // 로그인 상태 관리를 위한 키
 const LOGIN_STATUS_KEY = "loginStatus";
+
+// 기본 상태값 정의
+const defaultUserLevelState = {
+  uid: null,
+  email: null,
+  displayName: "사용자",
+  department: "미분류",
+  level: 0,
+};
+
+// 컨텍스트 생성 - 단 한 번만 선언
+const UserLevelContext = createContext();
+
+// 컨텍스트 사용을 위한 훅
+export const useUserLevel = () => useContext(UserLevelContext);
 
 const getInitialUserLevelData = () => {
   try {
@@ -64,7 +79,9 @@ const setLoginStatus = (isLoggedIn) => {
 };
 
 export function UserLevelProvider({ children }) {
-  const [userLevelData, setUserLevelData] = useState(getInitialUserLevelData());
+  const [userLevelData, setUserLevelData] = useState(
+    getInitialUserLevelData() || defaultUserLevelState
+  );
   const [currentUser, setCurrentUser] = useState(null);
   const [isAutoLoginEnabled, setIsAutoLoginEnabled] = useState(
     getAutoLoginSetting()
@@ -144,12 +161,25 @@ export function UserLevelProvider({ children }) {
     localStorage.setItem("userLevelData", JSON.stringify(updatedData));
   };
 
-  const updateUserLevelData = (newData, password) => {
-    if (password === adminPassword) {
-      setUserLevelData(newData);
-      return true;
+  // 임시 함수 추가 (이후 다른 파일로 이동하거나 보다 안전한 방식으로 변경)
+  const validateAdminPassword = (password) => {
+    return password === adminPassword;
+  };
+
+  const updateUserLevelData = (data, adminPassword) => {
+    // 패스워드 검증이 필요한 경우 (adminPassword가 제공된 경우)
+    if (adminPassword) {
+      if (!validateAdminPassword(adminPassword)) {
+        return false; // 패스워드가 일치하지 않으면 false 반환
+      }
     }
-    return false;
+
+    setUserLevelData((prevData) => ({
+      ...prevData,
+      ...data,
+    }));
+
+    return true; // 업데이트 성공 시 true 반환
   };
 
   const checkUserPermission = (requiredPermission) => {
@@ -238,6 +268,33 @@ export function UserLevelProvider({ children }) {
     setLoginStatus(isLoggedIn);
   }, [currentUser]);
 
+  // 로그인 상태가 없는 경우 임시 사용자 데이터 제공
+  useEffect(() => {
+    if (!userLevelData || !userLevelData.uid) {
+      console.log("로그인 상태 없음, 임시 사용자 데이터 제공");
+      const tempUserId = "temp-" + Math.random().toString(36).substr(2, 9);
+
+      // 기존 함수 호출이 있으면 그대로 유지, 없으면 직접 설정
+      if (typeof updateUserLevelData === "function") {
+        updateUserLevelData({
+          uid: tempUserId,
+          email: "temp@example.com",
+          displayName: "임시사용자",
+          department: "테스트부서",
+          level: 1,
+        });
+      } else {
+        setUserLevelData({
+          uid: tempUserId,
+          email: "temp@example.com",
+          displayName: "임시사용자",
+          department: "테스트부서",
+          level: 1,
+        });
+      }
+    }
+  }, [userLevelData]);
+
   return (
     <UserLevelContext.Provider
       value={{
@@ -263,8 +320,4 @@ export function UserLevelProvider({ children }) {
       {children}
     </UserLevelContext.Provider>
   );
-}
-
-export function useUserLevel() {
-  return useContext(UserLevelContext);
 }

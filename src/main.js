@@ -39,6 +39,10 @@ if (!gotTheLock) {
   let mainWindow;
   let tray = null;
 
+  // 창 객체를 전역 변수로 저장
+  let timerWindow = null;
+  let chatWindow = null;
+
   const createWindow = () => {
     // Windows 10에서 토스트 알림을 위한 AppUserModelID 설정
     if (process.platform === "win32") {
@@ -338,7 +342,15 @@ if (!gotTheLock) {
   });
 
   function createTimerWindow() {
-    const timerWindow = new BrowserWindow({
+    // 이미 창이 열려 있으면 활성화하고 리턴
+    if (timerWindow && !timerWindow.isDestroyed()) {
+      if (timerWindow.isMinimized()) timerWindow.restore();
+      timerWindow.focus();
+      return timerWindow;
+    }
+
+    // 새 창 생성
+    timerWindow = new BrowserWindow({
       width: 800,
       height: 600,
       icon: path.join(app.getAppPath(), "public", "icon.ico"),
@@ -373,6 +385,82 @@ if (!gotTheLock) {
     if (isDevelopment) {
       timerWindow.webContents.openDevTools();
     }
+
+    // 창이 닫힐 때 참조 제거
+    timerWindow.on("closed", () => {
+      timerWindow = null;
+    });
+
+    return timerWindow;
+  }
+
+  function createChatWindow() {
+    // 이미 창이 열려 있으면 활성화하고 리턴
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      if (chatWindow.isMinimized()) chatWindow.restore();
+      chatWindow.focus();
+      return chatWindow;
+    }
+
+    // 새 창 생성
+    chatWindow = new BrowserWindow({
+      width: 450,
+      height: 700,
+      icon: path.join(app.getAppPath(), "public", "icon.ico"),
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        preload: CHAT_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      },
+      backgroundColor: "#f5f6f8",
+    });
+
+    console.log("채팅 창 URL:", CHAT_WINDOW_WEBPACK_ENTRY);
+    chatWindow.loadURL(CHAT_WINDOW_WEBPACK_ENTRY);
+
+    // CSP 설정 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
+    chatWindow.webContents.session.webRequest.onHeadersReceived(
+      (details, callback) => {
+        // 개발 환경에서는 웹팩 핫 리로딩을 위해 'unsafe-eval' 허용
+        const cspHeader = isDevelopment
+          ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: webpack: https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;"
+          : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://firestore.googleapis.com https://*.googleapis.com wss://*.firebaseio.com;";
+
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            "Content-Security-Policy": [cspHeader],
+          },
+        });
+      }
+    );
+
+    // 항상 개발 도구 열기
+    chatWindow.webContents.openDevTools();
+
+    // 창이 닫힐 때 이벤트 처리
+    chatWindow.on("closed", () => {
+      console.log("채팅 창이 닫혔습니다.");
+      chatWindow = null;
+    });
+
+    // 콘솔 로그 출력
+    chatWindow.webContents.on("did-finish-load", () => {
+      console.log("채팅 창이 로드되었습니다.");
+      // 로딩 완료 후 창 크기 및 위치 재조정
+      chatWindow.setSize(450, 700);
+      chatWindow.center();
+    });
+
+    chatWindow.webContents.on(
+      "console-message",
+      (event, level, message, line, sourceId) => {
+        console.log(`채팅 창 콘솔 (${level}):`, message);
+      }
+    );
+
+    return chatWindow;
   }
 
   // 테스트용 IPC 통신 추가
@@ -391,7 +479,21 @@ if (!gotTheLock) {
 
   // IPC 통신 설정
   ipcMain.on("open-timer-window", () => {
-    createTimerWindow();
+    try {
+      console.log("타이머 창 열기 요청 받음");
+      createTimerWindow();
+    } catch (error) {
+      console.error("타이머 창 생성 중 오류 발생:", error);
+    }
+  });
+
+  ipcMain.on("open-chat-window", () => {
+    try {
+      console.log("채팅 창 열기 요청 받음");
+      createChatWindow();
+    } catch (error) {
+      console.error("채팅 창 생성 중 오류 발생:", error);
+    }
   });
 
   // This method will be called when Electron has finished

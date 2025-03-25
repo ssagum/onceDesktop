@@ -7,6 +7,7 @@ import {
   bell,
   board,
   bulb,
+  chatting,
   form,
   planeNote,
   plus,
@@ -51,6 +52,7 @@ import TaskRecordModal from "../Task/TaskRecordModal";
 import { useToast } from "../../contexts/ToastContext";
 import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
+import { getUnreadMessageCount } from "../Chat/ChatService";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -61,9 +63,14 @@ const RightBottomZone = styled.div``;
 const InsideHeaderZone = styled.div``;
 const ToDoZone = styled.div``;
 
-const Square = ({ title }) => {
+const Square = ({ title, unreadCount = 0 }) => {
   return (
-    <div className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer">
+    <div className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer relative">
+      {unreadCount > 0 && (
+        <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </div>
+      )}
       <div className="w-[40px] h-[50px]">
         {title === "공지등록" && (
           <img src={plus} alt="Logo" className="w-[40px]" />
@@ -89,6 +96,9 @@ const Square = ({ title }) => {
         {title === "병원현황" && (
           <img src={board} alt="Logo" className="w-[40px]" />
         )}
+        {title === "채 팅" && (
+          <img src={chatting} alt="Logo" className="w-[40px]" />
+        )}
       </div>
       <span className="text-once18">{title}</span>
     </div>
@@ -97,6 +107,10 @@ const Square = ({ title }) => {
 
 const openTimerWindow = () => {
   window.electron.openTimerWindow();
+};
+
+const openChatWindow = () => {
+  window.electron.openChatWindow();
 };
 
 export default function HomeMainCanvas() {
@@ -118,6 +132,7 @@ export default function HomeMainCanvas() {
   const { showToast } = useToast();
   const [isMiniMode, setIsMiniMode] = useState(false);
   const [stockRequestModalOn, setStockRequestModalOn] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -143,6 +158,26 @@ export default function HomeMainCanvas() {
       fetchTasks();
     }
   }, [userLevelData?.department, currentDate]);
+
+  useEffect(() => {
+    // 읽지 않은 메시지 수 가져오기
+    const fetchUnreadMessages = async () => {
+      if (userLevelData?.uid) {
+        const count = await getUnreadMessageCount(
+          userLevelData.uid,
+          userLevelData.department,
+          userLevelData.role
+        );
+        setUnreadChatCount(count);
+      }
+    };
+
+    fetchUnreadMessages();
+
+    // 1분마다 갱신
+    const interval = setInterval(fetchUnreadMessages, 60000);
+    return () => clearInterval(interval);
+  }, [userLevelData?.uid, userLevelData?.department, userLevelData?.role]);
 
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
@@ -589,13 +624,35 @@ export default function HomeMainCanvas() {
               </div>
             </RightTopZone>
             <RightBottomZone className="w-full flex-row flex">
-              <button
-                onClick={() => setCallIsVisible(true)}
-                className="w-full flex flex-col bg-white mr-[20px] rounded-xl h-[240px] justify-center items-center"
-              >
-                <img src={bell} alt="Logo" className="w-[80px] mb-[10px]" />
-                <span className="text-once18">호 출</span>
-              </button>
+              <div className="w-[240px] h-[240px] flex-col flex justify-between mr-[20px] gap-y-[20px]">
+                <button
+                  onClick={() => setCallIsVisible(true)}
+                  className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center"
+                >
+                  <img src={bell} alt="Logo" className="w-[46px] mb-[10px]" />
+                  <span className="text-once18">호 출</span>
+                </button>
+                <button
+                  onClick={openChatWindow}
+                  className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center relative"
+                >
+                  {unreadChatCount > 0 && (
+                    <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full px-1.5 min-w-[20px] h-5 flex items-center justify-center text-xs">
+                      {unreadChatCount > 99
+                        ? "99+"
+                        : unreadChatCount > 9
+                        ? `${unreadChatCount}+`
+                        : unreadChatCount}
+                    </div>
+                  )}
+                  <img
+                    src={chatting}
+                    alt="Logo"
+                    className="w-[44px] mb-[10px]"
+                  />
+                  <span className="text-once18">채 팅</span>
+                </button>
+              </div>
               <div className="w-[240px] h-[240px] flex-col flex justify-between">
                 {false ? (
                   <div className="w-[240px] flex flex-row justify-between">

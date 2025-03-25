@@ -61,7 +61,7 @@ function PCAllocation() {
   };
 
   // PC 할당 제출 처리
-  const handlePCAllocationSubmit = (newData, adminPassword) => {
+  const handlePCAllocationSubmit = async (newData, adminPassword) => {
     return updateUserLevelData(newData, adminPassword);
   };
 
