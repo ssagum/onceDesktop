@@ -13,8 +13,9 @@ import {
   markMessageAsRead,
   addReaction,
   initializeChatRooms,
+  CHAT_TYPES,
 } from "./ChatService";
-import { TempUserLevelContext } from "../../chat";
+import { useUserLevel } from "../../utils/UserLevelContext";
 import { IoPaperPlaneSharp } from "react-icons/io5";
 
 const Container = styled.div`
@@ -123,6 +124,7 @@ const MessageContainer = styled.div`
   padding: 20px;
   display: flex;
   flex-direction: column;
+  margin-bottom: 10px;
 `;
 
 const MessageGroup = styled.div`
@@ -170,11 +172,9 @@ const MessageContent = styled.div`
   max-width: 70%;
 `;
 
-const SenderName = styled.div`
-  font-size: 14px;
-  margin-bottom: 4px;
-  color: #666;
-  text-align: ${(props) => (props.isMe ? "right" : "left")};
+const SenderUserName = styled.div`
+  font-size: 16px;
+  font-weight: 500;
 `;
 
 const MessageBubble = styled.div`
@@ -226,13 +226,17 @@ const MessageTime = styled.span`
 
 const InputContainer = styled.div`
   display: flex;
+  flex-direction: row;
   padding: 10px;
   background-color: #fff;
   border-top: 1px solid #e6e6e6;
   position: relative;
+  min-height: 60px;
+  max-height: 150px;
+  align-items: flex-end;
 `;
 
-const MessageInput = styled.input`
+const MessageInput = styled.textarea`
   flex: 1;
   border: 1px solid #e6e6e6;
   border-radius: 20px;
@@ -240,6 +244,10 @@ const MessageInput = styled.input`
   font-size: 16px;
   outline: none;
   background-color: ${(props) => (props.disabled ? "#f5f5f5" : "#fff")};
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  font-family: inherit;
 
   &:focus {
     border-color: ${(props) => (props.disabled ? "#e6e6e6" : "#304ffd")};
@@ -260,6 +268,7 @@ const SendButton = styled.button`
   justify-content: center;
   margin-top: 4px;
   transition: background-color 0.2s;
+  margin-bottom: 6px;
 
   &:hover {
     background-color: ${(props) => (props.disabled ? "#cccccc" : "#263ed9")};
@@ -399,16 +408,31 @@ const MentionText = styled.span`
   font-weight: bold;
 `;
 
-// 멘션 입력 컨테이너 스타일 추가
+// 멘션 입력 컨테이너 스타일 수정
 const MentionInputContainer = styled.div`
   position: relative;
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   border: 1px solid #e6e6e6;
   border-radius: 20px;
-  padding: 5px 10px;
+  padding: 2px 10px;
   background-color: ${(props) => (props.disabled ? "#f5f5f5" : "#fff")};
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden; /* 가로 스크롤 방지 */
+  word-break: break-word; /* 단어 내에서도 줄바꿈 허용 */
+  overflow-wrap: break-word; /* 가로로 길어지지 않도록 처리 */
+  margin-bottom: 4px;
+
+  /* 스크롤바 숨기기 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer, Edge */
+
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
 
   &:focus-within {
     border-color: #304ffd;
@@ -443,8 +467,7 @@ const MentionInput = styled.div`
     content: "";
     position: absolute;
     left: 0; /* 오른쪽이 아닌 왼쪽에 위치 */
-    top: 50%;
-    transform: translateY(-50%);
+    top: calc(50% - 10px);
     height: 15px;
     width: 1px;
     background-color: #304ffd;
@@ -462,16 +485,18 @@ const MentionInput = styled.div`
   }
 `;
 
-// 플레이스홀더 스타일
+// 좌측에 위치하지만 수직 중앙 정렬된 Placeholder 스타일 수정
 const Placeholder = styled.div`
-  margin-top: 4px;
   position: absolute;
-  left: 10px;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
   color: #aaa;
-  font-size: 16px;
+  font-size: 14px;
   pointer-events: none;
 `;
 
+// 수직 중앙 정렬된 CursorIndicator 스타일 수정
 const CursorIndicator = styled.div`
   position: relative;
   width: 2px;
@@ -479,6 +504,7 @@ const CursorIndicator = styled.div`
   background-color: #304ffd;
   display: inline-block;
   margin-right: 4px;
+  vertical-align: middle;
   animation: blink 1s infinite;
 
   @keyframes blink {
@@ -691,6 +717,100 @@ const ReactionButton = styled.div`
   }
 `;
 
+// 스타일 컴포넌트 추가
+const SenderSelector = styled.div`
+  position: relative;
+  min-width: 100px;
+  border: 1px solid #e6e6e6;
+  border-radius: 20px;
+  padding: 8px 10px;
+  margin-right: 10px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.2s;
+  margin-bottom: 5px;
+  z-index: 10;
+
+  &:hover {
+    background-color: #e9e9e9;
+  }
+
+  svg {
+    margin-left: 5px;
+    font-size: 12px;
+  }
+`;
+
+const SenderDropdown = styled.div`
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 240px;
+  max-height: 300px;
+  background-color: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  padding: 10px 0;
+`;
+
+const SenderDropdownHeader = styled.div`
+  padding: 0 15px 10px;
+  font-weight: 600;
+  color: #333;
+  font-size: 16px;
+  border-bottom: 1px solid #e6e6e6;
+`;
+
+const SenderOptionsList = styled.div`
+  max-height: 250px;
+  overflow-y: auto;
+`;
+
+const SenderOption = styled.div`
+  padding: 8px 15px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #f5f6f8;
+  }
+
+  &.selected {
+    background-color: #f0f8ff;
+  }
+`;
+
+const SenderAvatar = styled.div`
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: #304ffd;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 600;
+  margin-right: 10px;
+  font-size: 14px;
+`;
+
+const SenderInfo = styled.div`
+  flex: 1;
+`;
+
+const SenderRole = styled.div`
+  font-size: 14px;
+  color: #666;
+`;
+
 // 날짜별로 메시지 그룹화 함수
 const groupMessagesByDate = (messages) => {
   const groups = {};
@@ -800,13 +920,14 @@ const highlightMentions = (text) => {
 };
 
 const ChatWindow = () => {
-  const { userLevelData } = useContext(TempUserLevelContext);
+  const { userLevelData, isLoggedIn } = useUserLevel();
   const [chatRooms, setChatRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
   const messageEndRef = useRef(null);
   const inputRef = useRef(null);
+  const scrollPositionRef = useRef(0); // 스크롤 위치 저장용 ref 추가
   const [loading, setLoading] = useState(true);
   const [canSend, setCanSend] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -838,6 +959,11 @@ const ChatWindow = () => {
   // 메시지 구독 관련
   const [messageUnsubscribe, setMessageUnsubscribe] = useState(null);
 
+  // 현재 선택된 발신자 상태 관리
+  const [selectedSender, setSelectedSender] = useState(null);
+  const [showSenderDropdown, setShowSenderDropdown] = useState(false);
+  const [departmentUsers, setDepartmentUsers] = useState([]);
+
   // Firebase 초기화
   useEffect(() => {
     const setupFirebase = async () => {
@@ -852,19 +978,69 @@ const ChatWindow = () => {
     setupFirebase();
   }, []);
 
+  // 초기 발신자 설정 - 로그인 상태면 해당 사용자, 아니면 부서의 첫 번째 사용자
+  useEffect(() => {
+    const initSender = async () => {
+      if (userLevelData?.uid && userLevelData?.name) {
+        // 로그인 상태
+        setSelectedSender({
+          id: userLevelData.uid,
+          name: userLevelData.name || userLevelData.displayName || "사용자",
+          department: userLevelData.department || "",
+        });
+      } else if (userLevelData?.department) {
+        // 부서는 알지만 로그인은 안 된 상태
+        try {
+          const users = await getUsersFromDepartment(userLevelData.department);
+          setDepartmentUsers(users);
+          // 자동 선택하지 않음 (첫 번째 사용자 자동 선택 제거)
+          setSelectedSender(null);
+        } catch (error) {
+          console.error("부서 사용자 목록 가져오기 오류:", error);
+        }
+      }
+    };
+
+    initSender();
+  }, [userLevelData]);
+
   // 채팅방 목록 불러오기
   useEffect(() => {
     const fetchChatRooms = async () => {
       try {
         setLoading(true);
-        if (userLevelData?.uid && userLevelData?.department) {
+
+        // 장치 ID 가져오기 (또는 생성)
+        const deviceId =
+          localStorage.getItem("deviceId") || `device-${Date.now()}`;
+        if (!localStorage.getItem("deviceId")) {
+          localStorage.setItem("deviceId", deviceId);
+        }
+
+        // userLevelData에서 department와 role 가져오기
+        const department = userLevelData?.department || "";
+        const role = userLevelData?.role || "";
+
+        console.log("현재 사용자 정보:", { department, role, userLevelData });
+
+        // 부서가 설정된 경우에만 모든 채팅방 표시, 그렇지 않으면 전체 채팅방만 표시
+        if (department) {
           // 역할 정보 추가
-          const rooms = await getChatRooms(
-            userLevelData.uid,
-            userLevelData.department,
-            userLevelData.role
-          );
+          const rooms = await getChatRooms(deviceId, department, role);
+          console.log("가져온 채팅방 목록:", rooms);
           setChatRooms(rooms);
+        } else {
+          // 부서가 없는 경우 전체 채팅방만 표시
+          const globalRoomId = "global-chat";
+          const globalRoom = {
+            id: globalRoomId,
+            name: "전체 채팅",
+            type: CHAT_TYPES.GLOBAL,
+            canSend: true, // 부서가 없어도 전체 채팅에서는 메시지 전송 허용
+            unreadCount: 0,
+            isMine: true,
+          };
+          setChatRooms([globalRoom]);
         }
       } catch (error) {
         console.error("채팅방 목록 가져오기 오류:", error);
@@ -874,7 +1050,7 @@ const ChatWindow = () => {
     };
 
     fetchChatRooms();
-  }, [userLevelData]);
+  }, [userLevelData]); // userLevelData가 변경될 때마다 다시 실행
 
   // 채팅방을 선택했을 때 해당 채팅방의 메시지 표시
   const handleSelectRoom = async (room) => {
@@ -886,8 +1062,31 @@ const ChatWindow = () => {
     setSelectedRoom(room);
     setMessages([]);
 
-    // 메시지 전송 권한 설정
-    setCanSend(room.canSend);
+    // 디버깅 로그 추가
+    console.log("선택된 채팅방:", room);
+    console.log("채팅방 타입:", room.type);
+    console.log("유저 레벨 데이터:", userLevelData);
+    console.log("사용자 부서:", userLevelData?.department);
+
+    // 메시지 전송 권한 설정 - 개선된 로직
+    if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL) {
+      // 전체 채팅 여부를 ID와 타입 모두 확인 (더 안전한 접근)
+      const isManagementTeam = userLevelData?.department === "경영지원팀";
+      console.log("경영지원팀 여부:", isManagementTeam);
+
+      // 전체 채팅인 경우:
+      // 1. 경영지원팀이 아니면 권한 있음
+      // 2. 부서가 할당되지 않은 경우(빈 문자열)도 권한 있음
+      setCanSend(!isManagementTeam || !userLevelData?.department);
+      console.log(
+        "전체 채팅 권한 설정:",
+        !isManagementTeam || !userLevelData?.department
+      );
+    } else {
+      // 다른 채팅방은 기존 로직 유지
+      setCanSend(room.canSend);
+      console.log("팀 채팅 권한 설정:", room.canSend);
+    }
 
     // 채팅방 멤버 가져오기
     try {
@@ -897,6 +1096,22 @@ const ChatWindow = () => {
       // 멘션 가능한 사용자 목록
       const mentionable = await getMentionableUsers(room.id);
       setMentionableUsers(mentionable);
+
+      // 채팅방 멤버를 발신자 선택 목록으로도 사용
+      setDepartmentUsers(roomMembers);
+
+      // 로그인 상태에서만 사용자 자신을 발신자로 설정, 비로그인 상태에서는 선택하지 않음
+      if (userLevelData?.uid) {
+        const currentUser = roomMembers.find(
+          (member) => member.id === userLevelData.uid
+        );
+        if (currentUser) {
+          setSelectedSender(currentUser);
+        }
+      } else {
+        // 비로그인 상태에서는 발신자 선택 안함
+        setSelectedSender(null);
+      }
     } catch (error) {
       console.error("채팅방 멤버 가져오기 오류:", error);
     }
@@ -905,17 +1120,18 @@ const ChatWindow = () => {
     const unsubscribe = subscribeToMessages(room.id, (updatedMessages) => {
       setMessages(updatedMessages);
 
-      // 수신한 메시지 중 안 읽은 메시지를 읽음으로 표시
-      if (userLevelData?.uid) {
-        updatedMessages.forEach((msg) => {
-          if (
-            msg.senderId !== userLevelData.uid &&
-            (!msg.readBy || !msg.readBy.includes(userLevelData.uid))
-          ) {
-            markMessageAsRead(msg.id, userLevelData.uid, room.id);
-          }
-        });
+      // 수신한 메시지 중 안 읽은 메시지를 읽음으로 표시 - 컴퓨터 기준으로 변경
+      const deviceId =
+        localStorage.getItem("deviceId") || `device-${Date.now()}`;
+      if (!localStorage.getItem("deviceId")) {
+        localStorage.setItem("deviceId", deviceId);
       }
+
+      updatedMessages.forEach((msg) => {
+        if (!msg.readBy || !msg.readBy.includes(deviceId)) {
+          markMessageAsRead(msg.id, deviceId, room.id);
+        }
+      });
     });
 
     setMessageUnsubscribe(() => unsubscribe);
@@ -960,9 +1176,47 @@ const ChatWindow = () => {
     // 이전 텍스트와 동일한 경우 중복 업데이트 방지
     if (text === messageText) return;
 
+    // 이전 스크롤 위치 저장
+    const container = document.querySelector(".mention-input-container");
+    const prevScrollTop = container ? container.scrollTop : 0;
+    const isUserScrolled = prevScrollTop > 0;
+
     setMessageText(text);
 
-    // 입력 내용이 비어있으면 멘션 관련 상태도 초기화
+    // 입력 영역 높이 조절
+    if (inputRef.current) {
+      // 먼저 높이를 초기화
+      inputRef.current.style.height = "40px";
+      // 실제 콘텐츠 높이 계산
+      const scrollHeight = inputRef.current.scrollHeight;
+      const newHeight = Math.min(120, scrollHeight); // 최대 높이 제한
+
+      // 높이 적용
+      inputRef.current.style.height = `${newHeight}px`;
+
+      // MentionInputContainer 높이도 조정
+      if (container) {
+        // 높이 설정 (padding 고려)
+        container.style.height = `${newHeight}px`;
+
+        // 스크롤 위치 조정
+        if (text.length === 0) {
+          // 텍스트가 없으면 스크롤 초기화
+          container.scrollTop = 0;
+        } else if (isUserScrolled) {
+          // 사용자가 스크롤 중이면 위치 유지
+          container.scrollTop = prevScrollTop;
+        } else {
+          // 아니면 자동 스크롤
+          container.scrollTop = container.scrollHeight;
+        }
+
+        // 스크롤 위치 ref에 저장
+        scrollPositionRef.current = container.scrollTop;
+      }
+    }
+
+    // 멘션 관련 코드
     if (!text) {
       setParsedMentions([]);
       setShowMentionSuggestions(false);
@@ -1059,7 +1313,7 @@ const ChatWindow = () => {
       messageText.trim() &&
       !isSending
     ) {
-      // 메시지 전송
+      // 메시지 전송 (Shift+Enter는 줄바꿈)
       e.preventDefault();
       handleSendMessage();
     }
@@ -1231,10 +1485,17 @@ const ChatWindow = () => {
     );
   };
 
-  // 메시지 전송 처리
+  // 메시지 전송 처리 - 선택한 발신자 정보 사용
   const handleSendMessage = async () => {
-    // 메시지가 비어있거나, 선택된 채팅방이 없거나, 권한이 없거나, 이미 전송 중이면 무시
-    if (!messageText.trim() || !selectedRoom || !canSend || isSending) return;
+    // 메시지가 비어있거나, 선택된 채팅방이 없거나, 권한이 없거나, 이미 전송 중이거나, 발신자가 선택되지 않았으면 무시
+    if (
+      !messageText.trim() ||
+      !selectedRoom ||
+      !canSend ||
+      isSending ||
+      !selectedSender
+    )
+      return;
 
     // 메시지 전송 중 상태로 설정 (락 설정)
     setIsSending(true);
@@ -1242,56 +1503,78 @@ const ChatWindow = () => {
     // 전송할 메시지 텍스트 저장 (상태 변경 전에)
     const textToSend = messageText.trim();
 
-    // 상태 초기화 - 메시지를 먼저 비워서 UI에 즉시 반영되도록 함
-    // requestAnimationFrame 사용하여 다음 렌더링 사이클에서 상태 업데이트
-    requestAnimationFrame(() => {
+    try {
+      // 상태 초기화 - 메시지를 먼저 비워서 UI에 즉시 반영되도록 함
       setMessageText("");
       setParsedMentions([]);
       setShowMentionSuggestions(false);
-    });
 
-    // 답장 정보 구성
-    const replyInfo = replyToMessage
-      ? {
-          id: replyToMessage.id,
-          text: replyToMessage.text,
-          senderName: replyToMessage.senderName,
-        }
-      : undefined;
+      // 입력창 높이 즉시 초기화
+      if (inputRef.current) {
+        inputRef.current.style.height = "40px";
+      }
 
-    // 메시지 객체 구성
-    const messageData = {
-      text: textToSend,
-      replyTo: replyInfo,
-    };
+      const container = document.querySelector(".mention-input-container");
+      if (container) {
+        container.style.height = "40px"; // 초기 높이로 설정
+        container.scrollTop = 0; // 스크롤 위치 초기화
+      }
 
-    try {
-      // Firebase에 메시지 저장
+      // 답장 정보 구성
+      const replyInfo = replyToMessage
+        ? {
+            id: replyToMessage.id,
+            text: replyToMessage.text,
+            senderName: replyToMessage.senderName,
+          }
+        : undefined;
+
+      // 메시지 객체 구성
+      const messageData = {
+        text: textToSend,
+        replyTo: replyInfo,
+      };
+
+      // 디바이스 ID 가져오기 (또는 생성)
+      const deviceId =
+        localStorage.getItem("deviceId") || `device-${Date.now()}`;
+      if (!localStorage.getItem("deviceId")) {
+        localStorage.setItem("deviceId", deviceId);
+      }
+
+      // Firebase에 메시지 저장 - 선택한 발신자 정보 사용
       await sendMessage(selectedRoom.id, messageData, {
-        uid: userLevelData.uid,
-        name:
-          userLevelData.displayName ||
-          userLevelData.name ||
-          userLevelData.email ||
-          "사용자",
+        uid: selectedSender.id,
+        name: selectedSender.name,
+        deviceId: deviceId,
       });
 
       // 답장 상태 초기화
       setReplyToMessage(null);
-
-      // 입력 필드가 깨끗하게 비워졌는지 한번 더 확인
-      setTimeout(() => {
-        if (messageText) {
-          setMessageText("");
-        }
-      }, 0);
     } catch (error) {
       console.error("메시지 전송 오류:", error);
     } finally {
       // 메시지 전송 완료 후 전송 상태 해제 (락 해제)
+      setIsSending(false);
+
+      // 안정적인 초기화를 위해 setTimeout 사용
       setTimeout(() => {
-        setIsSending(false);
-      }, 300);
+        // 입력 필드가 깨끗하게 비워졌는지 한번 더 확인
+        if (inputRef.current && inputRef.current.value !== "") {
+          inputRef.current.value = "";
+        }
+
+        // 입력창 높이 한 번 더 초기화
+        if (inputRef.current) {
+          inputRef.current.style.height = "40px";
+        }
+
+        const container = document.querySelector(".mention-input-container");
+        if (container) {
+          container.style.height = "40px";
+          container.scrollTop = 0;
+        }
+      }, 100);
     }
   };
 
@@ -1363,12 +1646,22 @@ const ChatWindow = () => {
     let result = [];
     let lastIndex = 0;
 
+    // 줄바꿈 문자를 <br> 태그로 변환
+    const renderText = (text) => {
+      return text.split("\n").map((line, i, arr) => (
+        <React.Fragment key={`line-${i}`}>
+          {line}
+          {i < arr.length - 1 && <br />}
+        </React.Fragment>
+      ));
+    };
+
     parsedMentions.forEach((mention) => {
       // 멘션 이전 텍스트 추가
       if (mention.index > lastIndex) {
         result.push(
           <span key={`text-${lastIndex}`}>
-            {messageText.substring(lastIndex, mention.index)}
+            {renderText(messageText.substring(lastIndex, mention.index))}
           </span>
         );
       }
@@ -1387,7 +1680,7 @@ const ChatWindow = () => {
     if (lastIndex < messageText.length) {
       result.push(
         <span key={`text-${lastIndex}`}>
-          {messageText.substring(lastIndex)}
+          {renderText(messageText.substring(lastIndex))}
         </span>
       );
     }
@@ -1403,6 +1696,54 @@ const ChatWindow = () => {
   // 메뉴 터치 이벤트 처리 함수
   const handleMenuTouch = (e) => {
     e.stopPropagation(); // 이벤트 버블링 방지
+  };
+
+  // 발신자 선택 토글 - 이벤트 버블링 중지
+  const toggleSenderDropdown = (e) => {
+    e.stopPropagation(); // 이벤트 버블링 중지
+    setShowSenderDropdown(!showSenderDropdown);
+  };
+
+  // 발신자 선택 처리 - 이벤트 버블링 중지
+  const handleSelectSender = (e, user) => {
+    e.stopPropagation(); // 이벤트 버블링 중지
+    setSelectedSender(user);
+    setShowSenderDropdown(false);
+  };
+
+  // 문서 클릭 시 발신자 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const selectorElement = document.querySelector(".sender-selector");
+      if (selectorElement && !selectorElement.contains(e.target)) {
+        setShowSenderDropdown(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+
+  // 클릭 위치로 커서 이동 처리 함수 추가
+  const handleContainerClick = (e) => {
+    if (!inputRef.current || !canSend) return;
+
+    const container = document.querySelector(".mention-input-container");
+    if (!container) return;
+
+    // 컨테이너 내부 클릭 위치 계산
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // 입력 필드에 포커스
+    inputRef.current.focus();
+
+    // 클릭 위치에 가장 가까운 텍스트 위치 계산
+    // (정확한 구현은 복잡하므로 간단히 처리)
+    // textarea의 내부 요소이므로 입력 필드 클릭만으로도 적절한 위치에 커서가 위치함
   };
 
   return (
@@ -1497,7 +1838,27 @@ const ChatWindow = () => {
                 <MessageDate>{formatDate(group.date)}</MessageDate>
 
                 {group.messages.map((message) => {
-                  const isMe = message.senderId === userLevelData?.uid;
+                  // 로그인 상태에 따라 다른 방식으로 내 메시지 판단
+                  let isMe = false;
+
+                  if (isLoggedIn) {
+                    // 로그인 상태: userLevelData.uid로 판단
+                    isMe = message.senderId === userLevelData?.uid;
+                  } else {
+                    // 비로그인 상태: 오직 deviceId만으로 판단 (readBy 배열은 사용하지 않음)
+                    const deviceId = localStorage.getItem("deviceId");
+                    isMe = message.deviceId === deviceId;
+
+                    // 디버깅용 로그
+                    console.log(`메시지 ID: ${message.id}`);
+                    console.log(
+                      `메시지 발신자: ${message.senderName} (${message.senderId})`
+                    );
+                    console.log(`메시지 디바이스ID: ${message.deviceId}`);
+                    console.log(`내 디바이스ID: ${deviceId}`);
+                    console.log(`isMe: ${isMe}`);
+                  }
+
                   const isMentioned = isUserMentioned(message);
                   return (
                     <MessageItem key={message.id} isMe={isMe}>
@@ -1510,9 +1871,9 @@ const ChatWindow = () => {
 
                       <MessageContent>
                         {!isMe && (
-                          <SenderName isMe={isMe}>
+                          <SenderUserName isMe={isMe}>
                             {message.senderName}
-                          </SenderName>
+                          </SenderUserName>
                         )}
                         <div
                           style={{
@@ -1569,7 +1930,7 @@ const ChatWindow = () => {
                 {mentionSuggestions.map((user, index) => (
                   <MentionItem
                     key={user.id}
-                    onClick={() => handleSelectMention(user)}
+                    onClick={(e) => handleSelectMention(user)}
                     className={index === activeMentionIndex ? "active" : ""}
                   >
                     {user.displayText}
@@ -1593,17 +1954,93 @@ const ChatWindow = () => {
               </ReplyPreviewContainer>
             )}
 
-            {/* 멘션 칩 포함된 입력 필드 */}
-            <MentionInputContainer disabled={!canSend}>
+            {/* 발신자 선택 UI 추가 */}
+            <SenderSelector
+              onClick={toggleSenderDropdown}
+              className="sender-selector"
+            >
+              {selectedSender ? (
+                <>
+                  <span style={{ marginLeft: "5px", flex: 1 }}>
+                    {selectedSender.name}
+                  </span>
+                  <span style={{ fontSize: "10px", marginLeft: "4px" }}>▼</span>
+                </>
+              ) : (
+                <>
+                  <span>발신자 선택</span>
+                  <span style={{ fontSize: "10px", marginLeft: "4px" }}>▼</span>
+                </>
+              )}
+
+              {showSenderDropdown && (
+                <SenderDropdown onClick={(e) => e.stopPropagation()}>
+                  <SenderDropdownHeader>발신자 선택</SenderDropdownHeader>
+                  <SenderOptionsList>
+                    {members.length > 0 ? (
+                      members.map((user) => (
+                        <SenderOption
+                          key={user.id}
+                          onClick={(e) => handleSelectSender(e, user)}
+                          className={
+                            selectedSender?.id === user.id ? "selected" : ""
+                          }
+                        >
+                          <SenderInfo>
+                            <SenderUserName>{user.name}</SenderUserName>
+                            <SenderRole>{user.role || "사용자"}</SenderRole>
+                          </SenderInfo>
+                        </SenderOption>
+                      ))
+                    ) : (
+                      <div style={{ padding: "10px 15px", color: "#999" }}>
+                        사용자가 없습니다
+                      </div>
+                    )}
+                  </SenderOptionsList>
+                </SenderDropdown>
+              )}
+            </SenderSelector>
+
+            {/* 멘션 칩 포함된 입력 필드 - 세로로만 중앙 정렬, 가로는 항상 좌측 */}
+            <MentionInputContainer
+              disabled={!canSend}
+              className="mention-input-container"
+              onClick={handleContainerClick}
+              onBlur={() => {
+                // 포커스를 잃을 때 현재 스크롤 위치 저장
+                const container = document.querySelector(
+                  ".mention-input-container"
+                );
+                if (container) {
+                  scrollPositionRef.current = container.scrollTop;
+                }
+              }}
+              onFocus={() => {
+                // 포커스를 얻을 때 저장된 스크롤 위치 복원
+                const container = document.querySelector(
+                  ".mention-input-container"
+                );
+                if (container) {
+                  setTimeout(() => {
+                    container.scrollTop = scrollPositionRef.current;
+                  }, 0);
+                }
+              }}
+            >
               <div
                 style={{
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
+                  justifyContent: "flex-start",
                   width: "100%",
                   minHeight: "36px",
                   position: "relative",
-                  padding: "0 5px",
+                  padding: "2px 5px",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                  height: !messageText ? "100%" : "auto",
                 }}
               >
                 {!messageText && (
@@ -1611,14 +2048,16 @@ const ChatWindow = () => {
                     <CursorIndicator />
                     <Placeholder>
                       {canSend
-                        ? "@멘션으로 사용자를 언급하세요 (예: @홍길동)"
+                        ? "@멘션으로 사용자를 언급하세요"
                         : "해당 채팅방에 입력 권한이 없습니다"}
                     </Placeholder>
                   </>
                 )}
                 {renderInput()}
                 {messageText && (
-                  <MentionInput style={{ width: "2px", marginLeft: "1px" }} />
+                  <MentionInput
+                    style={{ minHeight: "24px", marginLeft: "1px" }}
+                  />
                 )}
               </div>
               <MessageInput
@@ -1630,6 +2069,26 @@ const ChatWindow = () => {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={!canSend}
+                onBlur={() => {
+                  // 포커스를 잃을 때 현재 스크롤 위치 저장
+                  const container = document.querySelector(
+                    ".mention-input-container"
+                  );
+                  if (container) {
+                    scrollPositionRef.current = container.scrollTop;
+                  }
+                }}
+                onFocus={() => {
+                  // 포커스를 얻을 때 저장된 스크롤 위치 복원
+                  const container = document.querySelector(
+                    ".mention-input-container"
+                  );
+                  if (container) {
+                    setTimeout(() => {
+                      container.scrollTop = scrollPositionRef.current;
+                    }, 0);
+                  }
+                }}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -1639,13 +2098,18 @@ const ChatWindow = () => {
                   opacity: 0,
                   zIndex: 1,
                   cursor: "text",
+                  resize: "none",
+                  overflow: "hidden",
+                  minHeight: "36px",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
                 }}
               />
             </MentionInputContainer>
 
             <SendButton
               onClick={handleSendButtonClick}
-              disabled={!canSend || !messageText.trim()}
+              disabled={!canSend || !messageText.trim() || !selectedSender}
             >
               <IoPaperPlaneSharp size={18} />
             </SendButton>

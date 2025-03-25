@@ -226,7 +226,31 @@ export function UserLevelProvider({ children }) {
       // 로그인 상태 저장 (항상 true로 설정)
       setLoginStatus(true);
 
+      console.log("로그인 전 userLevelData:", userLevelData);
+      console.log("로그인한 사용자 정보:", result.user);
+
+      // PC 정보 보존하면서 사용자 정보 갱신
+      const updatedUserLevelData = {
+        // PC 정보는 무조건 현재 값 유지 (서버 값 무시)
+        department: userLevelData.department || "",
+        location: userLevelData.location || "",
+        // 사용자 정보 갱신
+        uid: result.user.uid,
+        email: result.user.email,
+        name: result.user.name,
+        displayName: result.user.displayName,
+        role: result.user.role || "",
+        departmentLeader: result.user.departmentLeader || false,
+      };
+
+      setUserLevelData(updatedUserLevelData);
+      localStorage.setItem(
+        "userLevelData",
+        JSON.stringify(updatedUserLevelData)
+      );
+
       console.log("로그인 성공:", result.user.name, "자동 로그인:", rememberMe);
+      console.log("업데이트된 userLevelData:", updatedUserLevelData);
     }
 
     return result;
@@ -256,6 +280,7 @@ export function UserLevelProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem("userLevelData", JSON.stringify(userLevelData));
+      console.log("userLevelData 변경됨:", userLevelData);
     } catch (e) {
       console.error("로컬 스토리지에 userLevelData 저장 실패", e);
     }
@@ -267,33 +292,6 @@ export function UserLevelProvider({ children }) {
     console.log("로그인 상태 변경:", isLoggedIn);
     setLoginStatus(isLoggedIn);
   }, [currentUser]);
-
-  // 로그인 상태가 없는 경우 임시 사용자 데이터 제공
-  useEffect(() => {
-    if (!userLevelData || !userLevelData.uid) {
-      console.log("로그인 상태 없음, 임시 사용자 데이터 제공");
-      const tempUserId = "temp-" + Math.random().toString(36).substr(2, 9);
-
-      // 기존 함수 호출이 있으면 그대로 유지, 없으면 직접 설정
-      if (typeof updateUserLevelData === "function") {
-        updateUserLevelData({
-          uid: tempUserId,
-          email: "temp@example.com",
-          displayName: "임시사용자",
-          department: "테스트부서",
-          level: 1,
-        });
-      } else {
-        setUserLevelData({
-          uid: tempUserId,
-          email: "temp@example.com",
-          displayName: "임시사용자",
-          department: "테스트부서",
-          level: 1,
-        });
-      }
-    }
-  }, [userLevelData]);
 
   return (
     <UserLevelContext.Provider

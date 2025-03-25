@@ -221,8 +221,8 @@ export const canSendMessage = (user, room) => {
 };
 
 // 채팅방 목록 가져오기
-export const getChatRooms = async (userId, department, role) => {
-  console.log("채팅방 목록 요청:", userId, department, role);
+export const getChatRooms = async (deviceId, department, role) => {
+  console.log("채팅방 목록 요청:", deviceId, department, role);
 
   try {
     // 모든 채팅방 가져오기
@@ -240,7 +240,7 @@ export const getChatRooms = async (userId, department, role) => {
 
     // 사용자 객체 구성
     const currentUser = {
-      uid: userId,
+      deviceId: deviceId,
       department: department,
       role: role || "",
     };
@@ -275,7 +275,7 @@ export const getChatRooms = async (userId, department, role) => {
     // 각 채팅방에 대해 읽지 않은 메시지 수 설정
     for (let i = 0; i < accessibleRooms.length; i++) {
       const room = accessibleRooms[i];
-      const unreadCount = await getUnreadMessageCountByRoom(userId, room.id);
+      const unreadCount = await getUnreadMessageCountByRoom(deviceId, room.id);
       accessibleRooms[i] = { ...room, unreadCount };
     }
 
@@ -345,7 +345,7 @@ export const sendMessage = async (roomId, message, user) => {
       senderId: user.uid,
       senderName: user.name || user.displayName || "사용자",
       createdAt: serverTimestamp(),
-      readBy: [user.uid],
+      readBy: [user.deviceId || `device-${Date.now()}`], // 읽음 표시에 장치 ID 사용
     };
 
     // 멘션이 있는 경우에만 mentions 필드 추가
@@ -369,12 +369,12 @@ export const sendMessage = async (roomId, message, user) => {
   }
 };
 
-// 메시지를 읽음으로 표시
-export const markMessageAsRead = async (messageId, userId, roomId) => {
+// 메시지를 읽음으로 표시 - 장치 ID 기반으로 변경
+export const markMessageAsRead = async (messageId, deviceId, roomId) => {
   try {
     const messageRef = doc(db, "chatRooms", roomId, "messages", messageId);
     await updateDoc(messageRef, {
-      readBy: arrayUnion(userId),
+      readBy: arrayUnion(deviceId),
     });
     return true;
   } catch (error) {
@@ -383,11 +383,11 @@ export const markMessageAsRead = async (messageId, userId, roomId) => {
   }
 };
 
-// 채팅방별 읽지 않은 메시지 수 가져오기
-export const getUnreadMessageCountByRoom = async (userId, roomId) => {
+// 채팅방별 읽지 않은 메시지 수 가져오기 - 장치 ID 기반으로 변경
+export const getUnreadMessageCountByRoom = async (deviceId, roomId) => {
   try {
     const messagesRef = collection(db, "chatRooms", roomId, "messages");
-    const q = query(messagesRef, where("readBy", "array-contains", userId));
+    const q = query(messagesRef, where("readBy", "array-contains", deviceId));
 
     const allMessagesSnapshot = await getDocs(messagesRef);
     const readMessagesSnapshot = await getDocs(q);
@@ -402,11 +402,11 @@ export const getUnreadMessageCountByRoom = async (userId, roomId) => {
   }
 };
 
-// 전체 읽지 않은 메시지 수 가져오기
-export const getUnreadMessageCount = async (userId, department, role) => {
+// 전체 읽지 않은 메시지 수 가져오기 - 장치 ID 기반으로 변경
+export const getUnreadMessageCount = async (deviceId, department, role) => {
   try {
     // 접근 가능한 채팅방 목록 가져오기
-    const rooms = await getChatRooms(userId, department, role);
+    const rooms = await getChatRooms(deviceId, department, role);
 
     // 접근 가능한 채팅방의 읽지 않은 메시지 합계 계산
     const totalUnread = rooms.reduce(

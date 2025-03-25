@@ -3,8 +3,14 @@ import { useUserLevel } from "../../utils/UserLevelContext";
 import SignupModal from "./SignupModal";
 
 function MiniLoginForm({ onLoginSuccess }) {
-  const { login, logout, isLoggedIn, currentUser, resetUserPassword } =
-    useUserLevel();
+  const {
+    login,
+    logout,
+    isLoggedIn,
+    currentUser,
+    resetUserPassword,
+    userLevelData,
+  } = useUserLevel();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -171,6 +177,16 @@ function MiniLoginForm({ onLoginSuccess }) {
                 className="text-gray-600 text-xs hover:underline"
               >
                 비밀번호 초기화
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }}
+                className="text-gray-600 text-xs hover:underline"
+              >
+                로컬 데이터 초기화
               </button>
               <button
                 type="button"

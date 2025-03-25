@@ -140,6 +140,52 @@ const GridContainer = styled.div`
   flex-direction: column;
 `;
 
+// 모드 토글 스위치 컴포넌트 - 스타일드 컴포넌트로 정의
+const ToggleContainer = styled.div`
+  display: flex;
+  position: relative;
+  width: 340px;
+  height: 50px;
+  margin-bottom: 20px;
+  border-radius: 30px;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  background-color: #f5f5f5;
+`;
+
+const ToggleOption = styled.div.attrs((props) => ({
+  "data-active": props.active ? "true" : "false",
+}))`
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50%;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  color: ${(props) => (props.active ? "#fff" : "#555")};
+  font-size: 16px;
+`;
+
+const ToggleSlider = styled.div.attrs((props) => ({
+  "data-position": props.position || "left",
+}))`
+  position: absolute;
+  top: 4px;
+  left: ${(props) => (props.position === "left" ? "4px" : "50%")};
+  width: calc(50% - 8px);
+  height: calc(100% - 8px);
+  background-color: #007bff;
+  border-radius: 16px;
+  transition: left 0.3s ease;
+`;
+
+const ToggleIcon = styled.span`
+  margin-right: 10px;
+  font-size: 22px;
+`;
+
 const DateControlContainer = styled.div`
   margin-bottom: 16px;
   position: sticky;
@@ -334,6 +380,7 @@ const Schedule = () => {
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [viewMode, setViewMode] = useState("dnd"); // 뷰 모드 상태 추가 (dnd: 진료 예약, board: 물리치료 예약)
 
   const timeSlots = generateTimeSlots();
 
@@ -615,6 +662,24 @@ const Schedule = () => {
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <GridContainer>
+            <ToggleContainer>
+              <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
+              <ToggleOption
+                active={viewMode === "dnd"}
+                onClick={() => setViewMode("dnd")}
+              >
+                <ToggleIcon>👨‍⚕️</ToggleIcon>
+                진료 예약
+              </ToggleOption>
+              <ToggleOption
+                active={viewMode === "board"}
+                onClick={() => setViewMode("board")}
+              >
+                <ToggleIcon>💪</ToggleIcon>
+                물리치료 예약
+              </ToggleOption>
+            </ToggleContainer>
+
             {isLoading ? (
               <div className="flex justify-center items-center h-full">
                 <div className="text-gray-500 flex flex-col items-center">
@@ -659,15 +724,35 @@ const Schedule = () => {
                   </WeekTabsContainer>
                 </SheetSelectorContainer>
 
-                <ScheduleGrid
-                  dates={displayDates}
-                  timeSlots={timeSlots}
-                  staff={staffData}
-                  appointments={appointments}
-                  onAppointmentCreate={handleAppointmentCreate}
-                  onAppointmentUpdate={handleAppointmentUpdate}
-                  onAppointmentDelete={handleAppointmentDelete}
-                />
+                {viewMode === "dnd" ? (
+                  // 진료 예약 모드
+                  <ScheduleGrid
+                    dates={displayDates}
+                    timeSlots={timeSlots}
+                    staff={staffData}
+                    appointments={appointments}
+                    onAppointmentCreate={handleAppointmentCreate}
+                    onAppointmentUpdate={handleAppointmentUpdate}
+                    onAppointmentDelete={handleAppointmentDelete}
+                  />
+                ) : (
+                  // 물리치료 예약 모드
+                  <ScheduleGrid
+                    dates={displayDates}
+                    timeSlots={timeSlots}
+                    staff={staffData.filter(
+                      (staff) =>
+                        staff.name.includes("물리치료") ||
+                        staff.id === "member3"
+                    )}
+                    appointments={appointments.filter(
+                      (app) => app.type === "물리치료"
+                    )}
+                    onAppointmentCreate={handleAppointmentCreate}
+                    onAppointmentUpdate={handleAppointmentUpdate}
+                    onAppointmentDelete={handleAppointmentDelete}
+                  />
+                )}
               </>
             )}
           </GridContainer>
