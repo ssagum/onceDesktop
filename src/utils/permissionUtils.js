@@ -44,7 +44,7 @@ export const isSameUser = (currentUser, userId) => {
  * @returns {Boolean} 대표원장 여부
  */
 export const isHospitalOwner = (userLevelData) => {
-  return userLevelData?.role === "원장";
+  return userLevelData?.role === "대표원장";
 };
 
 /**

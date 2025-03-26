@@ -317,9 +317,7 @@ const AppointmentBlock = styled.div`
     right: 0;
     width: 0;
     height: 0;
-    border-style: solid;
-    border-width: 0 10px 10px 0;
-    border-color: transparent #ffffff transparent transparent;
+    background-color: #f4a809;
   }
 `;
 
@@ -1481,20 +1479,11 @@ const ScheduleGrid = ({
           {/* 참고사항 표시기 */}
           {hasNotes && (
             <div
-              className="notes-indicator"
+              className="notes-indicator bg-onceYellow border-onceYellow"
               title="참고사항 있음"
               style={{
-                borderColor: `transparent ${
-                  appointment.type === "예약"
-                    ? "#ffffff"
-                    : appointment.type === "일반"
-                    ? "#ffffff"
-                    : appointment.type === "휴가"
-                    ? "#ffffff"
-                    : "#ffffff"
-                } transparent transparent`,
                 opacity: 0.9,
-                borderWidth: "0 12px 12px 0",
+                borderWidth: "12px 12px 12px 12px",
               }}
             />
           )}

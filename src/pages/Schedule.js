@@ -12,6 +12,7 @@ import {
   updateDoc,
   doc,
   deleteDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useToast } from "../contexts/ToastContext";
@@ -348,14 +349,6 @@ const WeekTab = styled.button`
   }
 `;
 
-// 의료진/직원 데이터 - 나중에 파이어베이스에서 가져오도록 변경 가능
-const staffData = [
-  { id: "member1", name: "이기현", color: "#F59E0B" },
-  { id: "member2", name: "이진용", color: "#4F46E5" },
-  { id: "member3", name: "정현", color: "#10B981" },
-  { id: "member10", name: "박상현", color: "#D946EF" },
-];
-
 // 30분 간격의 시간대 생성 (9:00 ~ 19:00)
 const generateTimeSlots = () => {
   const slots = [];
@@ -381,8 +374,63 @@ const Schedule = () => {
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [viewMode, setViewMode] = useState("dnd"); // 뷰 모드 상태 추가 (dnd: 진료 예약, board: 물리치료 예약)
+  const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
 
   const timeSlots = generateTimeSlots();
+
+  // Firebase에서 의료진 데이터 가져오기
+  useEffect(() => {
+    const fetchStaffData = async () => {
+      try {
+        const settingDocRef = doc(db, "setting", "providers");
+        const settingDoc = await getDoc(settingDocRef);
+
+        if (settingDoc.exists()) {
+          const data = settingDoc.data();
+          console.log("여기요", data);
+
+          // 색상 배열 (의료진 수에 맞게 순환해서 사용)
+          const colors = [
+            "#F59E0B",
+            "#4F46E5",
+            "#10B981",
+            "#D946EF",
+            "#EC4899",
+            "#3B82F6",
+            "#14B8A6",
+            "#8B5CF6",
+          ];
+
+          // 각 담당자 이름을 객체 형식으로 변환 (id, name, color 속성 포함)
+          const 진료담당자 = (data.진료 || []).map((name, index) => ({
+            id: `doctor_${index}`,
+            name: name,
+            color: colors[index % colors.length],
+          }));
+
+          const 물리치료담당자 = (data.물리치료 || []).map((name, index) => ({
+            id: `therapist_${index}`,
+            name: name,
+            color: colors[(index + 진료담당자.length) % colors.length],
+          }));
+
+          // 진료 및 물리치료 담당자 데이터 설정
+          setStaffData({
+            진료: 진료담당자,
+            물리치료: 물리치료담당자,
+          });
+        } else {
+          console.error("Providers 문서가 존재하지 않습니다");
+          showToast("담당자 정보를 가져오는 데 실패했습니다.", "error");
+        }
+      } catch (error) {
+        console.error("담당자 정보를 가져오는 중 오류 발생:", error);
+        showToast("담당자 정보를 가져오는 데 실패했습니다.", "error");
+      }
+    };
+
+    fetchStaffData();
+  }, [showToast]);
 
   // 선택된 월의 주 수 계산
   const getWeeksForMonth = () => {
@@ -680,6 +728,23 @@ const Schedule = () => {
               </ToggleOption>
             </ToggleContainer>
 
+            {/* 예약 알림 안내 */}
+            <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-800 text-[15px]">
+                {viewMode === "dnd" ? (
+                  <span>
+                    각 원장님은 진료실에 개인 PC가 마련되어 있으므로, 예약 관련
+                    알림은 원장님의 개별 PC로 발송됩니다.
+                  </span>
+                ) : (
+                  <span>
+                    물리치료사 선생님들은 업무상 이동이 잦으시므로, 어디서든
+                    예약 변동 사항을 바로 확인하실 수 있게 물리치료팀 모든
+                    PC에서 알림이 울립니다.
+                  </span>
+                )}
+              </p>
+            </div>
             {isLoading ? (
               <div className="flex justify-center items-center h-full">
                 <div className="text-gray-500 flex flex-col items-center">
@@ -729,7 +794,7 @@ const Schedule = () => {
                   <ScheduleGrid
                     dates={displayDates}
                     timeSlots={timeSlots}
-                    staff={staffData}
+                    staff={staffData.진료 || []}
                     appointments={appointments}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
@@ -740,11 +805,7 @@ const Schedule = () => {
                   <ScheduleGrid
                     dates={displayDates}
                     timeSlots={timeSlots}
-                    staff={staffData.filter(
-                      (staff) =>
-                        staff.name.includes("물리치료") ||
-                        staff.id === "member3"
-                    )}
+                    staff={staffData.물리치료 || []}
                     appointments={appointments.filter(
                       (app) => app.type === "물리치료"
                     )}
