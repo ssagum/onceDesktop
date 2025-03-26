@@ -703,17 +703,19 @@ const MemoInput = styled.div`
 `;
 
 const ScheduleGrid = ({
-  dates = [],
+  dates,
   timeSlots = [],
   staff = [],
-  initialAppointments = [],
+  appointments: initialAppointments = [],
   onAppointmentCreate,
   onAppointmentUpdate,
   onAppointmentDelete,
-  viewMode = "진료", // viewMode 프롭 기본값을 "진료"로 변경
+  viewMode = "진료",
+  showToast,
 }) => {
   const gridRef = useRef(null);
-  const [appointments, setAppointments] = useState(initialAppointments);
+  // 초기 appointments 저장
+  const [localAppointments, setLocalAppointments] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formPosition, setFormPosition] = useState({ left: 0, top: 0 });
   const [formData, setFormData] = useState({
@@ -791,6 +793,7 @@ const ScheduleGrid = ({
     예약: "#4299e1",
     일반: "#48bb78",
     휴가: "#ed8936",
+    물리치료: "#9F7AEA",
   };
 
   // 각 날짜 열의 최소 너비 (픽셀)
@@ -1240,47 +1243,52 @@ const ScheduleGrid = ({
         return;
       }
 
+      // 담당자 정보 가져오기
+      const selectedStaff = staff.find((s) => s.id === data.staffId);
+
+      // 새 일정 데이터 생성
       const newAppointment = {
-        title: data.title,
+        title: data.title || "",
         staffId: data.staffId,
+        staffName: selectedStaff ? selectedStaff.name : "알 수 없음",
         date: format(data.date, "yyyy-MM-dd"),
         startTime,
         endTime,
-        notes: data.notes,
-        type: data.type,
-        // 필요한 추가 필드
-        createdAt: new Date(),
-      };
-
-      // Firestore에 저장
-      const docRef = await addDoc(
-        collection(db, "reservations"),
-        newAppointment
-      );
-
-      // 생성된 문서 ID 추가
-      const appointmentWithId = {
-        ...newAppointment,
-        id: docRef.id,
+        notes: data.notes || "",
+        // 명시적으로 viewMode에 따라 type 설정
+        type: viewMode === "물리치료" ? "물리치료" : "진료",
         dateIndex: data.dateIndex,
+        staffColor: selectedStaff ? selectedStaff.color : "#999",
       };
 
-      // 상위 컴포넌트 콜백 호출
+      console.log("ScheduleGrid - 새 일정 생성:", newAppointment);
+
+      // 상위 컴포넌트 콜백 호출 - 여기서 Firebase 저장 처리
+      let savedAppointment = null;
       if (onAppointmentCreate) {
-        onAppointmentCreate(appointmentWithId);
+        // 생성된 예약 정보 (id 포함) 받아오기
+        savedAppointment = await onAppointmentCreate(newAppointment);
+
+        // 로컬 상태 업데이트 - 반환된 객체가 있는 경우만
+        if (savedAppointment && savedAppointment.id) {
+          console.log("로컬 상태 업데이트:", savedAppointment);
+          // 로컬 상태에 새 일정 추가
+          setLocalAppointments((prevAppointments) => [
+            ...prevAppointments,
+            savedAppointment,
+          ]);
+
+          // Toast 메시지 표시 (props로 전달받은 경우)
+          if (showToast) {
+            showToast(
+              `${savedAppointment.title || "새 일정"}이(가) 등록되었습니다.`,
+              "success"
+            );
+          }
+        }
       }
 
-      // 이전 상태 저장 (실행 취소 기능용)
-      setPreviousActions([
-        ...previousActions,
-        {
-          type: "create",
-          oldData: null,
-          newData: appointmentWithId,
-        },
-      ]);
-
-      setAppointments([...appointments, appointmentWithId]);
+      // 폼 닫기 및 상태 초기화
       setShowForm(false);
       setSelection(null); // 선택 영역 초기화
       setCurrentCell(null); // 선택된 셀 초기화
@@ -1677,7 +1685,51 @@ const ScheduleGrid = ({
 
   // 일정 렌더링 함수 수정 - 시간에 비례하여 표시
   const renderAppointments = () => {
-    return appointments.map((appointment) => {
+    // 필터링 전 로그 출력
+    console.log(
+      `총 일정 개수(필터링 전): ${localAppointments.length}, 현재 모드: ${viewMode}`
+    );
+
+    // 타입별 개수 계산
+    const typeCount = localAppointments.reduce((acc, app) => {
+      const type = app.type || "없음";
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+    console.log("일정 타입별 개수:", typeCount);
+
+    const filteredAppointments = localAppointments.filter((appointment) => {
+      // 필수 필드 확인
+      if (!appointment || !appointment.id) {
+        console.log("유효하지 않은 일정:", appointment);
+        return false;
+      }
+
+      // 로그 출력으로 문제 확인
+      console.log(
+        `일정 필터링: id=${appointment.id}, 제목=${
+          appointment.title || "없음"
+        }, type=${appointment.type}, viewMode=${viewMode}, isHidden=${
+          appointment.isHidden
+        }`
+      );
+
+      // isHidden이 true면 무조건 제외
+      if (appointment.isHidden === true) return false;
+
+      // 물리치료 모드인 경우
+      if (viewMode === "물리치료") {
+        return appointment.type === "물리치료";
+      }
+      // 진료 모드인 경우
+      else {
+        return appointment.type !== "물리치료";
+      }
+    });
+
+    console.log(`필터링 후 표시될 일정: ${filteredAppointments.length}개`);
+
+    return filteredAppointments.map((appointment) => {
       const dateIndex =
         appointment.dateIndex !== undefined
           ? appointment.dateIndex
@@ -1764,6 +1816,12 @@ const ScheduleGrid = ({
       // 최소 높이 보장 (너무 작은 일정은 보이게)
       const minHeight = Math.max(15, height);
 
+      // 담당자 색상 가져오기 (있으면 사용, 없으면 기본 타입 색상)
+      const appointmentColor =
+        appointment.staffColor ||
+        appointmentTypeColors[appointment.type] ||
+        "#64B5F6";
+
       return (
         <AppointmentBlock
           key={`appointment-${appointment.id}`}
@@ -1773,8 +1831,7 @@ const ScheduleGrid = ({
             gridRow: `${startTimeIndex + 1} / span ${
               endTimeIndex - startTimeIndex + 1
             }`,
-            backgroundColor:
-              appointmentTypeColors[appointment.type] || "#64B5F6",
+            backgroundColor: appointmentColor,
             zIndex: 5,
             marginTop: `${startTimeOffset * cellHeight}px`,
             height: `${minHeight}px`,
@@ -1802,6 +1859,14 @@ const ScheduleGrid = ({
               {formatTime(appointment.startTime)} -{" "}
               {formatTime(appointment.endTime)}
             </div>
+            {appointment.staffName && (
+              <div
+                className="staff-name"
+                style={{ fontSize: "0.8em", marginTop: "3px", opacity: 0.9 }}
+              >
+                {appointment.staffName}
+              </div>
+            )}
           </div>
         </AppointmentBlock>
       );
@@ -2238,6 +2303,58 @@ const ScheduleGrid = ({
       );
     });
   };
+
+  // 초기 설정 및 상태 관리
+  useEffect(() => {
+    console.log("ScheduleGrid가 마운트되었습니다.");
+  }, []);
+
+  // viewMode 변경 시 일정 필터링 재적용
+  useEffect(() => {
+    console.log("viewMode 변경됨:", viewMode);
+    // 초기 렌더링 시에는 무시
+    if (localAppointments.length === 0) return;
+
+    // 변경된 viewMode에 맞게 일정을 다시 필터링하여 렌더링 유도
+    setLocalAppointments((prev) => {
+      console.log(`viewMode 변경으로 일정 재필터링: ${prev.length}개`);
+      return [...prev];
+    });
+  }, [viewMode]);
+
+  // props로 전달된 appointments가 변경될 때마다 로컬 상태 업데이트
+  useEffect(() => {
+    console.log("appointments props 변경됨:", initialAppointments.length);
+
+    // 변경된 appointments를 로컬 상태에 병합 (중복 ID 처리)
+    setLocalAppointments((prevAppointments) => {
+      // ID를 기준으로 Map 생성 (기존 데이터)
+      const appointmentsMap = new Map();
+
+      // 기존 로컬 상태의 일정 추가
+      prevAppointments.forEach((app) => {
+        if (!app.id) return; // ID가 없는 일정은 무시
+        appointmentsMap.set(app.id, app);
+      });
+
+      // 새로 전달받은 일정 추가 (같은 ID가 있으면 덮어씀)
+      initialAppointments.forEach((app) => {
+        if (!app.id) return; // ID가 없는 일정은 무시
+        appointmentsMap.set(app.id, app);
+      });
+
+      // Map에서 배열로 변환
+      return Array.from(appointmentsMap.values());
+    });
+  }, [initialAppointments]);
+
+  // 컴포넌트 마운트 시 초기 appointments 설정
+  useEffect(() => {
+    console.log("초기 일정 데이터 설정:", initialAppointments.length);
+    setLocalAppointments(initialAppointments || []);
+  }, [initialAppointments]);
+
+  // 시간 유틸 함수
 
   return (
     <GridContainer ref={gridRef}>

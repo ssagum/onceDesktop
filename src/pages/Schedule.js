@@ -390,8 +390,7 @@ const Schedule = () => {
           console.log("의료진 데이터:", data);
 
           // 색상 배열 (의료진 수에 맞게 순환해서 사용)
-          const colors = [
-            "#F59E0B",
+          const doctorColors = [
             "#4F46E5",
             "#10B981",
             "#D946EF",
@@ -399,6 +398,29 @@ const Schedule = () => {
             "#3B82F6",
             "#14B8A6",
             "#8B5CF6",
+            // "#4F46E5", // 인디고/파란색 계열
+            // "#3B82F6",
+            // "#0EA5E9",
+            // "#06B6D4",
+            // "#0891B2",
+            // "#0284C7",
+            // "#1E40AF",
+          ];
+          const therapistColors = [
+            "#4F46E5",
+            "#10B981",
+            "#D946EF",
+            "#EC4899",
+            "#3B82F6",
+            "#14B8A6",
+            "#8B5CF6",
+            // "#10B981", // 초록/보라 계열
+            // "#059669",
+            // "#047857",
+            // "#D946EF",
+            // "#8B5CF6",
+            // "#A855F7",
+            // "#6366F1",
           ];
 
           // 진료 담당자와 물리치료 담당자 목록 가져오기
@@ -411,13 +433,13 @@ const Schedule = () => {
           const 진료담당자 = 진료목록.map((name, index) => ({
             id: `doctor_${index}`,
             name: name,
-            color: colors[index % colors.length],
+            color: doctorColors[index % doctorColors.length],
           }));
 
           const 물리치료담당자 = 물리치료목록.map((name, index) => ({
             id: `therapist_${index}`,
             name: name,
-            color: colors[(index + 진료담당자.length) % colors.length],
+            color: therapistColors[index % therapistColors.length],
           }));
 
           // 빈 배열 확인 및 기본값 설정
@@ -426,7 +448,7 @@ const Schedule = () => {
             진료담당자.push({
               id: "doctor_default",
               name: "기본 의사",
-              color: colors[0],
+              color: doctorColors[0],
             });
           }
 
@@ -435,7 +457,7 @@ const Schedule = () => {
             물리치료담당자.push({
               id: "therapist_default",
               name: "기본 치료사",
-              color: colors[1],
+              color: therapistColors[0],
             });
           }
 
@@ -450,12 +472,20 @@ const Schedule = () => {
           // 문서가 없는 경우 기본값 설정
           const defaultStaffData = {
             진료: [
-              { id: "doctor_0", name: "네트워크 에러", color: "#F59E0B" },
-              { id: "doctor_1", name: "네트워크 에러", color: "#4F46E5" },
+              { id: "doctor_0", name: "네트워크 에러", color: doctorColors[0] },
+              { id: "doctor_1", name: "네트워크 에러", color: doctorColors[1] },
             ],
             물리치료: [
-              { id: "therapist_0", name: "네트워크 에러", color: "#10B981" },
-              { id: "therapist_1", name: "네트워크 에러", color: "#D946EF" },
+              {
+                id: "therapist_0",
+                name: "네트워크 에러",
+                color: therapistColors[0],
+              },
+              {
+                id: "therapist_1",
+                name: "네트워크 에러",
+                color: therapistColors[1],
+              },
             ],
           };
 
@@ -467,12 +497,20 @@ const Schedule = () => {
         // 오류 발생 시 기본값 설정
         const defaultStaffData = {
           진료: [
-            { id: "doctor_0", name: "네트워크 에러", color: "#F59E0B" },
-            { id: "doctor_1", name: "네트워크 에러", color: "#4F46E5" },
+            { id: "doctor_0", name: "네트워크 에러", color: doctorColors[0] },
+            { id: "doctor_1", name: "네트워크 에러", color: doctorColors[1] },
           ],
           물리치료: [
-            { id: "therapist_0", name: "네트워크 에러", color: "#10B981" },
-            { id: "therapist_1", name: "네트워크 에러", color: "#D946EF" },
+            {
+              id: "therapist_0",
+              name: "네트워크 에러",
+              color: therapistColors[0],
+            },
+            {
+              id: "therapist_1",
+              name: "네트워크 에러",
+              color: therapistColors[1],
+            },
           ],
         };
 
@@ -548,69 +586,87 @@ const Schedule = () => {
     }
   }, [selectedMonth, selectedYear, activeWeek]);
 
-  // 일정 데이터 가져오기 (더미 데이터)
+  // 일정 데이터 가져오기 (Firebase에서 가져오기)
   useEffect(() => {
     const fetchAppointments = async () => {
       setIsLoading(true);
 
       try {
-        // 실제 구현에서는 Firebase에서 데이터 가져오기
-        // 여기서는 더미 데이터 사용
-        const dummyData = [
-          {
-            id: 1,
-            dateIndex: 0,
-            date: displayDates[0],
-            staffId: "member1",
-            staffName: "이기현",
-            startTime: "09:30",
-            endTime: "10:30",
-            title: "회의",
-            type: "일반",
-            notes: "주간 회의",
-          },
-          {
-            id: 2,
-            dateIndex: 0,
-            date: displayDates[0],
-            staffId: "member2",
-            staffName: "이진용",
-            startTime: "10:00",
-            endTime: "11:00",
-            title: "환자 상담",
-            patientName: "홍길동",
-            patientNumber: "2014",
-            type: "예약",
-          },
-          {
-            id: 3,
-            dateIndex: 1,
-            date: displayDates[1],
-            staffId: "member1",
-            staffName: "이기현",
-            startTime: "14:00",
-            endTime: "15:30",
-            title: "교육",
-            type: "일반",
-            notes: "신규 직원 교육",
-          },
-          {
-            id: 4,
-            dateIndex: 2,
-            date: displayDates[2],
-            staffId: "member3",
-            staffName: "정현",
-            startTime: "11:00",
-            endTime: "12:00",
-            title: "휴가",
-            type: "휴가",
-          },
-        ];
+        // 표시할 날짜 범위의 시작과 끝 계산
+        const startDateStr = format(
+          displayDates[0] || new Date(),
+          "yyyy-MM-dd"
+        );
+        const endDateStr = format(
+          displayDates[displayDates.length - 1] || new Date(),
+          "yyyy-MM-dd"
+        );
 
-        setAppointments(dummyData);
+        console.log(
+          `예약 조회 기간: ${startDateStr} ~ ${endDateStr}, 현재 모드: ${viewMode}`
+        );
+
+        // Firestore에서 데이터 가져오기 - 날짜 범위만 필터링
+        const appointmentsRef = collection(db, "reservations");
+        const q = query(
+          appointmentsRef,
+          where("date", ">=", startDateStr),
+          where("date", "<=", endDateStr)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        // 중복 방지를 위한 Map 사용
+        const appointmentsMap = new Map();
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          // id 필드와 함께 데이터 저장, isHidden이 true가 아닌 것만 저장
+          if (data.isHidden !== true) {
+            // date가 문자열인지 확인하고 필요시 변환
+            const dateStr =
+              typeof data.date === "string"
+                ? data.date
+                : format(data.date.toDate(), "yyyy-MM-dd");
+
+            // dateIndex 계산 - 현재 표시 중인 날짜 중 어디에 위치하는지
+            const dateIndex = displayDates.findIndex(
+              (d) => format(d, "yyyy-MM-dd") === dateStr
+            );
+
+            // 담당자 정보 처리
+            const currentStaff =
+              data.type === "물리치료" ? staffData.물리치료 : staffData.진료;
+
+            let staffColor = "#999";
+            const staffMember = currentStaff.find((s) => s.id === data.staffId);
+            if (staffMember) {
+              staffColor = staffMember.color;
+            }
+
+            // 일정 생성 및 로드 시 데이터 포맷 일관성 유지
+            const appointmentWithDateIndex = {
+              ...data,
+              id: doc.id,
+              dateIndex: dateIndex >= 0 ? dateIndex : 0,
+              date: dateStr,
+              staffColor: staffColor,
+              // type 필드가 없으면 기본값으로 설정
+              type: data.type || "예약",
+            };
+
+            // Map에 저장 (ID를 키로 사용해 중복 방지)
+            appointmentsMap.set(doc.id, appointmentWithDateIndex);
+          }
+        });
+
+        // Map에서 배열로 변환하여 상태 업데이트
+        const appointmentsArray = Array.from(appointmentsMap.values());
+        console.log(`조회된 일정 수: ${appointmentsArray.length}`);
+        setAppointments(appointmentsArray);
       } catch (error) {
-        console.error("일정을 가져오는 중 오류 발생:", error);
-        showToast("일정을 가져오는 데 실패했습니다.", "error");
+        console.error("일정 데이터 가져오기 오류:", error);
+        showToast("일정 데이터를 불러오는 중 오류가 발생했습니다.", "error");
       } finally {
         setIsLoading(false);
       }
@@ -619,7 +675,7 @@ const Schedule = () => {
     if (displayDates.length > 0) {
       fetchAppointments();
     }
-  }, [displayDates]);
+  }, [displayDates, staffData, showToast, viewMode]);
 
   // 이전 주로 이동
   const handlePrevDays = () => {
@@ -692,30 +748,133 @@ const Schedule = () => {
   };
 
   // 일정 생성 핸들러
-  const handleAppointmentCreate = (newAppointment) => {
-    // 실제 구현에서는 Firebase에 저장
-    setAppointments([...appointments, newAppointment]);
-    showToast("일정이 추가되었습니다.", "success");
+  const handleAppointmentCreate = async (newAppointment) => {
+    try {
+      console.log("일정 생성 시작:", newAppointment);
+
+      // staffId와 실제 이름 모두 저장
+      const currentStaff =
+        viewMode === "진료" ? staffData.진료 : staffData.물리치료;
+      const staffMember = currentStaff.find(
+        (s) => s.id === newAppointment.staffId
+      );
+
+      // 필수 필드 확인
+      if (
+        !newAppointment.date ||
+        !newAppointment.startTime ||
+        !newAppointment.endTime
+      ) {
+        showToast("일정 정보가 부족합니다.", "error");
+        return null;
+      }
+
+      // 모든 필드를 명시적으로 설정하여 일관된 데이터 구조 유지
+      const appointmentData = {
+        title: newAppointment.title || "",
+        date:
+          typeof newAppointment.date === "string"
+            ? newAppointment.date
+            : format(newAppointment.date, "yyyy-MM-dd"),
+        startTime: newAppointment.startTime,
+        endTime: newAppointment.endTime,
+        staffId: newAppointment.staffId,
+        staffName: staffMember ? staffMember.name : "알 수 없음",
+        notes: newAppointment.notes || "",
+        // 명시적으로 viewMode 값을 설정 - 물리치료 모드이면 "물리치료"로 설정, 아니면 "진료"로 설정
+        type: viewMode === "물리치료" ? "물리치료" : "진료",
+        isHidden: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      console.log("새 일정 데이터:", appointmentData);
+
+      // Firestore에 저장
+      const docRef = await addDoc(
+        collection(db, "reservations"),
+        appointmentData
+      );
+      console.log(`일정 추가됨, ID: ${docRef.id}`);
+
+      // ID를 포함한 최종 객체
+      const appointmentWithId = {
+        ...appointmentData,
+        id: docRef.id,
+        dateIndex:
+          newAppointment.dateIndex !== undefined ? newAppointment.dateIndex : 0,
+        staffColor: staffMember ? staffMember.color : "#999",
+      };
+
+      console.log("생성된 일정:", appointmentWithId);
+
+      // 로컬 상태에는 업데이트하지 않음 (ScheduleGrid에서 수행)
+
+      // 성공 메시지
+      showToast("일정이 추가되었습니다.", "success");
+
+      // 생성된 객체 반환
+      return appointmentWithId;
+    } catch (error) {
+      console.error("일정 생성 오류:", error);
+      showToast("일정 추가 중 오류가 발생했습니다.", "error");
+      return null;
+    }
   };
 
   // 일정 수정 핸들러
-  const handleAppointmentUpdate = (updatedAppointment) => {
-    // 실제 구현에서는 Firebase에서 업데이트
-    const updatedAppointments = appointments.map((app) =>
-      app.id === updatedAppointment.id ? updatedAppointment : app
-    );
-    setAppointments(updatedAppointments);
-    showToast("일정이 수정되었습니다.", "success");
+  const handleAppointmentUpdate = async (updatedAppointment) => {
+    try {
+      // staffId와 실제 이름 모두 업데이트
+      const currentStaff =
+        viewMode === "진료" ? staffData.진료 : staffData.물리치료;
+      const staffMember = currentStaff.find(
+        (s) => s.id === updatedAppointment.staffId
+      );
+
+      const appointmentData = {
+        ...updatedAppointment,
+        staffName: staffMember ? staffMember.name : "알 수 없음",
+        updatedAt: new Date(),
+      };
+
+      // Firestore 업데이트
+      const appointmentRef = doc(db, "reservations", updatedAppointment.id);
+      await updateDoc(appointmentRef, appointmentData);
+
+      // 상태 업데이트
+      const updatedAppointments = appointments.map((app) =>
+        app.id === updatedAppointment.id ? appointmentData : app
+      );
+
+      setAppointments(updatedAppointments);
+      showToast("일정이 수정되었습니다.", "success");
+    } catch (error) {
+      console.error("일정 수정 중 오류 발생:", error);
+      showToast("일정 수정에 실패했습니다.", "error");
+    }
   };
 
   // 일정 삭제 핸들러
-  const handleAppointmentDelete = (appointmentId) => {
-    // 실제 구현에서는 Firebase에서 삭제
-    const filteredAppointments = appointments.filter(
-      (app) => app.id !== appointmentId
-    );
-    setAppointments(filteredAppointments);
-    showToast("일정이 삭제되었습니다.", "success");
+  const handleAppointmentDelete = async (appointmentId) => {
+    try {
+      // Firestore에서 isHidden 처리
+      const appointmentRef = doc(db, "reservations", appointmentId);
+      await updateDoc(appointmentRef, {
+        isHidden: true,
+        hiddenAt: new Date(),
+      });
+
+      // 상태 업데이트
+      const filteredAppointments = appointments.filter(
+        (app) => app.id !== appointmentId
+      );
+
+      setAppointments(filteredAppointments);
+      showToast("일정이 삭제되었습니다.", "success");
+    } catch (error) {
+      console.error("일정 삭제 중 오류 발생:", error);
+      showToast("일정 삭제에 실패했습니다.", "error");
+    }
   };
 
   // 월 드롭다운 렌더링
@@ -846,13 +1005,12 @@ const Schedule = () => {
                     dates={displayDates}
                     timeSlots={timeSlots}
                     staff={staffData.진료 || []}
-                    appointments={appointments.filter(
-                      (app) => app.type !== "물리치료"
-                    )}
+                    appointments={appointments}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}
                     viewMode={viewMode}
+                    showToast={showToast}
                   />
                 ) : (
                   // 물리치료 예약 모드
@@ -860,13 +1018,12 @@ const Schedule = () => {
                     dates={displayDates}
                     timeSlots={timeSlots}
                     staff={staffData.물리치료 || []}
-                    appointments={appointments.filter(
-                      (app) => app.type === "물리치료"
-                    )}
+                    appointments={appointments}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}
                     viewMode={viewMode}
+                    showToast={showToast}
                   />
                 )}
               </>
