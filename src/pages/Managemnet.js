@@ -125,15 +125,121 @@ const ToggleIcon = styled.span`
 `;
 
 // 직원 상세 정보 모달 컴포넌트
-const StaffDetailModal = ({ isVisible, setIsVisible, staff }) => {
+const StaffDetailModal = ({
+  isVisible,
+  setIsVisible,
+  staff,
+  onStaffUpdate,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedStaff, setEditedStaff] = useState(null);
+  const [displaySalary, setDisplaySalary] = useState("");
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (staff) {
+      setEditedStaff({
+        ...staff,
+        bankInfo: {
+          ...staff.bankInfo,
+          salary: staff.bankInfo?.salary || "",
+          salaryType: staff.bankInfo?.salaryType || "세전",
+        },
+      });
+      // 월급에 콤마 표시
+      if (staff.bankInfo?.salary) {
+        setDisplaySalary(staff.bankInfo.salary.toLocaleString());
+      } else {
+        setDisplaySalary("");
+      }
+    }
+  }, [staff]);
+
   if (!isVisible || !staff) return null;
+
+  // 숫자만 추출하는 함수
+  const extractNumber = (str) => {
+    return str.replace(/[^\d]/g, "");
+  };
+
+  // 숫자에 콤마를 추가하는 함수
+  const formatNumberWithCommas = (num) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "bankInfo.salary") {
+      // 숫자만 추출하여 저장
+      const numberValue = extractNumber(value);
+
+      // 디스플레이용 콤마 추가된 값 설정
+      if (numberValue) {
+        setDisplaySalary(formatNumberWithCommas(numberValue));
+      } else {
+        setDisplaySalary("");
+      }
+
+      // 실제 데이터에는 숫자 형태로 저장
+      setEditedStaff({
+        ...editedStaff,
+        bankInfo: {
+          ...editedStaff.bankInfo,
+          salary: numberValue ? parseInt(numberValue, 10) : "",
+        },
+      });
+    } else if (name.startsWith("bankInfo.")) {
+      const bankInfoField = name.split(".")[1];
+      setEditedStaff({
+        ...editedStaff,
+        bankInfo: {
+          ...editedStaff.bankInfo,
+          [bankInfoField]: value,
+        },
+      });
+    } else {
+      setEditedStaff({
+        ...editedStaff,
+        [name]: value,
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      // Firebase에 직원 정보 업데이트
+      const userDocRef = doc(db, "users", editedStaff.id);
+      await setDoc(userDocRef, editedStaff, { merge: true });
+
+      showToast("직원 정보가 성공적으로 저장되었습니다.", "success");
+
+      // 부모 컴포넌트에 업데이트된 정보 전달
+      if (onStaffUpdate) {
+        onStaffUpdate(editedStaff);
+      }
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error("직원 정보 저장 오류:", error);
+      showToast("직원 정보 저장에 실패했습니다.", "error");
+    }
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
       <div className="bg-white rounded-md w-[700px] max-h-[90vh] overflow-y-auto p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">직원 상세 정보</h2>
-          <button onClick={() => setIsVisible(false)} className="text-gray-500">
+          <h2 className="text-2xl font-bold">
+            {isEditing ? "직원 정보 편집" : "직원 상세 정보"}
+          </h2>
+          <button
+            onClick={() => {
+              setIsEditing(false);
+              setIsVisible(false);
+            }}
+            className="text-gray-500"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -160,37 +266,107 @@ const StaffDetailModal = ({ isVisible, setIsVisible, staff }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-gray-600 text-sm">이름</p>
-                <p className="font-medium">{staff.name}</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="name"
+                    value={editedStaff.name || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.name}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">부서</p>
-                <p className="font-medium">{staff.department}</p>
+                {isEditing ? (
+                  <select
+                    name="department"
+                    value={editedStaff.department || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="원장팀">원장팀</option>
+                    <option value="간호팀">간호팀</option>
+                    <option value="물리치료팀">물리치료팀</option>
+                    <option value="원무팀">원무팀</option>
+                    <option value="영상의학팀">영상의학팀</option>
+                    <option value="경영지원팀">경영지원팀</option>
+                  </select>
+                ) : (
+                  <p className="font-medium">{staff.department}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">직책</p>
-                <p className="font-medium">{staff.role || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="role"
+                    value={editedStaff.role || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.role || "-"}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">상태</p>
-                <p className="font-medium">
-                  <span
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                      staff.status === "재직"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
+                {isEditing ? (
+                  <select
+                    name="status"
+                    value={editedStaff.status || "재직"}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
                   >
-                    {staff.status || "재직"}
-                  </span>
-                </p>
+                    <option value="재직">재직</option>
+                    <option value="휴직">휴직</option>
+                    <option value="퇴직">퇴직</option>
+                  </select>
+                ) : (
+                  <p className="font-medium">
+                    <span
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                        staff.status === "재직"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {staff.status || "재직"}
+                    </span>
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">입사일</p>
-                <p className="font-medium">{staff.hireDate || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="date"
+                    name="hireDate"
+                    value={editedStaff.hireDate || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.hireDate || "-"}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">퇴사일</p>
-                <p className="font-medium">{staff.resignationDate || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="date"
+                    name="resignationDate"
+                    value={editedStaff.resignationDate || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.resignationDate || "-"}</p>
+                )}
               </div>
             </div>
           </div>
@@ -203,15 +379,45 @@ const StaffDetailModal = ({ isVisible, setIsVisible, staff }) => {
             <div className="space-y-2">
               <div>
                 <p className="text-gray-600 text-sm">이메일</p>
-                <p className="font-medium">{staff.email || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="email"
+                    name="email"
+                    value={editedStaff.email || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.email || "-"}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">전화번호</p>
-                <p className="font-medium">{staff.phoneNumber || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="phoneNumber"
+                    value={editedStaff.phoneNumber || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.phoneNumber || "-"}</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">주소</p>
-                <p className="font-medium">{staff.address || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="address"
+                    value={editedStaff.address || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">{staff.address || "-"}</p>
+                )}
               </div>
             </div>
           </div>
@@ -224,13 +430,67 @@ const StaffDetailModal = ({ isVisible, setIsVisible, staff }) => {
             <div className="space-y-2">
               <div>
                 <p className="text-gray-600 text-sm">은행</p>
-                <p className="font-medium">{staff.bankInfo?.bankName || "-"}</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="bankInfo.bankName"
+                    value={editedStaff.bankInfo?.bankName || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">
+                    {staff.bankInfo?.bankName || "-"}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm">계좌번호</p>
-                <p className="font-medium">
-                  {staff.bankInfo?.accountNumber || "-"}
-                </p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="bankInfo.accountNumber"
+                    value={editedStaff.bankInfo?.accountNumber || ""}
+                    onChange={handleInputChange}
+                    className="w-full border rounded-md px-3 py-1.5"
+                  />
+                ) : (
+                  <p className="font-medium">
+                    {staff.bankInfo?.accountNumber || "-"}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">월급</p>
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      name="bankInfo.salary"
+                      value={displaySalary}
+                      onChange={handleInputChange}
+                      className="flex-1 border rounded-md px-3 py-1.5"
+                      placeholder="금액 입력"
+                    />
+                    <select
+                      name="bankInfo.salaryType"
+                      value={editedStaff.bankInfo?.salaryType || "세전"}
+                      onChange={handleInputChange}
+                      className="border rounded-md px-3 py-1.5"
+                    >
+                      <option value="세전">세전</option>
+                      <option value="세후">세후</option>
+                    </select>
+                  </div>
+                ) : (
+                  <p className="font-medium">
+                    {staff.bankInfo?.salary
+                      ? `${staff.bankInfo.salary.toLocaleString()}원 (${
+                          staff.bankInfo.salaryType || "세전"
+                        })`
+                      : "-"}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -240,29 +500,57 @@ const StaffDetailModal = ({ isVisible, setIsVisible, staff }) => {
             <h3 className="text-lg font-semibold mb-3 text-gray-800">
               주민등록번호
             </h3>
-            <p className="font-medium">
-              {staff.idNumber
-                ? staff.idNumber.replace(/(\d{6})-(\d{7})/, "$1-*******")
-                : "-"}
-            </p>
+            {isEditing ? (
+              <input
+                type="text"
+                name="idNumber"
+                value={editedStaff.idNumber || ""}
+                onChange={handleInputChange}
+                className="w-full border rounded-md px-3 py-1.5"
+                placeholder="000000-0000000 형식으로 입력"
+              />
+            ) : (
+              <p className="font-medium">
+                {staff.idNumber
+                  ? staff.idNumber.replace(/(\d{6})-(\d{7})/, "$1-*******")
+                  : "-"}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="mt-6 flex justify-end">
-          <button
-            onClick={() => setIsVisible(false)}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md mr-2"
-          >
-            닫기
-          </button>
-          <button
-            className="px-4 py-2 bg-blue-600 text-white rounded-md"
-            onClick={() => {
-              /* TODO: 편집 기능 구현 */
-            }}
-          >
-            편집
-          </button>
+          {isEditing ? (
+            <>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md mr-2"
+              >
+                취소
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                onClick={handleSave}
+              >
+                저장
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setIsVisible(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md mr-2"
+              >
+                닫기
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                onClick={() => setIsEditing(true)}
+              >
+                편집
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -565,6 +853,26 @@ const StaffManagement = () => {
     </div>
   );
 
+  // 직원 정보 업데이트 처리 함수
+  const handleStaffUpdate = (updatedStaff) => {
+    // 업데이트된 직원 정보로 selectedStaff 상태 업데이트
+    setSelectedStaff(updatedStaff);
+
+    // staffData 배열에서 해당 직원 정보도 업데이트
+    const updatedStaffData = staffData.map((staff) =>
+      staff.id === updatedStaff.id ? updatedStaff : staff
+    );
+
+    setStaffData(updatedStaffData);
+
+    // 필터링된 데이터도 업데이트
+    const updatedSortedData = sortedData.map((staff) =>
+      staff.id === updatedStaff.id ? updatedStaff : staff
+    );
+
+    setSortedData(updatedSortedData);
+  };
+
   return (
     <div className="flex flex-col w-full bg-white h-full p-5">
       {/* 진료 및 물리치료 담당자 관리 섹션 */}
@@ -853,6 +1161,7 @@ const StaffManagement = () => {
         isVisible={isDetailModalVisible}
         setIsVisible={setIsDetailModalVisible}
         staff={selectedStaff}
+        onStaffUpdate={handleStaffUpdate}
       />
     </div>
   );
