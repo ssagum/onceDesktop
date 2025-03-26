@@ -725,6 +725,10 @@ const ScheduleGrid = ({
     type: "예약",
   });
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [showSelectionForm, setShowSelectionForm] = useState(false);
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // 메모 관련 상태 추가 - 구조 변경
   const [memos, setMemos] = useState({});
@@ -907,7 +911,7 @@ const ScheduleGrid = ({
 
           // 선택된 영역이 있으면 폼 표시
           if (selection) {
-            showSelectionForm(e);
+            displaySelectionForm(e);
           }
         }
       }
@@ -923,7 +927,7 @@ const ScheduleGrid = ({
   }, [isSelecting, selection]); // isSelecting과 selection 상태가 변경될 때마다 이펙트 재실행
 
   // 선택 영역에 대한 폼을 표시하는 함수 추출
-  const showSelectionForm = (e) => {
+  const displaySelectionForm = (e) => {
     if (!selection) return;
 
     // 폼 데이터 설정
@@ -998,197 +1002,184 @@ const ScheduleGrid = ({
   };
 
   const handleMouseUp = (e, dateIndex, staffIndex, timeIndex) => {
-    if (!isSelecting) return;
-
     // 선택 상태 종료
     setIsSelecting(false);
 
-    // 선택 영역이 있거나 단일 셀 선택인 경우
-    // 선택 영역이 없는 경우, 단일 셀 선택으로 설정
-    if (!selection) {
-      setSelection({
-        startDateIndex: dateIndex,
-        endDateIndex: dateIndex,
-        startStaffIndex: staffIndex,
-        endStaffIndex: staffIndex,
-        startTimeIndex: timeIndex,
-        endTimeIndex: timeIndex,
-      });
+    // 단일 셀 선택으로 설정
+    setSelection({
+      startDateIndex: dateIndex,
+      endDateIndex: dateIndex,
+      startStaffIndex: staffIndex,
+      endStaffIndex: staffIndex,
+      startTimeIndex: timeIndex,
+      endTimeIndex: timeIndex,
+    });
+
+    // 마우스 클릭 위치에 폼 표시
+    let left = e.clientX + 10;
+    let top = e.clientY;
+
+    // 화면 경계를 벗어나지 않도록 조정
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const formWidth = 300;
+    const formHeight = 400;
+
+    if (left + formWidth > viewportWidth) {
+      left = Math.max(10, left - formWidth - 20);
     }
 
-    // 새로운 showSelectionForm 함수를 호출하여 폼 표시
-    setTimeout(() => {
-      showSelectionForm(e);
-    }, 0);
+    if (top + formHeight > viewportHeight) {
+      top = Math.max(10, viewportHeight - formHeight - 10);
+    }
+
+    // 폼 위치 설정
+    setFormPosition({ left, top });
+
+    // 빈 폼 데이터로 초기화
+    setFormData({
+      title: "",
+      notes: "",
+      duration: "30",
+      type: "예약",
+      startTime: effectiveTimeSlots[timeIndex],
+      endTime: getEndTime(effectiveTimeSlots[timeIndex]),
+      date: format(dates[dateIndex], "yyyy-MM-dd"),
+      staffId: staff[staffIndex].id,
+    });
+
+    // 폼 표시
+    setShowForm(true);
+    setCurrentCell(null); // 현재 셀 초기화
   };
 
   // 일정 수정 핸들러 수정
   const handleEditAppointment = async () => {
-    if (!editingAppointment) return;
-
     try {
-      // 소요시간에 따라 endTime 계산
-      const startTime = editingAppointment.startTime;
-      let endTime;
+      if (!selectedAppointment) return;
 
-      if (formData.endTime) {
-        endTime = formData.endTime;
-      } else {
-        const durationMinutes = parseInt(formData.duration, 10);
-        const startMinutes = timeToMinutes(startTime);
-        const endMinutes = startMinutes + durationMinutes;
-        endTime = minutesToTime(endMinutes);
-      }
-
-      const updatedAppointment = {
-        ...editingAppointment,
-        title: formData.title,
-        notes: formData.notes,
-        type: formData.type,
-        endTime: endTime,
-        updatedAt: new Date(),
-      };
-
-      // Firestore 문서 업데이트
-      const appointmentRef = doc(db, "reservations", editingAppointment.id);
-      await updateDoc(appointmentRef, {
-        title: formData.title,
-        notes: formData.notes,
-        type: formData.type,
-        endTime: endTime,
-        updatedAt: new Date(),
+      // 선택된 일정 데이터로 폼 데이터 설정
+      setFormData({
+        title: selectedAppointment.title || "",
+        date: selectedAppointment.date,
+        startTime: selectedAppointment.startTime,
+        endTime: selectedAppointment.endTime,
+        staffId: selectedAppointment.staffId,
+        notes: selectedAppointment.notes || "",
+        type: selectedAppointment.type || viewMode,
       });
 
-      // 이전 상태 저장 (실행 취소 기능용)
-      setPreviousActions([
-        ...previousActions,
-        {
-          type: "update",
-          oldData: editingAppointment,
-          newData: updatedAppointment,
-        },
-      ]);
+      // 수정 모드로 전환
+      setIsEditing(true);
 
-      if (onAppointmentUpdate) {
-        onAppointmentUpdate(updatedAppointment);
-      }
-
-      setShowForm(false);
-      setSelectedArea(null);
-      setEditingAppointment(null);
-      setSelection(null); // 선택 영역 초기화
-      setCurrentCell(null); // 선택된 셀 초기화
+      // 이미 폼이 표시되어 있으므로 상태 유지
+      // setShowForm은 이미 true 상태
     } catch (error) {
-      console.error("일정 수정 오류:", error);
-      alert("일정을 수정하는 중 오류가 발생했습니다.");
+      console.error("일정 수정 중 오류 발생:", error);
+      showToast("일정 수정 중 오류가 발생했습니다.", "error");
     }
   };
 
-  // 일정 삭제 핸들러 수정
-  const handleDeleteAppointment = async () => {
-    if (editingAppointment) {
-      try {
-        // Firestore 문서 삭제
-        const appointmentRef = doc(db, "reservations", editingAppointment.id);
-        await deleteDoc(appointmentRef);
-
-        // 이전 상태 저장 (실행 취소 기능용)
-        setPreviousActions([
-          ...previousActions,
-          {
-            type: "delete",
-            oldData: editingAppointment,
-            newData: null,
-          },
-        ]);
-
-        if (onAppointmentDelete) {
-          onAppointmentDelete(editingAppointment.id);
-        }
-
-        setShowForm(false);
-        setSelectedArea(null);
-        setEditingAppointment(null);
-        setSelection(null); // 선택 영역 초기화
-        setCurrentCell(null); // 선택된 셀 초기화
-      } catch (error) {
-        console.error("일정 삭제 오류:", error);
-        alert("일정을 삭제하는 중 오류가 발생했습니다.");
+  const handleAppointmentSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (!formData.date || !formData.startTime || !formData.endTime) {
+        showToast("필수 정보를 모두 입력해주세요.", "error");
+        return;
       }
+
+      if (isEditing && selectedAppointment) {
+        // 기존 일정 수정
+        const updatedAppointment = {
+          ...selectedAppointment,
+          ...formData,
+          dateIndex: selectedAppointment.dateIndex,
+        };
+        await onAppointmentUpdate(updatedAppointment);
+        showToast("일정이 수정되었습니다.", "success");
+      } else {
+        // 새 일정 생성
+        const newAppointment = {
+          ...formData,
+          dateIndex: dates.findIndex(
+            (date) => format(date, "yyyy-MM-dd") === formData.date
+          ),
+        };
+        await onAppointmentCreate(newAppointment);
+        showToast("일정이 추가되었습니다.", "success");
+      }
+
+      // 폼 초기화 및 상태 리셋
+      setFormData({
+        title: "",
+        date: "",
+        startTime: "",
+        endTime: "",
+        staffId: "",
+        notes: "",
+        type: viewMode,
+      });
+      setShowForm(false);
+      setIsEditing(false);
+      setSelectedAppointment(null);
+    } catch (error) {
+      console.error("일정 저장 중 오류 발생:", error);
+      showToast("일정 저장 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  const handleDeleteAppointment = async () => {
+    try {
+      if (!selectedAppointment) return;
+
+      if (window.confirm("정말로 이 일정을 삭제하시겠습니까?")) {
+        await onAppointmentDelete(selectedAppointment.id);
+
+        // 폼 닫기 및 상태 초기화
+        setShowForm(false);
+        setShowSelectionForm(false);
+        setIsEditing(false);
+        setSelectedAppointment(null);
+
+        showToast("일정이 삭제되었습니다.", "success");
+      }
+    } catch (error) {
+      console.error("일정 삭제 중 오류 발생:", error);
+      showToast("일정 삭제 중 오류가 발생했습니다.", "error");
     }
   };
 
   // 일정 클릭 핸들러도 비슷하게 수정
   const handleAppointmentClick = (appointment, e) => {
-    setEditingAppointment(appointment);
-    setFormData({
-      title: appointment.title,
-      notes: appointment.notes || "",
-      duration: "30",
-      type: appointment.type || "예약",
-    });
+    e.stopPropagation();
 
-    // 클릭한 일정 요소를 직접 사용
-    if (e && e.currentTarget) {
-      const rect = e.currentTarget.getBoundingClientRect();
+    // 폼 위치 계산
+    let left = e.clientX + 10;
+    let top = e.clientY;
 
-      // 화면 크기 가져오기
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+    // 화면 경계를 벗어나지 않도록 조정
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const formWidth = 300;
+    const formHeight = 400;
 
-      // 오른쪽에 충분한 공간이 있는지 확인, 없으면 왼쪽에 배치
-      const formWidth = 300; // 폼의 대략적인 너비
-      const left =
-        rect.right + 10 + formWidth > viewportWidth
-          ? rect.left - formWidth - 10
-          : rect.right + 10;
-
-      // 화면 아래에 충분한 공간이 있는지 확인, 없으면 위에 배치
-      const formHeight = 400; // 폼의 대략적인 높이
-      const top =
-        rect.top + formHeight > viewportHeight
-          ? Math.max(10, rect.top - formHeight + rect.height)
-          : rect.top;
-
-      setFormPosition({ left, top });
-    } else {
-      // 이벤트가 없는 경우 일정 ID로 요소 찾기
-      const appointmentElement = document.querySelector(
-        `[data-appointment-id="${appointment.id}"]`
-      );
-
-      if (appointmentElement) {
-        const rect = appointmentElement.getBoundingClientRect();
-
-        // 화면 크기 가져오기
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        // 오른쪽에 충분한 공간이 있는지 확인, 없으면 왼쪽에 배치
-        const formWidth = 300; // 폼의 대략적인 너비
-        const left =
-          rect.right + 10 + formWidth > viewportWidth
-            ? rect.left - formWidth - 10
-            : rect.right + 10;
-
-        // 화면 아래에 충분한 공간이 있는지 확인, 없으면 위에 배치
-        const formHeight = 400; // 폼의 대략적인 높이
-        const top =
-          rect.top + formHeight > viewportHeight
-            ? Math.max(10, rect.top - formHeight + rect.height)
-            : rect.top;
-
-        setFormPosition({ left, top });
-      } else {
-        // 기본 위치 설정
-        setFormPosition({
-          left: 100,
-          top: 100,
-        });
-      }
+    if (left + formWidth > viewportWidth) {
+      left = Math.max(10, left - formWidth - 20);
     }
 
-    setShowForm(true);
+    if (top + formHeight > viewportHeight) {
+      top = Math.max(10, viewportHeight - formHeight - 10);
+    }
+
+    // 폼 위치 설정
+    setFormPosition({ left, top });
+
+    // 선택된 일정 및 상태 설정
+    setSelectedAppointment(appointment);
+    setShowForm(true); // 폼 표시를 활성화
+    setShowSelectionForm(true);
+    setShowAppointmentForm(false);
+    setIsEditing(false);
   };
 
   // 폼 외부 클릭 핸들러 수정
@@ -2068,89 +2059,84 @@ const ScheduleGrid = ({
 
   // 시간 변경 핸들러 수정 - 더 세밀한 시간 단위 지원
   const handleTimeChange = (field, value) => {
-    if (!selection) return;
+    console.log(`시간 변경: ${field} = ${value}`);
+
+    if (!selection && !editingAppointment) {
+      console.log("선택된 영역 또는 편집 중인 일정이 없습니다.");
+      return;
+    }
 
     // 시간을 분으로 변환
     const valueMinutes = timeToMinutes(value);
 
-    if (field === "startTime") {
-      // 가장 가까운 timeIndex 찾기
-      let closestTimeIndex = 0;
-      let minDiff = Number.MAX_SAFE_INTEGER;
+    // formData 업데이트 - 항상 업데이트
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
 
-      // 모든 시간 슬롯에 대해 분 단위로 차이를 계산하여 가장 가까운 인덱스 찾기
-      effectiveTimeSlots.forEach((timeSlot, index) => {
-        const slotMinutes = timeToMinutes(timeSlot);
-        const diff = Math.abs(slotMinutes - valueMinutes);
+    // 편집 모드가 아닐 때만 selection 업데이트
+    if (!editingAppointment && selection) {
+      if (field === "startTime") {
+        // 시작 시간 처리
+        let bestTimeIndex = 0;
+        let minDiff = Number.MAX_SAFE_INTEGER;
 
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestTimeIndex = index;
-        }
-      });
+        // 모든 시간 슬롯에 대해 분 단위로 차이를 계산하여 가장 가까운 인덱스 찾기
+        effectiveTimeSlots.forEach((timeSlot, index) => {
+          const slotMinutes = timeToMinutes(timeSlot);
+          const diff = Math.abs(slotMinutes - valueMinutes);
 
-      // 선택 영역을 업데이트하되, endTimeIndex가 startTimeIndex보다 작으면 조정
-      const newStartTimeIndex = closestTimeIndex;
-      const newEndTimeIndex = Math.max(
-        selection.endTimeIndex,
-        newStartTimeIndex
-      );
-
-      setSelection({
-        ...selection,
-        startTimeIndex: newStartTimeIndex,
-        endTimeIndex: newEndTimeIndex,
-      });
-
-      // formData 업데이트
-      setFormData({
-        ...formData,
-        startTime: value,
-      });
-    } else if (field === "endTime") {
-      // 여기서는 endTime이 startTime보다 커야 함
-      const startMinutes = timeToMinutes(
-        formData.startTime || effectiveTimeSlots[selection.startTimeIndex]
-      );
-
-      if (valueMinutes <= startMinutes) {
-        // 종료 시간이 시작 시간보다 작거나 같으면 경고
-        alert("종료 시간은 시작 시간보다 커야 합니다.");
-        return;
-      }
-
-      // 가장 가까운 timeIndex 찾기
-      let closestTimeIndex = 0;
-      let minDiff = Number.MAX_SAFE_INTEGER;
-
-      effectiveTimeSlots.forEach((timeSlot, index) => {
-        const slotMinutes = timeToMinutes(timeSlot);
-        // 여기서는 종료 시간이 더 커야 하므로 종료 시간보다 작거나 같은 시간 슬롯 중에서 가장 가까운 것 찾기
-        if (slotMinutes <= valueMinutes) {
-          const diff = valueMinutes - slotMinutes;
           if (diff < minDiff) {
             minDiff = diff;
-            closestTimeIndex = index;
+            bestTimeIndex = index;
           }
+        });
+
+        // 선택 영역을 업데이트하되, endTimeIndex가 startTimeIndex보다 작으면 조정
+        const newStartTimeIndex = bestTimeIndex;
+        const newEndTimeIndex = Math.max(
+          selection.endTimeIndex,
+          newStartTimeIndex
+        );
+
+        setSelection({
+          ...selection,
+          startTimeIndex: newStartTimeIndex,
+          endTimeIndex: newEndTimeIndex,
+        });
+      } else if (field === "endTime") {
+        // 종료 시간 처리
+        // 여기서는 endTime이 startTime보다 커야 함
+        const startMinutes = timeToMinutes(
+          formData.startTime || effectiveTimeSlots[selection.startTimeIndex]
+        );
+
+        if (valueMinutes <= startMinutes) {
+          // 종료 시간이 시작 시간보다 작거나 같으면 경고
+          showToast
+            ? showToast("종료 시간은 시작 시간보다 커야 합니다.", "error")
+            : alert("종료 시간은 시작 시간보다 커야 합니다.");
+          return;
         }
-      });
 
-      // 종료 시간은 시작 시간보다 작을 수 없음
-      const newEndTimeIndex = Math.max(
-        closestTimeIndex,
-        selection.startTimeIndex
-      );
+        // 가장 가까운 timeIndex 찾기
+        let bestEndIndex = selection.endTimeIndex;
 
-      setSelection({
-        ...selection,
-        endTimeIndex: newEndTimeIndex,
-      });
+        effectiveTimeSlots.forEach((timeSlot, index) => {
+          if (index <= selection.startTimeIndex) return; // 시작 시간보다 작은 인덱스는 무시
 
-      // formData 업데이트
-      setFormData({
-        ...formData,
-        endTime: value,
-      });
+          const slotMinutes = timeToMinutes(timeSlot);
+          if (slotMinutes <= valueMinutes) {
+            bestEndIndex = index;
+          }
+        });
+
+        setSelection({
+          ...selection,
+          endTimeIndex: bestEndIndex,
+        });
+      }
     }
   };
 
@@ -2164,7 +2150,13 @@ const ScheduleGrid = ({
           inputRef.current.showPicker();
         } catch (error) {
           console.log("시간 선택기를 열 수 없습니다:", error);
+          // 일부 브라우저에서 showPicker가 지원되지 않을 때는 다른 방법으로 처리
+          // 예: 포커스를 주고 클릭 이벤트 시뮬레이션
+          inputRef.current.click();
         }
+      } else {
+        // showPicker 메서드가 없는 경우 직접 클릭 이벤트 발생
+        inputRef.current.click();
       }
     }
   };
@@ -2380,15 +2372,21 @@ const ScheduleGrid = ({
             overflowY: "auto", // 높이가 화면 크기를 초과할 경우 스크롤 가능하도록 설정
           }}
         >
+          {/* 선택된 일정이 있거나 편집 중이면 제목 변경 */}
+          <h3>{selectedAppointment ? "일정 상세 정보" : "새 일정 생성"}</h3>
+
           <FormField>
             <label>제목</label>
             <Input
               type="text"
-              value={formData.title}
+              value={
+                selectedAppointment ? selectedAppointment.title : formData.title
+              }
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
               }
               placeholder="일정 제목을 입력하세요"
+              disabled={!isEditing && selectedAppointment}
             />
           </FormField>
           <TimeFieldContainer>
@@ -2400,10 +2398,10 @@ const ScheduleGrid = ({
                 <Input
                   ref={startTimeInputRef}
                   type="time"
-                  step="60" // 60초 = 1분 단위로 입력 가능
+                  step="900" // 15분 간격으로 조정 (기존 60 → 900초)
                   value={
-                    editingAppointment
-                      ? editingAppointment.startTime
+                    selectedAppointment
+                      ? selectedAppointment.startTime
                       : formData.startTime ||
                         (selection
                           ? effectiveTimeSlots[selection.startTimeIndex]
@@ -2415,8 +2413,8 @@ const ScheduleGrid = ({
                   onClick={(e) => {
                     // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
                     e.stopPropagation();
-                    openTimePicker(startTimeInputRef);
                   }}
+                  disabled={!isEditing && selectedAppointment}
                 />
               </TimeInputWrapper>
             </div>
@@ -2426,10 +2424,10 @@ const ScheduleGrid = ({
                 <Input
                   ref={endTimeInputRef}
                   type="time"
-                  step="60" // 60초 = 1분 단위로 입력 가능
+                  step="900" // 15분 간격으로 조정 (기존 60 → 900초)
                   value={
-                    editingAppointment
-                      ? editingAppointment.endTime
+                    selectedAppointment
+                      ? selectedAppointment.endTime
                       : formData.endTime ||
                         (selection
                           ? getEndTime(
@@ -2443,8 +2441,8 @@ const ScheduleGrid = ({
                   onClick={(e) => {
                     // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
                     e.stopPropagation();
-                    openTimePicker(endTimeInputRef);
                   }}
+                  disabled={!isEditing && selectedAppointment}
                 />
               </TimeInputWrapper>
             </div>
@@ -2452,11 +2450,14 @@ const ScheduleGrid = ({
           <FormField>
             <label>참고사항</label>
             <TextArea
-              value={formData.notes}
+              value={
+                selectedAppointment ? selectedAppointment.notes : formData.notes
+              }
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
               }
               placeholder="참고사항을 입력하세요"
+              disabled={!isEditing && selectedAppointment}
             />
           </FormField>
           <FormActions>
@@ -2472,46 +2473,60 @@ const ScheduleGrid = ({
                 });
                 setSelection(null); // 선택 영역 초기화
                 setCurrentCell(null); // 선택된 셀 초기화
+                setSelectedAppointment(null); // 선택된 일정 초기화
+                setIsEditing(false); // 편집 모드 비활성화
               }}
             >
               취소
             </Button>
-            <Button
-              className="primary"
-              onClick={() => {
-                if (editingAppointment) {
-                  handleEditAppointment();
-                } else if (selection) {
-                  const startTimeIndex = selection.startTimeIndex;
-                  const endTimeIndex = selection.endTimeIndex;
-                  const dateIndex = selection.startDateIndex;
-                  const staffIndex = selection.startStaffIndex;
 
-                  // 폼 데이터에서 변경된 시간 값을 우선으로 사용
-                  const startTime =
-                    formData.startTime || effectiveTimeSlots[startTimeIndex];
-                  const endTime =
-                    formData.endTime ||
-                    getEndTime(effectiveTimeSlots[endTimeIndex]);
+            {selectedAppointment && !isEditing ? (
+              // 선택된 일정이 있고 편집 모드가 아닐 때
+              <Button className="primary" onClick={handleEditAppointment}>
+                수정
+              </Button>
+            ) : (
+              // 새 일정 생성 또는 일정 편집 중
+              <Button
+                className="primary"
+                onClick={() => {
+                  if (isEditing && selectedAppointment) {
+                    // 일정 편집 처리
+                    handleAppointmentSubmit(new Event("submit"));
+                  } else if (selection) {
+                    // 새 일정 생성
+                    const startTimeIndex = selection.startTimeIndex;
+                    const endTimeIndex = selection.endTimeIndex;
+                    const dateIndex = selection.startDateIndex;
+                    const staffIndex = selection.startStaffIndex;
 
-                  const appointmentData = {
-                    title: formData.title,
-                    notes: formData.notes,
-                    type: formData.type,
-                    dateIndex: dateIndex,
-                    staffId: staff[staffIndex].id,
-                    date: dates[dateIndex],
-                    startTime: startTime,
-                    endTime: endTime,
-                  };
+                    // 폼 데이터에서 변경된 시간 값을 우선으로 사용
+                    const startTime =
+                      formData.startTime || effectiveTimeSlots[startTimeIndex];
+                    const endTime =
+                      formData.endTime ||
+                      getEndTime(effectiveTimeSlots[endTimeIndex]);
 
-                  createAppointment(appointmentData);
-                }
-              }}
-            >
-              {editingAppointment ? "수정" : "생성"}
-            </Button>
-            {editingAppointment && (
+                    const appointmentData = {
+                      title: formData.title,
+                      notes: formData.notes,
+                      type: formData.type,
+                      dateIndex: dateIndex,
+                      staffId: staff[staffIndex].id,
+                      date: dates[dateIndex],
+                      startTime: startTime,
+                      endTime: endTime,
+                    };
+
+                    createAppointment(appointmentData);
+                  }
+                }}
+              >
+                {isEditing ? "저장" : "생성"}
+              </Button>
+            )}
+
+            {selectedAppointment && (
               <Button className="danger" onClick={handleDeleteAppointment}>
                 삭제
               </Button>

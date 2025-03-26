@@ -857,23 +857,24 @@ const Schedule = () => {
   // 일정 삭제 핸들러
   const handleAppointmentDelete = async (appointmentId) => {
     try {
-      // Firestore에서 isHidden 처리
+      // Firestore 문서 업데이트 (isHidden 처리)
       const appointmentRef = doc(db, "reservations", appointmentId);
       await updateDoc(appointmentRef, {
         isHidden: true,
         hiddenAt: new Date(),
+        updatedAt: new Date(),
       });
 
-      // 상태 업데이트
-      const filteredAppointments = appointments.filter(
-        (app) => app.id !== appointmentId
+      // 로컬 상태 업데이트
+      setAppointments((prevAppointments) =>
+        prevAppointments.filter((app) => app.id !== appointmentId)
       );
 
-      setAppointments(filteredAppointments);
-      showToast("일정이 삭제되었습니다.", "success");
+      // 데이터 갱신
+      await fetchAppointments();
     } catch (error) {
       console.error("일정 삭제 중 오류 발생:", error);
-      showToast("일정 삭제에 실패했습니다.", "error");
+      showToast("일정 삭제 중 오류가 발생했습니다.", "error");
     }
   };
 
