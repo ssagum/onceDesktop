@@ -52,6 +52,7 @@ export const loginUser = async (email, password) => {
       department: existingPCData.department || userData.department || "",
       location: existingPCData.location || userData.location || "",
       // 사용자 정보 갱신
+      id: userDoc.id,
       role: userData.role || "",
       departmentLeader: userData.departmentLeader || false,
     };

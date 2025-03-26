@@ -235,6 +235,7 @@ export function UserLevelProvider({ children }) {
         department: userLevelData.department || "",
         location: userLevelData.location || "",
         // 사용자 정보 갱신
+        id: result.user.id,
         uid: result.user.uid,
         email: result.user.email,
         name: result.user.name,

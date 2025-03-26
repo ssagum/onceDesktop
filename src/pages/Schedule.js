@@ -373,7 +373,7 @@ const Schedule = () => {
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
-  const [viewMode, setViewMode] = useState("dnd"); // 뷰 모드 상태 추가 (dnd: 진료 예약, board: 물리치료 예약)
+  const [viewMode, setViewMode] = useState("진료"); // 뷰 모드 상태 변경 ("dnd" -> "진료", "board" -> "물리치료")
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
 
   const timeSlots = generateTimeSlots();
@@ -387,7 +387,7 @@ const Schedule = () => {
 
         if (settingDoc.exists()) {
           const data = settingDoc.data();
-          console.log("여기요", data);
+          console.log("의료진 데이터:", data);
 
           // 색상 배열 (의료진 수에 맞게 순환해서 사용)
           const colors = [
@@ -401,18 +401,43 @@ const Schedule = () => {
             "#8B5CF6",
           ];
 
+          // 진료 담당자와 물리치료 담당자 목록 가져오기
+          const 진료목록 = data.진료 || [];
+          const 물리치료목록 = data.물리치료 || [];
+
+          console.log("진료목록:", 진료목록);
+
           // 각 담당자 이름을 객체 형식으로 변환 (id, name, color 속성 포함)
-          const 진료담당자 = (data.진료 || []).map((name, index) => ({
+          const 진료담당자 = 진료목록.map((name, index) => ({
             id: `doctor_${index}`,
             name: name,
             color: colors[index % colors.length],
           }));
 
-          const 물리치료담당자 = (data.물리치료 || []).map((name, index) => ({
+          const 물리치료담당자 = 물리치료목록.map((name, index) => ({
             id: `therapist_${index}`,
             name: name,
             color: colors[(index + 진료담당자.length) % colors.length],
           }));
+
+          // 빈 배열 확인 및 기본값 설정
+          if (진료담당자.length === 0) {
+            console.warn("진료 담당자 목록이 비어있습니다. 기본값 설정");
+            진료담당자.push({
+              id: "doctor_default",
+              name: "기본 의사",
+              color: colors[0],
+            });
+          }
+
+          if (물리치료담당자.length === 0) {
+            console.warn("물리치료 담당자 목록이 비어있습니다. 기본값 설정");
+            물리치료담당자.push({
+              id: "therapist_default",
+              name: "기본 치료사",
+              color: colors[1],
+            });
+          }
 
           // 진료 및 물리치료 담당자 데이터 설정
           setStaffData({
@@ -420,12 +445,38 @@ const Schedule = () => {
             물리치료: 물리치료담당자,
           });
         } else {
-          console.error("Providers 문서가 존재하지 않습니다");
-          showToast("담당자 정보를 가져오는 데 실패했습니다.", "error");
+          console.error("Providers 문서가 존재하지 않습니다. 기본값 설정");
+
+          // 문서가 없는 경우 기본값 설정
+          const defaultStaffData = {
+            진료: [
+              { id: "doctor_0", name: "네트워크 에러", color: "#F59E0B" },
+              { id: "doctor_1", name: "네트워크 에러", color: "#4F46E5" },
+            ],
+            물리치료: [
+              { id: "therapist_0", name: "네트워크 에러", color: "#10B981" },
+              { id: "therapist_1", name: "네트워크 에러", color: "#D946EF" },
+            ],
+          };
+
+          setStaffData(defaultStaffData);
         }
       } catch (error) {
         console.error("담당자 정보를 가져오는 중 오류 발생:", error);
-        showToast("담당자 정보를 가져오는 데 실패했습니다.", "error");
+
+        // 오류 발생 시 기본값 설정
+        const defaultStaffData = {
+          진료: [
+            { id: "doctor_0", name: "네트워크 에러", color: "#F59E0B" },
+            { id: "doctor_1", name: "네트워크 에러", color: "#4F46E5" },
+          ],
+          물리치료: [
+            { id: "therapist_0", name: "네트워크 에러", color: "#10B981" },
+            { id: "therapist_1", name: "네트워크 에러", color: "#D946EF" },
+          ],
+        };
+
+        setStaffData(defaultStaffData);
       }
     };
 
@@ -711,17 +762,17 @@ const Schedule = () => {
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <GridContainer>
             <ToggleContainer>
-              <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
+              <ToggleSlider position={viewMode === "진료" ? "left" : "right"} />
               <ToggleOption
-                active={viewMode === "dnd"}
-                onClick={() => setViewMode("dnd")}
+                active={viewMode === "진료"}
+                onClick={() => setViewMode("진료")}
               >
                 <ToggleIcon>👨‍⚕️</ToggleIcon>
                 진료 예약
               </ToggleOption>
               <ToggleOption
-                active={viewMode === "board"}
-                onClick={() => setViewMode("board")}
+                active={viewMode === "물리치료"}
+                onClick={() => setViewMode("물리치료")}
               >
                 <ToggleIcon>💪</ToggleIcon>
                 물리치료 예약
@@ -731,7 +782,7 @@ const Schedule = () => {
             {/* 예약 알림 안내 */}
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 text-[15px]">
-                {viewMode === "dnd" ? (
+                {viewMode === "진료" ? (
                   <span>
                     각 원장님은 진료실에 개인 PC가 마련되어 있으므로, 예약 관련
                     알림은 원장님의 개별 PC로 발송됩니다.
@@ -789,16 +840,19 @@ const Schedule = () => {
                   </WeekTabsContainer>
                 </SheetSelectorContainer>
 
-                {viewMode === "dnd" ? (
+                {viewMode === "진료" ? (
                   // 진료 예약 모드
                   <ScheduleGrid
                     dates={displayDates}
                     timeSlots={timeSlots}
                     staff={staffData.진료 || []}
-                    appointments={appointments}
+                    appointments={appointments.filter(
+                      (app) => app.type !== "물리치료"
+                    )}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}
+                    viewMode={viewMode}
                   />
                 ) : (
                   // 물리치료 예약 모드
@@ -812,6 +866,7 @@ const Schedule = () => {
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}
+                    viewMode={viewMode}
                   />
                 )}
               </>

@@ -710,7 +710,7 @@ const ScheduleGrid = ({
   onAppointmentCreate,
   onAppointmentUpdate,
   onAppointmentDelete,
-  viewMode = "진료", // viewMode 프롭 추가, 기본값은 "진료"
+  viewMode = "진료", // viewMode 프롭 기본값을 "진료"로 변경
 }) => {
   const gridRef = useRef(null);
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -729,8 +729,12 @@ const ScheduleGrid = ({
   const [newMemoItem, setNewMemoItem] = useState("");
   const [activeMemoDateIndex, setActiveMemoDateIndex] = useState(0);
 
-  // 메모 유형 관련 상태 제거하고 viewMode를 사용
-  const memoType = viewMode === "board" ? "물리치료" : "진료";
+  // 메모 유형 관련 상태 확인 및 사용
+  const memoType = useMemo(() => {
+    console.log("현재 viewMode:", viewMode);
+    return viewMode === "물리치료" ? "물리치료" : "진료";
+  }, [viewMode]);
+
   const memoTypes = ["진료", "물리치료"];
 
   // 선택 관련 상태
@@ -1435,6 +1439,9 @@ const ScheduleGrid = ({
           displayTime = timeIndex === 9 ? "점심" : "시간";
         }
 
+        // 영업 시간 내인지 확인 (근무시간 배경색 표시 용도)
+        const isWithinBusinessHours = shouldShowTime && dayOfWeekNumber !== 0;
+
         // 각 날짜별 시간 열 추가 - 너비 50px로 변경
         cells.push(
           <Cell
@@ -1442,7 +1449,11 @@ const ScheduleGrid = ({
             style={{
               gridColumn: startCol,
               gridRow: timeIndex + 1,
-              backgroundColor: isBreakTimeForDay ? "#fff8e1" : "#f5f5f5",
+              backgroundColor: isBreakTimeForDay
+                ? "#fff8e1"
+                : isWithinBusinessHours
+                ? "#fff8e1" // 영업 시간 내인 경우 노란색
+                : "#f5f5f5",
               opacity: isOutOfBusinessHours ? 0.6 : 1,
               borderRight: "1px solid #ddd",
               display: "flex",
@@ -1632,22 +1643,24 @@ const ScheduleGrid = ({
       try {
         // 각 날짜와 메모 유형에 대해 메모 로드
         let loadedMemos = {};
+        const currentMemoType = memoType; // 현재 viewMode에 따른 메모 타입
+        console.log("메모 로드 중, 현재 메모 타입:", currentMemoType);
 
         for (const date of dates) {
           const formattedDate = format(date, "yyyy-MM-dd");
 
-          // 각 메모 유형에 대해 로드
-          for (const type of memoTypes) {
-            const memoKey = `memo-${formattedDate}-${type}`;
+          // 현재 뷰 모드에 해당하는 메모만 로드
+          const memoKey = `memo-${formattedDate}-${currentMemoType}`;
+          console.log("로드할 메모 키:", memoKey);
 
-            // Firestore에서 메모 데이터 조회
-            const memoRef = doc(db, "memos", memoKey);
-            const memoDoc = await getDoc(memoRef);
+          // Firestore에서 메모 데이터 조회
+          const memoRef = doc(db, "memos", memoKey);
+          const memoDoc = await getDoc(memoRef);
 
-            if (memoDoc.exists()) {
-              const memoData = memoDoc.data();
-              loadedMemos[memoKey] = memoData.content;
-            }
+          if (memoDoc.exists()) {
+            const memoData = memoDoc.data();
+            loadedMemos[memoKey] = memoData.content;
+            console.log("메모 로드됨:", memoKey, memoData.content);
           }
         }
 
@@ -1660,7 +1673,7 @@ const ScheduleGrid = ({
     if (dates.length > 0) {
       loadMemos();
     }
-  }, [dates, memoTypes]);
+  }, [dates, memoType]);
 
   // 일정 렌더링 함수 수정 - 시간에 비례하여 표시
   const renderAppointments = () => {
@@ -2109,6 +2122,7 @@ const ScheduleGrid = ({
       const formattedDate = format(date, "yyyy-MM-dd");
       // 현재 뷰 모드에 맞는 메모 키 생성
       const memoKey = `memo-${formattedDate}-${memoType}`;
+      console.log("렌더링할 메모 키:", memoKey, "현재 memoType:", memoType);
 
       // 현재 모드에 해당하는 메모 항목만 표시
       const memoItems = memos[memoKey]
@@ -2139,7 +2153,7 @@ const ScheduleGrid = ({
               <MemoTitle>
                 {format(date, "M/d")} (
                 {["일", "월", "화", "수", "목", "금", "토"][date.getDay()]})
-                {viewMode === "board"
+                {viewMode === "물리치료"
                   ? " 물리치료 시트 공유 메모"
                   : " 진료 시트 공유 메모"}
               </MemoTitle>

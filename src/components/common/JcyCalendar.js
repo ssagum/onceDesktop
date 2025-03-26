@@ -22,8 +22,8 @@ const RenderHeader = ({ currentMonth, prevMonth, nextMonth }) => {
   return (
     <section className="flex flex-col">
       <section className="flex flex-row items-center">
-        <p className="text-[16px]">{getKoreanMonth(currentMonth.getMonth())}</p>
-        <p className="text-[16px] ml-[6px]">{format(currentMonth, "yyyy")}</p>
+        <p className="text-[18px]">{getKoreanMonth(currentMonth.getMonth())}</p>
+        <p className="text-[18px] ml-[6px]">{format(currentMonth, "yyyy")}</p>
         <div className="flex flex-row ml-[14px]">
           <img
             onClick={prevMonth}
@@ -63,7 +63,7 @@ const RenderDays = ({ standardWidth }) => {
         }}
         key={i}
       >
-        <p className={`text-[12px] ${i === 0 ? "text-red-500" : ""}`}>
+        <p className={`text-[14px] ${i === 0 ? "text-red-500" : ""}`}>
           {date[i]}
         </p>
       </div>
@@ -143,7 +143,7 @@ const RenderCells = ({
             onClick={() => onDateClick(cloneDay)}
           >
             <div
-              className={`flex items-center justify-center text-[12px] text-center ${
+              className={`flex items-center justify-center text-[14px] text-center ${
                 isStart
                   ? "bg-[#FBAB3A] rounded-full" // 시작일
                   : isEnd

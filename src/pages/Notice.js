@@ -9,6 +9,8 @@ import NoticeMainCanvas from "../components/Notice.js/NoticeMainCanvas";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useToast } from "../contexts/ToastContext";
+import { useUserLevel } from "../utils/UserLevelContext";
+import LoginPCModal from "../components/common/LoginPCModal";
 
 const MainZone = styled.div``;
 
@@ -19,16 +21,56 @@ const Notice = () => {
   const [noticeType, setNoticeType] = useState("regular");
   const [classification, setClassification] = useState("전체");
   const { showToast } = useToast();
+  const { userLevelData, isLoggedIn } = useUserLevel();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const handleCloseEditor = () => {
     setShowEditor(false);
     setEditorContent("");
   };
 
+  // 로그인 모달 관련 함수들
+  const openLoginModal = () => {
+    setLoginModalOpen(true);
+  };
+
+  const closeLoginModal = () => {
+    setLoginModalOpen(false);
+  };
+
+  const handleLoginSuccess = () => {
+    closeLoginModal();
+    // 로그인 성공 후 게시글 작성 모달 표시
+    setShowEditor(true);
+  };
+
+  const handlePCAllocationSubmit = (pcData) => {
+    closeLoginModal();
+    showToast("PC 정보가 설정되었습니다.", "success");
+  };
+
   const handleSaveContent = async (postData) => {
+    // 로그인 여부 확인
+    if (!isLoggedIn) {
+      // 토스트 메시지 대신 로그인 모달 표시
+      openLoginModal();
+      return;
+    }
+
     try {
+      // authorId를 직접 확인하여 추가
+      const safePostData = {
+        ...postData,
+        isHidden: false, // 기본적으로 숨김 처리되지 않음
+      };
+
+      // authorId가 있는 경우에만 추가 (undefined 방지)
+      if (userLevelData?.id) {
+        safePostData.authorId = userLevelData.id;
+      }
+
       // Firestore에 게시글 저장
-      await addDoc(collection(db, "notices"), postData);
+      await addDoc(collection(db, "notices"), safePostData);
       showToast("게시글이 성공적으로 저장되었습니다", "success");
       setShowEditor(false);
       setEditorContent("");
@@ -38,27 +80,49 @@ const Notice = () => {
     }
   };
 
+  // 게시글 작성 모달 표시 처리
+  const handleCreatePost = () => {
+    // 로그인 여부 확인
+    if (!isLoggedIn || !userLevelData?.name) {
+      openLoginModal();
+      return;
+    }
+
+    setShowEditor(true);
+  };
+
   return (
-    // h-screen 을 넘어가는 페이지는 h-screen 당연히 쓰면 안 됨
-    <div className="flex flex-row w-full h-screen bg-onceBackground items-center">
-      <div className="w-[250px] h-full flex flex-col justify-center">
-        <SideBar />
+    <>
+      {/* h-screen 을 넘어가는 페이지는 h-screen 당연히 쓰면 안 됨 */}
+      <div className="flex flex-row w-full h-screen bg-onceBackground items-center">
+        <div className="w-[250px] h-full flex flex-col justify-center">
+          <SideBar />
+        </div>
+        <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
+          <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
+            <NoticeMainCanvas onCreatePost={handleCreatePost} />
+            <TextEditorModal
+              show={showEditor}
+              handleClose={handleCloseEditor}
+              content={editorContent}
+              setContent={setEditorContent}
+              handleSave={handleSaveContent}
+              classification={classification}
+              noticeType={noticeType}
+            />
+          </section>
+        </MainZone>
       </div>
-      <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
-        <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
-          <NoticeMainCanvas onCreatePost={() => setShowEditor(true)} />
-          <TextEditorModal
-            show={showEditor}
-            handleClose={handleCloseEditor}
-            content={editorContent}
-            setContent={setEditorContent}
-            handleSave={handleSaveContent}
-            classification={classification}
-            noticeType={noticeType}
-          />
-        </section>
-      </MainZone>
-    </div>
+
+      {/* 로그인/PC할당 통합 모달 */}
+      <LoginPCModal
+        isOpen={loginModalOpen}
+        onClose={closeLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        onPCAllocationSubmit={handlePCAllocationSubmit}
+        defaultDepartment={userLevelData?.department || ""}
+      />
+    </>
   );
 };
 

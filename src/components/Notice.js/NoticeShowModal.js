@@ -9,6 +9,8 @@ import {
   serverTimestamp,
   doc,
   deleteDoc,
+  getDocs,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useUserLevel } from "../../utils/UserLevelContext";
@@ -36,10 +38,14 @@ const electronAPI = window.electron;
 const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const { userLevelData, checkUserPermission } = useUserLevel();
   const { showToast } = useToast();
   const [downloadingFiles, setDownloadingFiles] = useState({});
+
+  // 댓글 작성자 선택 관련 상태 추가
+  const [selectedCommenter, setSelectedCommenter] = useState(null);
+  const [showCommenterDropdown, setShowCommenterDropdown] = useState(false);
+  const [departmentUsers, setDepartmentUsers] = useState([]);
 
   // 권한 확인 로직 수정
   const canEdit =
@@ -55,7 +61,140 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       (notice.author === userLevelData.name && !notice.authorId) || // authorId가 없고 author가 일치하는 경우도 허용
       isHospitalOwner(userLevelData));
 
+  // 권한 디버깅용 로그
+  useEffect(() => {
+    if (notice && userLevelData) {
+      console.log("권한 확인: ", {
+        사용자정보: userLevelData,
+        게시물정보: {
+          작성자: notice.author,
+          작성자ID: notice.authorId,
+        },
+        권한체크: {
+          수정가능: canEdit,
+          삭제가능: canDelete,
+          작성자일치: isSameUser(userLevelData, notice.authorId),
+          이름일치: notice.author === userLevelData.name,
+          관리자여부: isHospitalOwner(userLevelData),
+        },
+      });
+    }
+  }, [notice, userLevelData, canEdit, canDelete]);
+
   const canComment = !!userLevelData; // 로그인한 사용자만 댓글 작성 가능
+
+  // 모든 사용자 목록 가져오기
+  const getAllUsers = async () => {
+    try {
+      console.log("사용자 목록 로드 시작...");
+
+      // users 컬렉션에서 모든 사용자 가져오기 (userLevels 대신)
+      const usersRef = collection(db, "users");
+      const snapshot = await getDocs(usersRef);
+
+      // 결과 확인
+      console.log("Firestore 쿼리 결과:", snapshot.size, "개의 문서");
+
+      if (snapshot.empty) {
+        console.log("사용자 문서가 없습니다!");
+        // 테스트용 더미 데이터 반환
+        return [
+          {
+            id: "dummy1",
+            name: "테스트 사용자 1",
+            role: "의사",
+            department: "원무과",
+          },
+          {
+            id: "dummy2",
+            name: "테스트 사용자 2",
+            role: "간호사",
+            department: "내과",
+          },
+          {
+            id: "dummy3",
+            name: "테스트 사용자 3",
+            role: "원장",
+            department: "경영팀",
+          },
+        ];
+      }
+
+      const users = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || data.displayName || "사용자",
+          role: data.role || "",
+          department: data.department || "",
+        };
+      });
+
+      // 결과 로그
+      console.log("사용자 목록 처리 완료:", users.length, "명");
+      console.log("첫 번째 사용자 샘플:", users.length > 0 ? users[0] : "없음");
+
+      return users;
+    } catch (error) {
+      console.error("사용자 목록 가져오기 오류:", error);
+      console.error("에러 세부정보:", error.code, error.message);
+
+      // 오류 발생 시 테스트용 더미 데이터 반환
+      return [
+        {
+          id: "error1",
+          name: "에러 테스트 1",
+          role: "테스트",
+          department: "오류",
+        },
+        {
+          id: "error2",
+          name: "에러 테스트 2",
+          role: "테스트",
+          department: "오류",
+        },
+      ];
+    }
+  };
+
+  // 초기 댓글 작성자 설정 (개선)
+  useEffect(() => {
+    const initCommenter = async () => {
+      console.log("초기화: userLevelData", userLevelData);
+
+      // 현재 사용자 설정
+      if (userLevelData?.uid || userLevelData?.name) {
+        setSelectedCommenter({
+          id: userLevelData?.uid || `temp-${Date.now()}`,
+          name: userLevelData?.name || userLevelData?.displayName || "사용자",
+          role: userLevelData?.role || "",
+          department: userLevelData?.department || "",
+        });
+        console.log("로그인 사용자로 설정됨");
+      }
+
+      // 모든 사용자 목록 명시적 로드
+      console.log("모든 사용자 목록 로드 시작");
+      try {
+        const users = await getAllUsers();
+        console.log("로드된 총 사용자 수:", users.length);
+
+        if (users.length > 0) {
+          setDepartmentUsers(users);
+          console.log("사용자 목록 상태 업데이트 완료");
+        } else {
+          console.warn("로드된 사용자가 없습니다");
+        }
+      } catch (error) {
+        console.error("사용자 목록 로드 실패:", error);
+      }
+    };
+
+    if (show) {
+      console.log("모달이 표시됨 - 초기화 시작");
+      initCommenter();
+    }
+  }, [userLevelData, show]);
 
   useEffect(() => {
     if (!notice?.id) return;
@@ -125,6 +264,24 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
     };
   }, [notice?.id, showToast]);
 
+  // 발신자 드롭다운 외부 클릭 감지 (개선)
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const selector = document.querySelector(".commenter-selector");
+      if (selector && !selector.contains(e.target) && showCommenterDropdown) {
+        console.log("외부 클릭으로 드롭다운 닫힘");
+        setShowCommenterDropdown(false);
+      }
+    };
+
+    if (showCommenterDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showCommenterDropdown]);
+
   // Electron 환경에서 파일 다운로드 처리
   const handleFileDownload = (fileUrl, fileName) => {
     if (electronAPI) {
@@ -150,6 +307,44 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
     }
   };
 
+  // 댓글 작성자 드롭다운 토글 (개선)
+  const toggleCommenterDropdown = (e) => {
+    e.preventDefault(); // 기본 동작 방지
+    e.stopPropagation(); // 이벤트 버블링 방지
+
+    console.log("드롭다운 토글 클릭됨, 현재 상태:", showCommenterDropdown);
+    console.log("현재 사용자 목록 수:", departmentUsers.length);
+
+    // 항상 사용자 목록 새로 로드
+    getAllUsers()
+      .then((users) => {
+        console.log("토글 중 로드된 사용자 수:", users.length);
+
+        if (users.length > 0) {
+          // 상태 업데이트
+          setDepartmentUsers(users);
+          setShowCommenterDropdown(!showCommenterDropdown);
+          console.log("드롭다운 상태 변경:", !showCommenterDropdown);
+        } else {
+          // 사용자가 없어도 드롭다운은 표시
+          setShowCommenterDropdown(!showCommenterDropdown);
+          console.warn("사용자 목록 비어 있음");
+        }
+      })
+      .catch((error) => {
+        console.error("명단 로드 실패:", error);
+        // 에러가 있어도 토글은 수행
+        setShowCommenterDropdown(!showCommenterDropdown);
+      });
+  };
+
+  // 댓글 작성자 선택
+  const handleSelectCommenter = (e, user) => {
+    e.stopPropagation(); // 이벤트 버블링 방지
+    setSelectedCommenter(user);
+    setShowCommenterDropdown(false);
+  };
+
   const handleAddComment = async (e) => {
     e.preventDefault();
 
@@ -163,13 +358,19 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       return;
     }
 
+    if (!selectedCommenter) {
+      showToast("댓글 작성자를 선택해주세요.", "error");
+      return;
+    }
+
     try {
       await addDoc(collection(db, "comments"), {
         noticeId: notice.id,
         content: newComment.trim(),
-        author: userLevelData.name || userLevelData.role,
-        department: userLevelData.department,
-        role: userLevelData.role,
+        author: selectedCommenter.name,
+        authorId: selectedCommenter.id,
+        department: selectedCommenter.department,
+        role: selectedCommenter.role,
         createdAt: serverTimestamp(),
       });
       setNewComment("");
@@ -204,26 +405,33 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!canDelete) {
-      showToast("게시글 삭제 권한이 없습니다.", "error");
-      return;
+  const handleDelete = async (noticeId) => {
+    // noticeId가 유효한지 확인
+    if (!noticeId) {
+      showToast("유효하지 않은 게시글 ID입니다.", "error");
+      return false;
     }
 
-    if (showConfirmDelete) {
-      try {
-        if (onDelete && notice) {
-          await onDelete(notice.id);
-          showToast("게시글이 삭제되었습니다.", "success");
-          handleClose();
-        }
-      } catch (error) {
-        console.error("Error deleting notice:", error);
-        showToast("게시글 삭제에 실패했습니다.", "error");
+    try {
+      // 실제 삭제 대신 isHidden 필드만 업데이트
+      const docRef = doc(db, "notices", noticeId);
+      await updateDoc(docRef, {
+        isHidden: true,
+        hiddenAt: serverTimestamp(),
+      });
+
+      // onDelete 콜백이 있으면 호출
+      if (typeof onDelete === "function") {
+        onDelete(noticeId);
       }
-      setShowConfirmDelete(false);
-    } else {
-      setShowConfirmDelete(true);
+
+      showToast("게시글이 삭제되었습니다.", "success");
+      handleClose(); // 모달 닫기
+      return true;
+    } catch (error) {
+      console.error("게시글 삭제 오류:", error);
+      showToast("게시글 삭제에 실패했습니다.", "error");
+      return false;
     }
   };
 
@@ -270,6 +478,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
         <div className="modal-header" style={headerStyle}>
           <h2 style={titleStyle}>공지사항</h2>
           <div style={headerButtonsStyle}>
+            {/* 권한이 있는 사용자에게만 수정/삭제 버튼 표시 */}
             {canEdit && (
               <button
                 onClick={handleEdit}
@@ -281,15 +490,19 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
             )}
             {canDelete && (
               <button
-                onClick={handleDelete}
-                style={
-                  showConfirmDelete
-                    ? confirmDeleteButtonStyle
-                    : deleteButtonStyle
-                }
+                onClick={() => {
+                  if (notice && notice.id) {
+                    if (window.confirm("정말 게시글을 삭제하시겠습니까?")) {
+                      handleDelete(notice.id);
+                    }
+                  } else {
+                    showToast("삭제할 게시글 정보가 없습니다.", "error");
+                  }
+                }}
+                style={deleteButtonStyle}
                 title="게시글 삭제"
               >
-                <FaTrash /> {showConfirmDelete ? "삭제 확인" : "삭제"}
+                <FaTrash /> 삭제
               </button>
             )}
             <button onClick={handleClose} style={closeButtonStyle}>
@@ -426,6 +639,87 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
             </div>
 
             <form onSubmit={handleAddComment} style={commentFormStyle}>
+              {/* 댓글 작성자 선택 UI */}
+              <div style={commenterSelectorContainerStyle}>
+                <div
+                  onClick={toggleCommenterDropdown}
+                  style={commenterSelectorStyle}
+                  className="commenter-selector"
+                >
+                  {selectedCommenter ? (
+                    <>
+                      <span style={{ marginLeft: "5px", flex: 1 }}>
+                        {selectedCommenter.name}
+                      </span>
+                      <span style={{ fontSize: "10px", marginLeft: "4px" }}>
+                        ▼
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>작성자 선택</span>
+                      <span style={{ fontSize: "10px", marginLeft: "4px" }}>
+                        ▼
+                      </span>
+                    </>
+                  )}
+
+                  {showCommenterDropdown && (
+                    <div
+                      style={{
+                        ...commenterDropdownStyle,
+                        // 목록 갯수에 따라 높이 조정
+                        maxHeight:
+                          Math.min(300, departmentUsers.length * 50 + 60) +
+                          "px",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div style={commenterDropdownHeaderStyle}>
+                        작성자 선택 ({departmentUsers.length}명)
+                      </div>
+                      <div style={commenterOptionsListStyle}>
+                        {departmentUsers.length > 0 ? (
+                          departmentUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              onClick={(e) => handleSelectCommenter(e, user)}
+                              style={{
+                                ...commenterOptionStyle,
+                                backgroundColor:
+                                  selectedCommenter?.id === user.id
+                                    ? "#f0f8ff"
+                                    : "transparent",
+                              }}
+                            >
+                              <div style={commenterInfoStyle}>
+                                <div style={commenterNameStyle}>
+                                  {user.name || "이름없음"}
+                                </div>
+                                <div style={commenterRoleStyle}>
+                                  {user.department ? `${user.department} ` : ""}
+                                  {user.role || "사용자"}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div
+                            style={{
+                              padding: "10px 15px",
+                              color: "#999",
+                              textAlign: "center",
+                            }}
+                          >
+                            로딩 중...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <input
                 type="text"
                 value={newComment}
@@ -433,7 +727,11 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
                 placeholder="댓글을 입력하세요"
                 style={commentInputStyle}
               />
-              <button type="submit" style={commentButtonStyle}>
+              <button
+                type="submit"
+                style={commentButtonStyle}
+                disabled={!selectedCommenter || !newComment.trim()}
+              >
                 작성
               </button>
             </form>
@@ -519,11 +817,6 @@ const deleteButtonStyle = {
   borderRadius: "4px",
   fontSize: "0.85rem",
   cursor: "pointer",
-};
-
-const confirmDeleteButtonStyle = {
-  ...deleteButtonStyle,
-  backgroundColor: "#d32f2f",
 };
 
 const bodyStyle = {
@@ -728,6 +1021,7 @@ const commentFormStyle = {
   display: "flex",
   gap: "10px",
   marginTop: "20px",
+  alignItems: "center",
 };
 
 const commentInputStyle = {
@@ -747,6 +1041,84 @@ const commentButtonStyle = {
   borderRadius: "4px",
   cursor: "pointer",
   fontWeight: "500",
+  opacity: (props) => (props.disabled ? 0.5 : 1),
+  cursor: (props) => (props.disabled ? "not-allowed" : "pointer"),
+};
+
+// 댓글 작성자 선택 관련 스타일
+const commenterSelectorContainerStyle = {
+  position: "relative",
+  minWidth: "120px",
+  zIndex: 10,
+};
+
+const commenterSelectorStyle = {
+  position: "relative",
+  minWidth: "120px",
+  border: "1px solid #e6e6e6",
+  borderRadius: "4px",
+  padding: "8px 10px",
+  backgroundColor: "#f5f5f5",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  fontSize: "14px",
+  color: "#333",
+  transition: "all 0.2s",
+  height: "42px",
+};
+
+const commenterDropdownStyle = {
+  position: "absolute",
+  bottom: "100%",
+  left: 0,
+  width: "240px",
+  maxHeight: "300px",
+  backgroundColor: "#fff",
+  border: "1px solid #e6e6e6",
+  borderRadius: "4px",
+  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+  zIndex: 1000, // z-index 값 증가
+  padding: "10px 0",
+  marginBottom: "5px",
+  display: "block", // 명시적으로 display 설정
+  overflow: "visible", // 명시적으로 overflow 설정
+};
+
+const commenterDropdownHeaderStyle = {
+  padding: "0 15px 10px",
+  fontWeight: "600",
+  color: "#333",
+  fontSize: "16px",
+  borderBottom: "1px solid #e6e6e6",
+};
+
+const commenterOptionsListStyle = {
+  maxHeight: "250px",
+  overflow: "auto",
+};
+
+const commenterOptionStyle = {
+  padding: "8px 15px",
+  display: "flex",
+  alignItems: "center",
+  cursor: "pointer",
+  transition: "background-color 0.2s",
+};
+
+const commenterInfoStyle = {
+  flex: 1,
+};
+
+const commenterNameStyle = {
+  fontSize: "16px",
+  fontWeight: "500",
+};
+
+const commenterRoleStyle = {
+  fontSize: "14px",
+  color: "#666",
 };
 
 // 파일 크기 형식화 함수
