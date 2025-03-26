@@ -1088,14 +1088,19 @@ const ScheduleGrid = ({
         return;
       }
 
+      let result = null;
+
       if (isEditing && selectedAppointment) {
         // 기존 일정 수정
         const updatedAppointment = {
           ...selectedAppointment,
           ...formData,
           dateIndex: selectedAppointment.dateIndex,
+          updatedAt: new Date().toISOString(),
         };
-        await onAppointmentUpdate(updatedAppointment);
+
+        // 상위 컴포넌트의 update 함수 호출
+        result = await onAppointmentUpdate(updatedAppointment);
         showToast("일정이 수정되었습니다.", "success");
       } else {
         // 새 일정 생성
@@ -1104,8 +1109,11 @@ const ScheduleGrid = ({
           dateIndex: dates.findIndex(
             (date) => format(date, "yyyy-MM-dd") === formData.date
           ),
+          createdAt: new Date().toISOString(),
         };
-        await onAppointmentCreate(newAppointment);
+
+        // 상위 컴포넌트의 create 함수 호출
+        result = await onAppointmentCreate(newAppointment);
         showToast("일정이 추가되었습니다.", "success");
       }
 
@@ -1122,6 +1130,8 @@ const ScheduleGrid = ({
       setShowForm(false);
       setIsEditing(false);
       setSelectedAppointment(null);
+
+      console.log("일정 작업 완료, 결과:", result);
     } catch (error) {
       console.error("일정 저장 중 오류 발생:", error);
       showToast("일정 저장 중 오류가 발생했습니다.", "error");
@@ -1566,15 +1576,41 @@ const ScheduleGrid = ({
       // 문자열이면 배열로 변환
       if (typeof currentItems === "string") {
         currentItems = [currentItems];
+      } else if (!Array.isArray(currentItems)) {
+        currentItems = [];
       }
 
+      // 새 항목 추가 (고유 ID 부여)
+      const newItem = {
+        id: `memo-${Date.now()}-${Math.floor(Math.random() * 10000)}`, // 타임스탬프와 랜덤값 조합으로 고유 ID 생성
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // 기존 항목들에 ID가 없는 경우 ID 추가
+      const updatedItems = currentItems.map((item) => {
+        if (typeof item === "string") {
+          return {
+            id: `memo-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+            content: item,
+            createdAt: new Date().toISOString(),
+          };
+        } else if (typeof item === "object" && !item.id) {
+          return {
+            ...item,
+            id: `memo-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          };
+        }
+        return item;
+      });
+
       // 새 항목 추가
-      const updatedItems = [...currentItems, content.trim()];
+      const finalItems = [...updatedItems, newItem];
 
       // 상태 업데이트
       setMemos((prevMemos) => ({
         ...prevMemos,
-        [memoKey]: updatedItems,
+        [memoKey]: finalItems,
       }));
 
       // Firestore에 저장
@@ -1582,7 +1618,7 @@ const ScheduleGrid = ({
       const memoRef = doc(db, "memos", memoKey);
       await setDoc(memoRef, {
         date,
-        content: updatedItems,
+        content: finalItems,
         updatedAt: new Date(),
       });
 
@@ -1601,9 +1637,11 @@ const ScheduleGrid = ({
       // 문자열이면 배열로 변환
       if (typeof currentItems === "string") {
         currentItems = [currentItems];
+      } else if (!Array.isArray(currentItems)) {
+        currentItems = [];
       }
 
-      // 항목 삭제
+      // 항목 삭제 (인덱스로 삭제)
       const updatedItems = currentItems.filter(
         (_, index) => index !== itemIndex
       );
@@ -1658,8 +1696,51 @@ const ScheduleGrid = ({
 
           if (memoDoc.exists()) {
             const memoData = memoDoc.data();
-            loadedMemos[memoKey] = memoData.content;
-            console.log("메모 로드됨:", memoKey, memoData.content);
+
+            // 내용이 있는 경우만 처리
+            if (memoData.content) {
+              let processedContent;
+
+              if (Array.isArray(memoData.content)) {
+                // ID가 없는 항목에 ID 추가
+                processedContent = memoData.content.map((item, index) => {
+                  if (typeof item === "string") {
+                    return {
+                      id: `memo-${Date.now()}-${index}-${Math.floor(
+                        Math.random() * 10000
+                      )}`,
+                      content: item,
+                      createdAt: new Date().toISOString(),
+                    };
+                  } else if (typeof item === "object" && !item.id) {
+                    return {
+                      ...item,
+                      id: `memo-${Date.now()}-${index}-${Math.floor(
+                        Math.random() * 10000
+                      )}`,
+                    };
+                  }
+                  return item;
+                });
+              } else if (typeof memoData.content === "string") {
+                // 문자열인 경우 객체 배열로 변환
+                processedContent = [
+                  {
+                    id: `memo-${Date.now()}-${Math.floor(
+                      Math.random() * 10000
+                    )}`,
+                    content: memoData.content,
+                    createdAt: new Date().toISOString(),
+                  },
+                ];
+              } else {
+                // 기타 경우는 빈 배열로 설정
+                processedContent = [];
+              }
+
+              loadedMemos[memoKey] = processedContent;
+              console.log("메모 로드됨 (변환 후):", memoKey, processedContent);
+            }
           }
         }
 
@@ -2061,22 +2142,14 @@ const ScheduleGrid = ({
   const handleTimeChange = (field, value) => {
     console.log(`시간 변경: ${field} = ${value}`);
 
-    if (!selection && !editingAppointment) {
-      console.log("선택된 영역 또는 편집 중인 일정이 없습니다.");
-      return;
-    }
-
-    // 시간을 분으로 변환
-    const valueMinutes = timeToMinutes(value);
-
     // formData 업데이트 - 항상 업데이트
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
 
-    // 편집 모드가 아닐 때만 selection 업데이트
-    if (!editingAppointment && selection) {
+    // 선택 영역이 있고 편집 모드가 아닐 때만 selection 업데이트
+    if (selection && !isEditing) {
       if (field === "startTime") {
         // 시작 시간 처리
         let bestTimeIndex = 0;
@@ -2085,7 +2158,7 @@ const ScheduleGrid = ({
         // 모든 시간 슬롯에 대해 분 단위로 차이를 계산하여 가장 가까운 인덱스 찾기
         effectiveTimeSlots.forEach((timeSlot, index) => {
           const slotMinutes = timeToMinutes(timeSlot);
-          const diff = Math.abs(slotMinutes - valueMinutes);
+          const diff = Math.abs(slotMinutes - timeToMinutes(value));
 
           if (diff < minDiff) {
             minDiff = diff;
@@ -2111,6 +2184,7 @@ const ScheduleGrid = ({
         const startMinutes = timeToMinutes(
           formData.startTime || effectiveTimeSlots[selection.startTimeIndex]
         );
+        const valueMinutes = timeToMinutes(value);
 
         if (valueMinutes <= startMinutes) {
           // 종료 시간이 시작 시간보다 작거나 같으면 경고
@@ -2182,11 +2256,16 @@ const ScheduleGrid = ({
       console.log("렌더링할 메모 키:", memoKey, "현재 memoType:", memoType);
 
       // 현재 모드에 해당하는 메모 항목만 표시
-      const memoItems = memos[memoKey]
-        ? typeof memos[memoKey] === "string"
-          ? [memos[memoKey]]
-          : memos[memoKey]
-        : [];
+      const memoData = memos[memoKey];
+      let memoItems = [];
+
+      if (memoData) {
+        if (Array.isArray(memoData)) {
+          memoItems = memoData;
+        } else if (typeof memoData === "string") {
+          memoItems = [memoData];
+        }
+      }
 
       // 각 날짜의 시작 열 계산
       const startCol = dateIndex * (staff.length + 1) + 1;
@@ -2231,17 +2310,27 @@ const ScheduleGrid = ({
                   메모가 없습니다. 새 메모를 추가하세요.
                 </div>
               ) : (
-                memoItems.map((item, idx) => (
-                  <MemoItem key={`memo-item-${dateIndex}-${idx}`}>
-                    <MemoText>{item}</MemoText>
-                    <DeleteButton
-                      onClick={() => handleDeleteMemoItem(memoKey, idx)}
-                      title="삭제"
-                    >
-                      ✕
-                    </DeleteButton>
-                  </MemoItem>
-                ))
+                memoItems.map((item, idx) => {
+                  // 문자열과 객체 모두 처리
+                  const itemContent =
+                    typeof item === "string" ? item : item.content;
+                  const itemId =
+                    typeof item === "object" && item.id
+                      ? item.id
+                      : `memo-item-${dateIndex}-${idx}-${Date.now()}`;
+
+                  return (
+                    <MemoItem key={itemId}>
+                      <MemoText>{itemContent}</MemoText>
+                      <DeleteButton
+                        onClick={() => handleDeleteMemoItem(memoKey, idx)}
+                        title="삭제"
+                      >
+                        ✕
+                      </DeleteButton>
+                    </MemoItem>
+                  );
+                })
               )}
             </MemoContent>
 
@@ -2380,7 +2469,11 @@ const ScheduleGrid = ({
             <Input
               type="text"
               value={
-                selectedAppointment ? selectedAppointment.title : formData.title
+                isEditing
+                  ? formData.title
+                  : selectedAppointment
+                  ? selectedAppointment.title
+                  : formData.title
               }
               onChange={(e) =>
                 setFormData({ ...formData, title: e.target.value })
@@ -2400,7 +2493,9 @@ const ScheduleGrid = ({
                   type="time"
                   step="900" // 15분 간격으로 조정 (기존 60 → 900초)
                   value={
-                    selectedAppointment
+                    isEditing
+                      ? formData.startTime
+                      : selectedAppointment
                       ? selectedAppointment.startTime
                       : formData.startTime ||
                         (selection
@@ -2426,7 +2521,9 @@ const ScheduleGrid = ({
                   type="time"
                   step="900" // 15분 간격으로 조정 (기존 60 → 900초)
                   value={
-                    selectedAppointment
+                    isEditing
+                      ? formData.endTime
+                      : selectedAppointment
                       ? selectedAppointment.endTime
                       : formData.endTime ||
                         (selection
@@ -2451,7 +2548,11 @@ const ScheduleGrid = ({
             <label>참고사항</label>
             <TextArea
               value={
-                selectedAppointment ? selectedAppointment.notes : formData.notes
+                isEditing
+                  ? formData.notes
+                  : selectedAppointment
+                  ? selectedAppointment.notes
+                  : formData.notes
               }
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })

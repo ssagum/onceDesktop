@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 import SideBar from "../components/SideBar";
 import ScheduleGrid from "../components/Schedule/ScheduleGrid";
+import { useUserLevel } from "../utils/UserLevelContext";
 import {
   collection,
   getDocs,
@@ -321,9 +322,17 @@ const WeekTab = styled.button`
   flex: 1;
   margin: 0 3px;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 
   &:hover {
     background-color: ${(props) => (props.isActive ? "#bae6fd" : "#f1f5f9")};
+    border-color: ${(props) => (props.isActive ? "#0ea5e9" : "#cbd5e1")};
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 
   &:focus-visible {
@@ -341,6 +350,7 @@ const WeekTab = styled.button`
 
   .week-number {
     margin-right: 4px;
+    font-weight: ${(props) => (props.isActive ? "700" : "600")};
   }
 
   .date-range {
@@ -362,9 +372,10 @@ const generateTimeSlots = () => {
 
 const Schedule = () => {
   const { pathname } = useLocation();
+  const { department } = useUserLevel();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // 초기값을 true로 설정
   const [displayDates, setDisplayDates] = useState([]);
   const { showToast } = useToast();
 
@@ -373,7 +384,9 @@ const Schedule = () => {
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
-  const [viewMode, setViewMode] = useState("진료"); // 뷰 모드 상태 변경 ("dnd" -> "진료", "board" -> "물리치료")
+  const [viewMode, setViewMode] = useState(
+    department === "물리치료팀" ? "물리치료" : "진료"
+  ); // 부서가 물리치료팀이면 물리치료 모드로 시작
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
 
   const timeSlots = generateTimeSlots();
@@ -521,6 +534,15 @@ const Schedule = () => {
     fetchStaffData();
   }, [showToast]);
 
+  // 부서 정보가 변경될 때 viewMode 업데이트
+  useEffect(() => {
+    if (department === "물리치료팀") {
+      setViewMode("물리치료");
+    } else if (department && department !== "물리치료팀") {
+      setViewMode("진료");
+    }
+  }, [department]);
+
   // 선택된 월의 주 수 계산
   const getWeeksForMonth = () => {
     const weeks = [];
@@ -553,129 +575,134 @@ const Schedule = () => {
 
   const weeks = getWeeksForMonth();
 
-  // 표시할 월~토 날짜 계산
+  // 표시할 월~토 날짜 계산 (초기 렌더링용)
   useEffect(() => {
-    const dates = [];
-    // 현재 날짜가 일요일이면 다음주 월요일부터, 아니면 이번주 월요일부터 시작
-    const dayOfWeek = currentDate.getDay();
-    let weekStart;
+    // 컴포넌트 마운트 시 오늘 날짜 기준으로 주차를 선택하고 날짜 계산
+    const today = new Date();
 
-    if (dayOfWeek === 0) {
-      // 일요일이면 다음 월요일(내일)부터 시작
-      weekStart = addDays(currentDate, 1);
-    } else {
-      // 월~토요일이면 이번주 월요일부터 시작
-      weekStart =
-        dayOfWeek === 1
-          ? currentDate // 월요일이면 현재 날짜가 시작일
-          : addDays(currentDate, -(dayOfWeek - 1)); // 그 외에는 이번주 월요일로 조정
-    }
+    // 오늘 날짜가 속한 주차 찾기
+    const foundWeekIndex = weeks.findIndex(
+      (week) => today >= week.start && today <= week.end
+    );
 
-    // 월요일부터 토요일까지 6일 추가
+    const weekIndex = foundWeekIndex !== -1 ? foundWeekIndex : 0;
+    const weekStartDate = weeks[weekIndex].start;
+
+    // 해당 주차의 날짜 계산 (월~토)
+    const initialDates = [];
     for (let i = 0; i < 6; i++) {
-      dates.push(addDays(weekStart, i));
+      initialDates.push(addDays(weekStartDate, i));
     }
-    setDisplayDates(dates);
-  }, [currentDate]);
 
-  // 월 변경 시 해당 월의 첫 주로 설정
+    // 상태 업데이트
+    setActiveWeek(weekIndex);
+    setCurrentDate(weekStartDate);
+    setDisplayDates(initialDates);
+
+    console.log("컴포넌트 초기화: 오늘 날짜 기준 주차 설정 완료");
+
+    // 이제 초기 주차 설정이 완료되었으므로 fetchAppointments가 처리됨
+  }, []); // 마운트 시 한 번만 실행
+
+  // displayDates가 변경될 때 일정 데이터 가져오기
   useEffect(() => {
-    if (weeks.length > 0) {
-      const newDate = weeks[activeWeek].start;
-      setCurrentDate(newDate);
+    if (displayDates.length > 0) {
+      console.log("displayDates 변경으로 fetchAppointments 호출됨");
+      fetchAppointments();
     }
-  }, [selectedMonth, selectedYear, activeWeek]);
+  }, [displayDates, staffData, viewMode]); // 필요한 의존성만 포함
 
-  // 일정 데이터 가져오기 (Firebase에서 가져오기)
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      setIsLoading(true);
+  // 일정 데이터 가져오기 (Firebase에서 가져오기) - 컴포넌트 레벨에서 선언
+  const fetchAppointments = async () => {
+    setIsLoading(true);
+    console.log("fetchAppointments 함수 호출됨");
 
-      try {
-        // 표시할 날짜 범위의 시작과 끝 계산
-        const startDateStr = format(
-          displayDates[0] || new Date(),
-          "yyyy-MM-dd"
-        );
-        const endDateStr = format(
-          displayDates[displayDates.length - 1] || new Date(),
-          "yyyy-MM-dd"
-        );
+    try {
+      // 표시할 날짜 범위의 시작과 끝 계산
+      const startDateStr = format(displayDates[0] || new Date(), "yyyy-MM-dd");
+      const endDateStr = format(
+        displayDates[displayDates.length - 1] || new Date(),
+        "yyyy-MM-dd"
+      );
 
-        console.log(
-          `예약 조회 기간: ${startDateStr} ~ ${endDateStr}, 현재 모드: ${viewMode}`
-        );
+      console.log(
+        `예약 조회 기간: ${startDateStr} ~ ${endDateStr}, 현재 모드: ${viewMode}`
+      );
+      console.log(
+        "displayDates:",
+        displayDates.map((d) => format(d, "yyyy-MM-dd"))
+      );
 
-        // Firestore에서 데이터 가져오기 - 날짜 범위만 필터링
-        const appointmentsRef = collection(db, "reservations");
-        const q = query(
-          appointmentsRef,
-          where("date", ">=", startDateStr),
-          where("date", "<=", endDateStr)
-        );
+      // Firestore에서 데이터 가져오기 - 날짜 범위만 필터링
+      const appointmentsRef = collection(db, "reservations");
+      const q = query(
+        appointmentsRef,
+        where("date", ">=", startDateStr),
+        where("date", "<=", endDateStr)
+      );
 
-        const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(q);
 
-        // 중복 방지를 위한 Map 사용
-        const appointmentsMap = new Map();
+      // 중복 방지를 위한 Map 사용
+      const appointmentsMap = new Map();
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          // id 필드와 함께 데이터 저장, isHidden이 true가 아닌 것만 저장
-          if (data.isHidden !== true) {
-            // date가 문자열인지 확인하고 필요시 변환
-            const dateStr =
-              typeof data.date === "string"
-                ? data.date
-                : format(data.date.toDate(), "yyyy-MM-dd");
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // id 필드와 함께 데이터 저장, isHidden이 true가 아닌 것만 저장
+        if (data.isHidden !== true) {
+          // date가 문자열인지 확인하고 필요시 변환
+          const dateStr =
+            typeof data.date === "string"
+              ? data.date
+              : format(data.date.toDate(), "yyyy-MM-dd");
 
-            // dateIndex 계산 - 현재 표시 중인 날짜 중 어디에 위치하는지
-            const dateIndex = displayDates.findIndex(
-              (d) => format(d, "yyyy-MM-dd") === dateStr
-            );
+          // dateIndex 계산 - 현재 표시 중인 날짜 중 어디에 위치하는지
+          const dateIndex = displayDates.findIndex(
+            (d) => format(d, "yyyy-MM-dd") === dateStr
+          );
 
-            // 담당자 정보 처리
+          // 담당자 정보 처리 - 색상 일관성 유지
+          let staffColor = data.staffColor || "#999";
+
+          // 기존 색상이 없거나 담당자가 변경된 경우에만 새 색상 할당
+          if (!staffColor || staffColor === "#999") {
             const currentStaff =
               data.type === "물리치료" ? staffData.물리치료 : staffData.진료;
 
-            let staffColor = "#999";
             const staffMember = currentStaff.find((s) => s.id === data.staffId);
             if (staffMember) {
               staffColor = staffMember.color;
             }
-
-            // 일정 생성 및 로드 시 데이터 포맷 일관성 유지
-            const appointmentWithDateIndex = {
-              ...data,
-              id: doc.id,
-              dateIndex: dateIndex >= 0 ? dateIndex : 0,
-              date: dateStr,
-              staffColor: staffColor,
-              // type 필드가 없으면 기본값으로 설정
-              type: data.type || "예약",
-            };
-
-            // Map에 저장 (ID를 키로 사용해 중복 방지)
-            appointmentsMap.set(doc.id, appointmentWithDateIndex);
           }
-        });
 
-        // Map에서 배열로 변환하여 상태 업데이트
-        const appointmentsArray = Array.from(appointmentsMap.values());
-        console.log(`조회된 일정 수: ${appointmentsArray.length}`);
-        setAppointments(appointmentsArray);
-      } catch (error) {
-        console.error("일정 데이터 가져오기 오류:", error);
-        showToast("일정 데이터를 불러오는 중 오류가 발생했습니다.", "error");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+          // 일정 생성 및 로드 시 데이터 포맷 일관성 유지
+          const appointmentWithDateIndex = {
+            ...data,
+            id: doc.id,
+            dateIndex: dateIndex >= 0 ? dateIndex : 0,
+            date: dateStr,
+            staffColor: staffColor,
+            // type 필드가 없으면 기본값으로 설정
+            type: data.type || "예약",
+          };
 
-    if (displayDates.length > 0) {
-      fetchAppointments();
+          // Map에 저장 (ID를 키로 사용해 중복 방지)
+          appointmentsMap.set(doc.id, appointmentWithDateIndex);
+        }
+      });
+
+      // Map에서 배열로 변환하여 상태 업데이트
+      const appointmentsArray = Array.from(appointmentsMap.values());
+      console.log(`조회된 일정 수: ${appointmentsArray.length}`);
+      setAppointments(appointmentsArray);
+    } catch (error) {
+      console.error("일정 데이터 가져오기 오류:", error);
+      showToast("일정 데이터를 불러오는 중 오류가 발생했습니다.", "error");
+    } finally {
+      // 항상 로딩 완료 처리
+      setIsLoading(false);
     }
-  }, [displayDates, staffData, showToast, viewMode]);
+  };
 
   // 이전 주로 이동
   const handlePrevDays = () => {
@@ -731,15 +758,100 @@ const Schedule = () => {
 
   // 월 변경 핸들러
   const handleMonthChange = (month, year) => {
+    // 로딩 상태 표시 시작
+    setIsLoading(true);
+
     setSelectedMonth(month);
     setSelectedYear(year);
-    setActiveWeek(0); // 첫 주차로 리셋
+
+    // 이 월의 주차 계산
+    const newWeeks = [];
+    const firstDay = startOfMonth(new Date(year, month, 1));
+    const lastDay = endOfMonth(new Date(year, month, 1));
+
+    // 첫째 주 시작일이 월요일이 아니면 이전 월의 날짜 포함
+    let startOfFirstWeek = startOfWeek(firstDay, { weekStartsOn: 1 }); // 월요일부터 시작
+
+    let currentDate = startOfFirstWeek;
+    let weekNumber = 0;
+
+    while (currentDate <= lastDay) {
+      const weekEnd = addDays(currentDate, 6);
+
+      newWeeks.push({
+        weekNumber: weekNumber,
+        start: new Date(currentDate),
+        end: new Date(weekEnd),
+        label: `${weekNumber + 1}주`,
+        dateRange: `${format(currentDate, "M/d")}-${format(weekEnd, "M/d")}`,
+      });
+
+      currentDate = addDays(currentDate, 7);
+      weekNumber++;
+    }
+
+    // 첫 주차 선택 (인덱스 0)
+    setActiveWeek(0);
+
+    // 첫 주차의 날짜 계산 (월~토)
+    if (newWeeks.length > 0) {
+      const firstWeekStart = newWeeks[0].start;
+      console.log(
+        "첫 주차의 시작 날짜로 변경:",
+        format(firstWeekStart, "yyyy-MM-dd")
+      );
+
+      // 해당 주차의 날짜 계산 (월~토)
+      const newDates = [];
+      for (let i = 0; i < 6; i++) {
+        newDates.push(addDays(firstWeekStart, i)); // 월요일부터 토요일까지
+      }
+
+      // 상태 업데이트
+      setCurrentDate(firstWeekStart);
+      setDisplayDates(newDates); // 직접 displayDates 설정
+    }
+
     setShowMonthDropdown(false);
   };
 
   // 주차 변경 핸들러
   const handleWeekChange = (weekIndex) => {
-    setActiveWeek(weekIndex);
+    // 로딩 상태 표시 시작
+    setIsLoading(true);
+
+    console.log(`주차 변경 시도: ${activeWeek + 1}주차 → ${weekIndex + 1}주차`);
+
+    // 선택한 주차의 시작 날짜
+    if (weeks.length > weekIndex) {
+      // 선택한 주차의 시작일
+      const weekStartDate = weeks[weekIndex].start;
+
+      console.log(
+        `주차 변경: ${weekIndex + 1}주차 선택, 시작일:`,
+        format(weekStartDate, "yyyy-MM-dd")
+      );
+
+      // 해당 주차의 날짜 계산 (월~토)
+      const newDates = [];
+      for (let i = 0; i < 6; i++) {
+        newDates.push(addDays(weekStartDate, i)); // 월요일부터 토요일까지
+      }
+
+      // 상태 업데이트
+      setActiveWeek(weekIndex);
+      setCurrentDate(weekStartDate); // currentDate 업데이트
+      setDisplayDates(newDates); // 직접 displayDates 설정
+
+      console.log(
+        `새 날짜 범위: ${format(newDates[0], "yyyy-MM-dd")} ~ ${format(
+          newDates[newDates.length - 1],
+          "yyyy-MM-dd"
+        )}`
+      );
+
+      // 예약 데이터는 displayDates 변경 감지 useEffect에서 자동으로 로드됨
+    }
   };
 
   // 월 드롭다운 토글
@@ -807,7 +919,8 @@ const Schedule = () => {
 
       console.log("생성된 일정:", appointmentWithId);
 
-      // 로컬 상태에는 업데이트하지 않음 (ScheduleGrid에서 수행)
+      // 데이터 새로고침
+      await fetchAppointments();
 
       // 성공 메시지
       showToast("일정이 추가되었습니다.", "success");
@@ -834,6 +947,10 @@ const Schedule = () => {
       const appointmentData = {
         ...updatedAppointment,
         staffName: staffMember ? staffMember.name : "알 수 없음",
+        // 색상 정보 유지 또는 업데이트
+        staffColor:
+          updatedAppointment.staffColor ||
+          (staffMember ? staffMember.color : "#999"),
         updatedAt: new Date(),
       };
 
@@ -847,10 +964,17 @@ const Schedule = () => {
       );
 
       setAppointments(updatedAppointments);
+
+      // 데이터 새로고침
+      await fetchAppointments();
+
       showToast("일정이 수정되었습니다.", "success");
+
+      return appointmentData;
     } catch (error) {
       console.error("일정 수정 중 오류 발생:", error);
       showToast("일정 수정에 실패했습니다.", "error");
+      return null;
     }
   };
 
@@ -986,12 +1110,20 @@ const Schedule = () => {
                       <WeekTab
                         key={`week-${index}`}
                         isActive={index === activeWeek}
-                        onClick={() => handleWeekChange(index)}
+                        onClick={(e) => {
+                          e.preventDefault(); // 이벤트 기본 동작 방지
+                          e.stopPropagation(); // 이벤트 버블링 방지
+                          console.log(
+                            `주차 탭 클릭: ${index + 1}주차 (${week.dateRange})`
+                          );
+                          handleWeekChange(index);
+                        }}
                         role="tab"
                         aria-selected={index === activeWeek}
                         id={`week-tab-${index}`}
                         aria-controls={`week-panel-${index}`}
                         title={week.dateRange}
+                        style={{ pointerEvents: "auto", cursor: "pointer" }}
                       >
                         <span className="week-number">{week.label}</span>
                         <span className="date-range">{week.dateRange}</span>
