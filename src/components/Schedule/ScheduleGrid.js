@@ -1,6 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import styled, { keyframes } from "styled-components";
-import { format } from "date-fns";
+import { format, parseISO, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   collection,
@@ -8,6 +14,10 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDocs,
+  query,
+  setDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -579,6 +589,119 @@ const SelectedCell = styled.div`
   border-radius: 4px;
 `;
 
+// 메모 관련 스타일 컴포넌트 수정 - 기울기 제거
+const MemoOverlay = styled.div`
+  position: relative;
+  background-color: #fff9c4;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #f9a825;
+  // transform: rotate(1deg); - 주석 처리 대신 완전히 제거
+`;
+
+const MemoHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f9a825;
+`;
+
+const MemoTitle = styled.div`
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #5d4037;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const MemoCount = styled.span`
+  background-color: #f9a825;
+  color: #5d4037;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+`;
+
+const MemoContent = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  min-height: 50px;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #f9a825;
+    border-radius: 4px;
+  }
+`;
+
+const MemoItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(249, 168, 37, 0.3);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+`;
+
+const MemoText = styled.div`
+  flex: 1;
+  font-size: 0.9rem;
+  color: #5d4037;
+  word-break: break-word;
+  line-height: 1.4;
+`;
+
+// DeleteButton 스타일 수정 - 노란색으로 복원
+const DeleteButton = styled.button`
+  background: none;
+  border: none;
+  color: #f9a825;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 8px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+
+  &:hover {
+    opacity: 1;
+    color: #d84315;
+  }
+`;
+
+const MemoInput = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
 const ScheduleGrid = ({
   dates = [],
   timeSlots = [],
@@ -587,6 +710,7 @@ const ScheduleGrid = ({
   onAppointmentCreate,
   onAppointmentUpdate,
   onAppointmentDelete,
+  viewMode = "진료", // viewMode 프롭 추가, 기본값은 "진료"
 }) => {
   const gridRef = useRef(null);
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -599,6 +723,15 @@ const ScheduleGrid = ({
     type: "예약",
   });
   const [editingAppointment, setEditingAppointment] = useState(null);
+
+  // 메모 관련 상태 추가 - 구조 변경
+  const [memos, setMemos] = useState({});
+  const [newMemoItem, setNewMemoItem] = useState("");
+  const [activeMemoDateIndex, setActiveMemoDateIndex] = useState(0);
+
+  // 메모 유형 관련 상태 제거하고 viewMode를 사용
+  const memoType = viewMode === "board" ? "물리치료" : "진료";
+  const memoTypes = ["진료", "물리치료"];
 
   // 선택 관련 상태
   const [selection, setSelection] = useState(null);
@@ -1228,11 +1361,19 @@ const ScheduleGrid = ({
   // 변수명 변경하여 중복 방지
   const activeDragArea = getDragArea();
 
-  // 셀 렌더링 함수 수정
+  // 셀 렌더링 함수 수정 - "메모"를 "21:30"으로 변경
   const renderTimeGridCells = () => {
     let cells = [];
 
+    // 21:00 시간대 인덱스 찾기
+    const timeIndex21 = effectiveTimeSlots.findIndex(
+      (time) => time === "21:00"
+    );
+
     effectiveTimeSlots.forEach((time, timeIndex) => {
+      // 특정 시간대 여부 확인
+      const is2130 = timeIndex21 !== -1 && timeIndex === timeIndex21 + 1;
+
       dates.forEach((date, dateIndex) => {
         const isToday =
           format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
@@ -1245,7 +1386,7 @@ const ScheduleGrid = ({
         const timeMinute = parseInt(time.split(":")[1], 10);
         const timeInMinutes = timeHour * 60 + timeMinute;
 
-        // 요일별 표시 시간 제한
+        // 요일별 표시 시간 제한 (시간 표시만 제한하고 드래그는 가능하도록)
         let shouldShowTime = true;
 
         if (
@@ -1253,7 +1394,7 @@ const ScheduleGrid = ({
           dayOfWeekNumber === 3 ||
           dayOfWeekNumber === 5
         ) {
-          // 월수금: 19시 30분까지
+          // 월수금: 19시까지
           shouldShowTime = timeInMinutes <= 19 * 60;
         } else if (dayOfWeekNumber === 2 || dayOfWeekNumber === 4) {
           // 화목: 20시까지
@@ -1266,7 +1407,7 @@ const ScheduleGrid = ({
           shouldShowTime = false;
         }
 
-        // 영업 시간 외인지 확인
+        // 영업 시간 외인지 확인 (UI 표시 용도로만 사용)
         const isOutOfBusinessHours = !shouldShowTime || dayOfWeekNumber === 0;
 
         // 휴게시간 로직 변경 - 행 인덱스로 판단
@@ -1275,9 +1416,11 @@ const ScheduleGrid = ({
           dayOfWeekNumber !== 0 &&
           dayOfWeekNumber !== 6; // 일요일과 토요일 제외
 
-        // 특정 행에 대한 시간 표시 조정
+        // 특정 시간대 (21:30)인 경우 "메모" 대신 "21:30" 표시
         let displayTime = time;
-        if (timeIndex === 8) {
+        if (is2130) {
+          displayTime = "21:30"; // "메모" 대신 "21:30"으로 변경
+        } else if (timeIndex === 8) {
           // 9번째 행 (0-based index)
           displayTime = "13:00";
         } else if (timeIndex === 11) {
@@ -1314,15 +1457,16 @@ const ScheduleGrid = ({
               overflow: "hidden",
             }}
           >
-            {shouldShowTime ? displayTime : ""}
+            {shouldShowTime ? displayTime : displayTime}
           </Cell>
         );
 
-        // 직원 셀 추가
+        // 직원 셀 추가 - 인원별 메모 제거
         staff.forEach((person, staffIndex) => {
           const colIndex = startCol + staffIndex + 1;
           const cellKey = `cell-${dateIndex}-${staffIndex}-${timeIndex}`;
-          const canInteract = !isOutOfBusinessHours && !isBreakTimeForDay;
+          // 영업 시간 외여도 드래그는 가능하도록 변경, 휴게시간은 예외
+          const canInteract = !isBreakTimeForDay;
 
           cells.push(
             <Cell
@@ -1342,7 +1486,7 @@ const ScheduleGrid = ({
                   : isToday
                   ? "#fafeff"
                   : undefined,
-                cursor: isOutOfBusinessHours ? "not-allowed" : "pointer",
+                cursor: isBreakTimeForDay ? "not-allowed" : "pointer",
                 opacity: isOutOfBusinessHours ? 0.5 : 1,
                 minWidth: "150px",
                 height: "40px",
@@ -1350,12 +1494,15 @@ const ScheduleGrid = ({
               }}
               className="schedule-cell"
               onMouseDown={(e) =>
+                canInteract &&
                 handleMouseDown(e, dateIndex, staffIndex, timeIndex)
               }
               onMouseMove={(e) =>
+                canInteract &&
                 handleMouseMove(e, dateIndex, staffIndex, timeIndex)
               }
               onMouseUp={(e) =>
+                canInteract &&
                 handleMouseUp(e, dateIndex, staffIndex, timeIndex)
               }
             />
@@ -1366,6 +1513,154 @@ const ScheduleGrid = ({
 
     return cells;
   };
+
+  // 메모 변경 핸들러
+  const handleMemoChange = (memoKey, value) => {
+    setMemos((prevMemos) => ({
+      ...prevMemos,
+      [memoKey]: value,
+    }));
+  };
+
+  // 메모 저장 함수
+  const saveMemo = async (memoKey) => {
+    if (!memos[memoKey] || memos[memoKey].trim() === "") return;
+
+    try {
+      // 메모 키에서 날짜와 직원 ID 추출
+      const [, date, staffId] = memoKey.split("-");
+
+      // Firestore에 저장
+      const memoRef = doc(db, "memos", memoKey);
+      await setDoc(memoRef, {
+        date,
+        staffId,
+        content: memos[memoKey],
+        updatedAt: new Date(),
+      });
+
+      console.log(`메모 저장됨: ${memoKey}`, memos[memoKey]);
+    } catch (error) {
+      console.error("메모 저장 오류:", error);
+    }
+  };
+
+  // 메모 항목 추가 함수
+  const handleAddMemoItem = async (memoKey, content) => {
+    if (!content || content.trim() === "") return;
+
+    try {
+      // 기존 메모 항목 가져오기
+      let currentItems = memos[memoKey] || [];
+
+      // 문자열이면 배열로 변환
+      if (typeof currentItems === "string") {
+        currentItems = [currentItems];
+      }
+
+      // 새 항목 추가
+      const updatedItems = [...currentItems, content.trim()];
+
+      // 상태 업데이트
+      setMemos((prevMemos) => ({
+        ...prevMemos,
+        [memoKey]: updatedItems,
+      }));
+
+      // Firestore에 저장
+      const [, date] = memoKey.split("-");
+      const memoRef = doc(db, "memos", memoKey);
+      await setDoc(memoRef, {
+        date,
+        content: updatedItems,
+        updatedAt: new Date(),
+      });
+
+      console.log(`메모 항목 추가됨: ${memoKey}`, content);
+    } catch (error) {
+      console.error("메모 항목 추가 오류:", error);
+    }
+  };
+
+  // 메모 항목 삭제 함수
+  const handleDeleteMemoItem = async (memoKey, itemIndex) => {
+    try {
+      // 기존 메모 항목 가져오기
+      let currentItems = memos[memoKey] || [];
+
+      // 문자열이면 배열로 변환
+      if (typeof currentItems === "string") {
+        currentItems = [currentItems];
+      }
+
+      // 항목 삭제
+      const updatedItems = currentItems.filter(
+        (_, index) => index !== itemIndex
+      );
+
+      // 상태 업데이트
+      setMemos((prevMemos) => ({
+        ...prevMemos,
+        [memoKey]: updatedItems,
+      }));
+
+      // Firestore에 저장
+      const [, date] = memoKey.split("-");
+      const memoRef = doc(db, "memos", memoKey);
+
+      if (updatedItems.length === 0) {
+        // 항목이 없으면 문서 삭제
+        await deleteDoc(memoRef);
+        console.log(`메모 문서 삭제됨: ${memoKey}`);
+      } else {
+        // 항목이 남아있으면 업데이트
+        await setDoc(memoRef, {
+          date,
+          content: updatedItems,
+          updatedAt: new Date(),
+        });
+        console.log(`메모 항목 삭제됨: ${memoKey}`, itemIndex);
+      }
+    } catch (error) {
+      console.error("메모 항목 삭제 오류:", error);
+    }
+  };
+
+  // 초기 메모 로드 함수 수정
+  useEffect(() => {
+    const loadMemos = async () => {
+      try {
+        // 각 날짜와 메모 유형에 대해 메모 로드
+        let loadedMemos = {};
+
+        for (const date of dates) {
+          const formattedDate = format(date, "yyyy-MM-dd");
+
+          // 각 메모 유형에 대해 로드
+          for (const type of memoTypes) {
+            const memoKey = `memo-${formattedDate}-${type}`;
+
+            // Firestore에서 메모 데이터 조회
+            const memoRef = doc(db, "memos", memoKey);
+            const memoDoc = await getDoc(memoRef);
+
+            if (memoDoc.exists()) {
+              const memoData = memoDoc.data();
+              loadedMemos[memoKey] = memoData.content;
+            }
+          }
+        }
+
+        setMemos(loadedMemos);
+      } catch (error) {
+        console.error("메모 로드 오류:", error);
+      }
+    };
+
+    if (dates.length > 0) {
+      loadMemos();
+    }
+  }, [dates, memoTypes]);
 
   // 일정 렌더링 함수 수정 - 시간에 비례하여 표시
   const renderAppointments = () => {
@@ -1800,6 +2095,136 @@ const ScheduleGrid = ({
   const startTimeInputRef = useRef(null);
   const endTimeInputRef = useRef(null);
 
+  // 메모 영역 렌더링 함수 수정 - 시간 열 침범 문제 해결
+  const renderMemoOverlays = () => {
+    if (dates.length === 0) return null;
+
+    // 22:00 시간대 인덱스 찾기
+    const timeIndex22 = effectiveTimeSlots.findIndex(
+      (time) => time === "22:00"
+    );
+    if (timeIndex22 === -1) return null;
+
+    return dates.map((date, dateIndex) => {
+      const formattedDate = format(date, "yyyy-MM-dd");
+      // 현재 뷰 모드에 맞는 메모 키 생성
+      const memoKey = `memo-${formattedDate}-${memoType}`;
+
+      // 현재 모드에 해당하는 메모 항목만 표시
+      const memoItems = memos[memoKey]
+        ? typeof memos[memoKey] === "string"
+          ? [memos[memoKey]]
+          : memos[memoKey]
+        : [];
+
+      // 각 날짜의 시작 열 계산
+      const startCol = dateIndex * (staff.length + 1) + 1;
+
+      return (
+        <Cell
+          key={`memo-cell-${dateIndex}`}
+          style={{
+            gridColumn: `${startCol + 1} / span ${staff.length}`, // 시간 열 다음부터 모든 staff 열 차지
+            gridRow: timeIndex22 + 1, // 22:00 행에 정확히 배치
+            border: "none",
+            padding: "0",
+            position: "relative",
+            height: "240px", // 탭 UI 제거로 높이 다시 감소
+            overflow: "visible",
+            zIndex: 50,
+          }}
+        >
+          <MemoOverlay>
+            <MemoHeader>
+              <MemoTitle>
+                {format(date, "M/d")} (
+                {["일", "월", "화", "수", "목", "금", "토"][date.getDay()]})
+                {viewMode === "board"
+                  ? " 물리치료 시트 공유 메모"
+                  : " 진료 시트 공유 메모"}
+              </MemoTitle>
+              <MemoCount>{memoItems.length}개 항목</MemoCount>
+            </MemoHeader>
+
+            <MemoContent>
+              {memoItems.length === 0 ? (
+                <div
+                  style={{
+                    padding: "10px 0",
+                    textAlign: "center",
+                    color: "#5D4037",
+                    fontSize: "0.9rem",
+                    opacity: 0.7,
+                  }}
+                >
+                  메모가 없습니다. 새 메모를 추가하세요.
+                </div>
+              ) : (
+                memoItems.map((item, idx) => (
+                  <MemoItem key={`memo-item-${dateIndex}-${idx}`}>
+                    <MemoText>{item}</MemoText>
+                    <DeleteButton
+                      onClick={() => handleDeleteMemoItem(memoKey, idx)}
+                      title="삭제"
+                    >
+                      ✕
+                    </DeleteButton>
+                  </MemoItem>
+                ))
+              )}
+            </MemoContent>
+
+            <MemoInput>
+              <input
+                type="text"
+                placeholder="새 메모 항목 추가..."
+                value={dateIndex === activeMemoDateIndex ? newMemoItem : ""}
+                onChange={(e) => {
+                  setActiveMemoDateIndex(dateIndex);
+                  setNewMemoItem(e.target.value);
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && newMemoItem.trim()) {
+                    handleAddMemoItem(memoKey, newMemoItem);
+                    setNewMemoItem("");
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "6px 8px",
+                  border: "1px solid #F9A825",
+                  borderRadius: "4px",
+                  fontSize: "0.85rem",
+                  backgroundColor: "rgba(255, 255, 255, 0.7)",
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (newMemoItem.trim()) {
+                    handleAddMemoItem(memoKey, newMemoItem);
+                    setNewMemoItem("");
+                  }
+                }}
+                style={{
+                  padding: "6px 10px",
+                  backgroundColor: "#F9A825",
+                  color: "#5D4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: "bold",
+                }}
+              >
+                추가
+              </button>
+            </MemoInput>
+          </MemoOverlay>
+        </Cell>
+      );
+    });
+  };
+
   return (
     <GridContainer ref={gridRef}>
       <HeaderContainer $dates={dates} $staff={staff}>
@@ -1811,6 +2236,7 @@ const ScheduleGrid = ({
         {renderAppointments()}
         {renderSelectionArea()}
         {renderSelectedCell()}
+        {renderMemoOverlays()}
       </GridContent>
       {showForm && (
         <AppointmentForm

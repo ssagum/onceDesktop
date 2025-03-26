@@ -17,6 +17,9 @@ import {
   where,
   orderBy,
   getDocs,
+  doc,
+  setDoc,
+  getDoc,
 } from "firebase/firestore";
 import {
   BarChart,
@@ -49,6 +52,7 @@ import {
   isAfter,
 } from "date-fns";
 import { calculateTotalAccumulatedDays } from "../utils/vacationUtils";
+import { useToast } from "../contexts/ToastContext";
 
 const MainZone = styled.div``;
 
@@ -278,6 +282,13 @@ const StaffManagement = () => {
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 진료 및 물리치료 담당자 관리를 위한 상태 추가
+  const [providers, setProviders] = useState({ 진료: [], 물리치료: [] });
+  const [newProvider, setNewProvider] = useState("");
+  const [providerType, setProviderType] = useState("진료");
+  const [isEditingProviders, setIsEditingProviders] = useState(false);
+  const { showToast } = useToast();
+
   // 부서 필터 목록
   const departments = [
     "원장팀",
@@ -287,6 +298,65 @@ const StaffManagement = () => {
     "영상의학팀",
     "경영지원팀",
   ];
+
+  // Firebase에서 담당자 정보 가져오기
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const settingDocRef = doc(db, "setting", "providers");
+        const settingDoc = await getDoc(settingDocRef);
+
+        if (settingDoc.exists()) {
+          const data = settingDoc.data();
+          setProviders({
+            진료: data.진료 || [],
+            물리치료: data.물리치료 || [],
+          });
+        } else {
+          console.error("Providers 문서가 존재하지 않습니다");
+        }
+      } catch (error) {
+        console.error("담당자 정보를 가져오는 중 오류 발생:", error);
+      }
+    };
+
+    fetchProviders();
+  }, []);
+
+  // 담당자 추가
+  const handleAddProvider = () => {
+    if (!newProvider.trim()) return;
+
+    const updatedProviders = { ...providers };
+    updatedProviders[providerType] = [
+      ...updatedProviders[providerType],
+      newProvider.trim(),
+    ];
+    setProviders(updatedProviders);
+    setNewProvider("");
+  };
+
+  // 담당자 제거
+  const handleRemoveProvider = (type, name) => {
+    const updatedProviders = { ...providers };
+    updatedProviders[type] = updatedProviders[type].filter(
+      (provider) => provider !== name
+    );
+    setProviders(updatedProviders);
+  };
+
+  // 담당자 정보 저장
+  const handleSaveProviders = async () => {
+    try {
+      const settingDocRef = doc(db, "setting", "providers");
+      await setDoc(settingDocRef, providers, { merge: true });
+      showToast("담당자 정보가 저장되었습니다.", "success");
+      setIsEditingProviders(false);
+    } catch (error) {
+      console.error("담당자 정보 저장 중 오류 발생:", error);
+      showToast("담당자 정보 저장에 실패했습니다.", "error");
+    }
+  };
 
   // Firebase에서 사용자 데이터 가져오기
   useEffect(() => {
@@ -497,6 +567,182 @@ const StaffManagement = () => {
 
   return (
     <div className="flex flex-col w-full bg-white h-full p-5">
+      {/* 진료 및 물리치료 담당자 관리 섹션 */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold text-blue-800">
+            예약 시트 인력 관리
+          </h3>
+          <div>
+            {isEditingProviders ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveProviders}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium"
+                >
+                  저장하기
+                </button>
+                <button
+                  onClick={() => setIsEditingProviders(false)}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded text-sm font-medium"
+                >
+                  취소
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsEditingProviders(true)}
+                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded text-sm font-medium"
+              >
+                편집하기
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isEditingProviders ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-5">
+              <div className="bg-white p-3 rounded-md border border-blue-100">
+                <h4 className="font-medium text-blue-900 mb-2">진료 담당자</h4>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {providers.진료.map((name, index) => (
+                    <div
+                      key={`doctor-${index}`}
+                      className="flex items-center bg-blue-100 px-2 py-1 rounded"
+                    >
+                      <span className="mr-1">{name}</span>
+                      <button
+                        onClick={() => handleRemoveProvider("진료", name)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white p-3 rounded-md border border-blue-100">
+                <h4 className="font-medium text-blue-900 mb-2">
+                  물리치료 담당자
+                </h4>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {providers.물리치료.map((name, index) => (
+                    <div
+                      key={`therapist-${index}`}
+                      className="flex items-center bg-blue-100 px-2 py-1 rounded"
+                    >
+                      <span className="mr-1">{name}</span>
+                      <button
+                        onClick={() => handleRemoveProvider("물리치료", name)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 mt-4">
+              <select
+                value={providerType}
+                onChange={(e) => setProviderType(e.target.value)}
+                className="border rounded-md px-3 py-1.5"
+              >
+                <option value="진료">진료</option>
+                <option value="물리치료">물리치료</option>
+              </select>
+
+              <input
+                type="text"
+                value={newProvider}
+                onChange={(e) => setNewProvider(e.target.value)}
+                placeholder="담당자 이름 입력"
+                className="border rounded-md px-3 py-1.5 flex-1"
+              />
+
+              <button
+                onClick={handleAddProvider}
+                className="bg-blue-600 text-white px-3 py-1.5 rounded-md"
+              >
+                추가
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-5">
+            <div className="bg-white p-3 rounded-md border border-blue-100">
+              <h4 className="font-medium text-blue-900 mb-2">진료 담당자</h4>
+              <div className="flex flex-wrap gap-2">
+                {providers.진료.length > 0 ? (
+                  providers.진료.map((name, index) => (
+                    <span
+                      key={`doctor-${index}`}
+                      className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                    >
+                      {name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-500 text-sm">
+                    등록된 담당자가 없습니다
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-md border border-blue-100">
+              <h4 className="font-medium text-blue-900 mb-2">
+                물리치료 담당자
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {providers.물리치료.length > 0 ? (
+                  providers.물리치료.map((name, index) => (
+                    <span
+                      key={`therapist-${index}`}
+                      className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                    >
+                      {name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-500 text-sm">
+                    등록된 담당자가 없습니다
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 검색 영역 */}
       <div className="flex flex-row w-full items-center justify-between mb-4">
         <div className="relative w-[400px]">
@@ -535,7 +781,7 @@ const StaffManagement = () => {
             index % 2 === 0 ? "bg-gray-100" : "bg-white"
           }
           renderRow={renderStaffRow}
-          itemsPerPage={8}
+          itemsPerPage={6}
           emptyRowHeight="60px"
           onRowClick={(row) => {
             setSelectedStaff(row);
@@ -803,7 +1049,7 @@ const RevenueDetailModal = ({ isVisible, setIsVisible, data }) => {
               index % 2 === 0 ? "bg-gray-100" : "bg-white"
             }
             renderRow={getActiveRenderRow()}
-            itemsPerPage={10}
+            itemsPerPage={6}
             emptyRowHeight="60px"
           />
         </div>
@@ -2245,7 +2491,6 @@ const Management = () => {
               </ToggleOption>
             </ToggleContainer>
           </div>
-
           {/* 현재 선택된 모드에 따른 컴포넌트 렌더링 */}
           <div className="flex-1 overflow-auto">
             {viewMode === "staff" ? <StaffManagement /> : <RevenueManagement />}
