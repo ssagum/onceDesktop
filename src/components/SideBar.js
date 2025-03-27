@@ -108,12 +108,12 @@ export default function SideBar() {
         <PCAllocation />
         <IndexZone className="flex flex-col px-[10px] items-center">
           <div className="w-full bg-[#162D66] h-[3px] rounded-2xl mb-[50px]" />
-          <Link to="/">
+          {/* <Link to="/">
             <RenderIndex
               indexValue="홈"
               nowURL={nowURL === "/" ? "홈" : nowURL}
             />
-          </Link>
+          </Link> */}
           <Link to="/notice">
             <RenderIndex
               indexValue="게시판"
@@ -168,14 +168,14 @@ export default function SideBar() {
               nowURL={nowURL === "/parking" ? "주차등록" : nowURL}
             />
           </Link>
-          {isHospitalOwner(userLevelData) && (
+          {/* {isHospitalOwner(userLevelData) && (
             <Link to="/management">
               <RenderIndex
                 indexValue="병원현황"
                 nowURL={nowURL === "/management" ? "병원현황" : nowURL}
               />
             </Link>
-          )}
+          )} */}
         </IndexZone>
         <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
           <span className="text-onceGray text-once18">

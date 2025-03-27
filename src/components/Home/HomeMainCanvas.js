@@ -55,6 +55,8 @@ import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
 import { getUnreadMessageCount } from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
+import { isHospitalOwner } from "../../utils/permissionUtils";
+import ManagementModal from "../Management/ManagementModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -78,7 +80,7 @@ const Square = ({ title, unreadCount = 0 }) => {
           <img src={plus} alt="Logo" className="w-[40px]" />
         )}
         {title === "업무추가" && (
-          <img src={task} alt="Logo" className="w-[40px]" />
+          <img src={task} alt="Logo" className="w-[34px]" />
         )}
         {title === "비품신청" && (
           <img src={form} alt="Logo" className="w-[40px]" />
@@ -96,7 +98,7 @@ const Square = ({ title, unreadCount = 0 }) => {
           <img src={bulb} alt="Logo" className="w-[40px]" />
         )}
         {title === "병원현황" && (
-          <img src={board} alt="Logo" className="w-[40px]" />
+          <img src={board} alt="Logo" className="w-[36px]" />
         )}
         {title === "채 팅" && (
           <img src={chatting} alt="Logo" className="w-[40px]" />
@@ -140,6 +142,7 @@ export default function HomeMainCanvas() {
     useState(false);
   const [requestStatusModalTab, setRequestStatusModalTab] =
     useState("vacation");
+  const [managementModalVisible, setManagementModalVisible] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -667,7 +670,7 @@ export default function HomeMainCanvas() {
                 </button>
               </div>
               <div className="w-[240px] h-[240px] flex-col flex justify-between">
-                {false ? (
+                {isHospitalOwner(userLevelData) ? (
                   <div className="w-[240px] flex flex-row justify-between">
                     <Square title={"공지등록"} />
                     <Square title={"업무추가"} />
@@ -686,9 +689,15 @@ export default function HomeMainCanvas() {
                   <div onClick={openTimerWindow}>
                     <Square title={"타이머"} />
                   </div>
-                  <div onClick={() => openRequestStatusModal("request")}>
-                    <Square title={"요청하기"} />
-                  </div>
+                  {isHospitalOwner(userLevelData) ? (
+                    <div onClick={() => setManagementModalVisible(true)}>
+                      <Square title={"병원현황"} />
+                    </div>
+                  ) : (
+                    <div onClick={() => openRequestStatusModal("request")}>
+                      <Square title={"요청하기"} />
+                    </div>
+                  )}
                 </div>
               </div>
               <CallModal
@@ -729,6 +738,12 @@ export default function HomeMainCanvas() {
         isVisible={requestStatusModalVisible}
         setIsVisible={setRequestStatusModalVisible}
         initialTab={requestStatusModalTab}
+      />
+
+      {/* 병원 현황 모달 */}
+      <ManagementModal
+        isVisible={managementModalVisible}
+        setIsVisible={setManagementModalVisible}
       />
     </div>
   );

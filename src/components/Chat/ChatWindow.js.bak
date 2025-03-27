@@ -923,9 +923,10 @@ const highlightMentions = (text) => {
 const SecretModeIcon = styled.div`
   font-size: 20px;
   cursor: pointer;
-  margin-right: 5px;
+  margin-right: 15px;
   opacity: 0.7;
   transition: opacity 0.2s;
+
   &:hover {
     opacity: 1;
   }
@@ -989,40 +990,6 @@ const ModalButton = styled.button`
   }
 `;
 
-// 로딩 화면 컴포넌트 추가
-const LoadingOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #f5f6f8;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 99999; /* z-index 값을 극단적으로 높게 설정 */
-  opacity: 1; /* 항상 완전 불투명하게 설정 */
-  transition: none; /* 애니메이션 효과 제거 */
-`;
-
-const LoadingSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e0e0e0;
-  border-top: 4px solid #304ffd;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
 const ChatWindow = () => {
   const { userLevelData, isLoggedIn } = useUserLevel();
   const [chatRooms, setChatRooms] = useState([]);
@@ -1080,56 +1047,24 @@ const ChatWindow = () => {
   // 창 최소화/복원 감지
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // 페이지가 보이지 않게 되면 (최소화, 작업표시줄로 이동 등)
+      // 페이지가 보이지 않게 되면 (최소화 등)
       if (document.hidden) {
         isVisibleRef.current = false;
-
-        // 시크릿 모드였다면 즉시 채팅방에서 리스트로 돌아감
-        if (secretMode) {
-          console.log("앱 최소화: 시크릿 모드 감지, 로딩 화면 표시");
-          // 먼저 로딩 화면 표시 - 확실하게 우선 적용
-          setLoading(true);
-
-          // 작은 지연 후 상태 변경 (로딩이 확실히 적용된 후)
-          setTimeout(() => {
-            console.log("앱 최소화: 채팅방 상태 초기화 및 시크릿 모드 해제");
-            // 구독 정리
-            if (messageUnsubscribe) {
-              messageUnsubscribe();
-              setMessageUnsubscribe(null);
-            }
-
-            // 채팅방 상태 초기화
-            setMessages([]);
-            setSelectedRoom(null);
-
-            // 답장 상태, 멘션 상태 등 초기화
-            setReplyToMessage(null);
-            setShowMentionSuggestions(false);
-            setShowMembers(false);
-
-            // 시크릿 모드 해제
-            setSecretMode(false);
-          }, 50); // 아주 짧은 지연으로 로딩 화면이 먼저 렌더링되도록 함
-        }
       } else {
         // 페이지가 다시 보이게 되면
         if (!isVisibleRef.current) {
           isVisibleRef.current = true;
 
-          // 최소화 상태에서 복귀한 경우 (로딩 화면이 표시 중이면)
-          if (loading) {
-            console.log("앱 복귀: 로딩 상태 확인됨, 채팅방 목록 로드");
-            // 일반 모드로 채팅방 목록 로드
-            fetchChatRooms(false);
+          // 시크릿 모드였다면 해제
+          if (secretMode) {
+            setSecretMode(false);
 
-            // 충분한 지연 후 로딩 상태 해제 (2초 동안 로딩 화면 유지)
+            // 로딩 애니메이션 표시
+            setLoading(true);
+            // 약간의 지연 후 채팅방 목록 다시 로드
             setTimeout(() => {
-              console.log("앱 복귀: 로딩 화면 해제 (2초 지연 후)");
-              setLoading(false);
-            }, 2000);
-          } else {
-            console.log("앱 복귀: 로딩 상태 아님, 아무 작업 안함");
+              fetchChatRooms();
+            }, 500);
           }
         }
       }
@@ -1139,32 +1074,7 @@ const ChatWindow = () => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [secretMode, messageUnsubscribe, loading]);
-
-  // 로딩 화면 없이 채팅방 목록을 조용히 새로고침
-  const silentlyRefreshChatRooms = async () => {
-    try {
-      // 장치 ID 가져오기
-      const deviceId =
-        localStorage.getItem("deviceId") || `device-${Date.now()}`;
-      if (!localStorage.getItem("deviceId")) {
-        localStorage.setItem("deviceId", deviceId);
-      }
-
-      // 사용자 정보 가져오기
-      const department = userLevelData?.department || "";
-      const role = userLevelData?.role || "";
-      const isDirector = role === "대표원장";
-
-      // 시크릿 모드로 채팅방 목록 조회
-      const rooms = await getChatRooms(deviceId, department, role, true);
-
-      // 상태 업데이트
-      setChatRooms(rooms);
-    } catch (error) {
-      console.error("채팅방 목록 조용히 갱신 중 오류:", error);
-    }
-  };
+  }, [secretMode]);
 
   // 비밀번호 모달 토글
   const togglePasswordModal = () => {
@@ -1245,10 +1155,7 @@ const ChatWindow = () => {
     } catch (error) {
       console.error("채팅방 목록 가져오기 오류:", error);
     } finally {
-      // 약간의 지연 후 로딩 상태 해제 - 부드러운 전환을 위해
-      setTimeout(() => {
-        setLoading(false);
-      }, 300);
+      setLoading(false);
     }
   };
 
@@ -1419,9 +1326,10 @@ const ChatWindow = () => {
     return (
       <ModalOverlay onClick={togglePasswordModal}>
         <ModalContent onClick={(e) => e.stopPropagation()}>
+          <ModalHeader>시크릿 모드 진입</ModalHeader>
           <PasswordInput
             type="password"
-            placeholder="모바일 채팅은 아직 지원하지 않습니다."
+            placeholder="비밀번호를 입력하세요"
             value={password}
             onChange={handlePasswordChange}
             onKeyDown={handlePasswordKeyDown}
@@ -1900,7 +1808,7 @@ const ChatWindow = () => {
 
   // 새 메시지가 추가될 때 스크롤 맨 아래로
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "auto" });
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // 입력 필드 상태 모니터링
@@ -2061,13 +1969,6 @@ const ChatWindow = () => {
 
   return (
     <Container>
-      {/* 로딩 화면 - props 제거하고 항상 완전 불투명하게 표시 */}
-      {loading && (
-        <LoadingOverlay>
-          <LoadingSpinner />
-        </LoadingOverlay>
-      )}
-
       <Header>
         <BackButton visible={selectedRoom !== null} onClick={handleBack}>
           &lt;
@@ -2081,12 +1982,35 @@ const ChatWindow = () => {
             멤버 <MembersCount>{members.length}</MembersCount>
           </MembersButton>
         )}
+
+        {showMembers && selectedRoom && (
+          <MembersPanel>
+            <MembersPanelHeader>
+              {selectedRoom.type === "global"
+                ? "전체 채팅 멤버"
+                : `${selectedRoom.departmentName} 채팅 멤버`}
+            </MembersPanelHeader>
+            <MemberList>
+              {members.map((member) => (
+                <MemberItem key={member.id}>
+                  <MemberAvatar>{getUserInitials(member.name)}</MemberAvatar>
+                  <MemberInfo>
+                    <MemberName>{member.name}</MemberName>
+                    <MemberRole>{member.role || "사용자"}</MemberRole>
+                  </MemberInfo>
+                </MemberItem>
+              ))}
+            </MemberList>
+          </MembersPanel>
+        )}
       </Header>
 
       {!selectedRoom ? (
         // 채팅방 목록 화면
         <ChatRoomList>
-          {chatRooms.length > 0 ? (
+          {loading ? (
+            <div className="p-4 text-center">채팅방 목록을 불러오는 중...</div>
+          ) : chatRooms.length > 0 ? (
             chatRooms.map((room) => (
               <ChatRoomItem
                 key={room.id}
@@ -2116,11 +2040,7 @@ const ChatWindow = () => {
               </ChatRoomItem>
             ))
           ) : (
-            <div
-              style={{ padding: "20px", textAlign: "center", color: "#666" }}
-            >
-              표시할 채팅방이 없습니다
-            </div>
+            <div className="p-4 text-center">표시할 채팅방이 없습니다</div>
           )}
         </ChatRoomList>
       ) : (

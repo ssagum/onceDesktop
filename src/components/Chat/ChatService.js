@@ -221,8 +221,13 @@ export const canSendMessage = (user, room) => {
 };
 
 // 채팅방 목록 가져오기
-export const getChatRooms = async (deviceId, department, role) => {
-  console.log("채팅방 목록 요청:", deviceId, department, role);
+export const getChatRooms = async (
+  deviceId,
+  department,
+  role,
+  isSecretMode = false
+) => {
+  console.log("채팅방 목록 요청:", deviceId, department, role, isSecretMode);
 
   try {
     // 모든 채팅방 가져오기
@@ -247,7 +252,8 @@ export const getChatRooms = async (deviceId, department, role) => {
 
     let accessibleRooms = [];
 
-    if (role === "대표원장") {
+    // 대표원장이고 시크릿 모드인 경우에만 모든 채팅방 접근 가능
+    if (role === "대표원장" && isSecretMode) {
       // 원장님은 모든 채팅방 접근 가능
       accessibleRooms = allRooms.map((room) => ({
         ...room,
