@@ -163,7 +163,7 @@ const DraggableItem = ({ id, data, type, onItemClick }) => {
               수량: {data.quantity} {data.measure || "개"}
             </span>
             {data.price > 0 && (
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">
+              <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs mt-2">
                 단가: {data.price.toLocaleString()}원
               </span>
             )}
