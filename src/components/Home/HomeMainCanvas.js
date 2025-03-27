@@ -57,6 +57,7 @@ import { getUnreadMessageCount } from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
 import { isHospitalOwner } from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
+import NaverReservationViewer from "../Reservation/NaverReservationViewer";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -143,6 +144,7 @@ export default function HomeMainCanvas() {
   const [requestStatusModalTab, setRequestStatusModalTab] =
     useState("vacation");
   const [managementModalVisible, setManagementModalVisible] = useState(false);
+  const [naverReservationVisible, setNaverReservationVisible] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -565,6 +567,27 @@ export default function HomeMainCanvas() {
     setRequestStatusModalVisible(true);
   };
 
+  // 네이버 예약 데이터 처리 핸들러
+  const handleExtractedData = (data) => {
+    if (!data) return;
+
+    try {
+      // 데이터 처리 로직 - 필요에 따라 예약 시스템에 추가하거나 다른 처리를 할 수 있음
+      showToast("네이버 예약 정보가 성공적으로 추출되었습니다.", "success");
+
+      // 예약 페이지로 이동하는 옵션 제공
+      const shouldNavigate = window.confirm(
+        "예약 정보를 확인했습니다. 예약 페이지로 이동하시겠습니까?"
+      );
+      if (shouldNavigate) {
+        navigate("/schedule");
+      }
+    } catch (error) {
+      console.error("네이버 예약 데이터 처리 중 오류:", error);
+      showToast("예약 데이터 처리 중 오류가 발생했습니다.", "error");
+    }
+  };
+
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
       <TopZone className="flex-[1] w-full pt-[20px] px-[20px]">
@@ -686,8 +709,8 @@ export default function HomeMainCanvas() {
                   </div>
                 )}
                 <div className="w-[240px] flex flex-row justify-between">
-                  <div onClick={openTimerWindow}>
-                    <Square title={"타이머"} />
+                  <div onClick={() => setNaverReservationVisible(true)}>
+                    <Square title={"네이버 예약"} />
                   </div>
                   {isHospitalOwner(userLevelData) ? (
                     <div onClick={() => setManagementModalVisible(true)}>
@@ -744,6 +767,13 @@ export default function HomeMainCanvas() {
       <ManagementModal
         isVisible={managementModalVisible}
         setIsVisible={setManagementModalVisible}
+      />
+
+      {/* 네이버 예약 모달 */}
+      <NaverReservationViewer
+        isVisible={naverReservationVisible}
+        setIsVisible={setNaverReservationVisible}
+        onDataExtract={handleExtractedData}
       />
     </div>
   );

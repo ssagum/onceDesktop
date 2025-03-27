@@ -39,6 +39,7 @@ import {
   IoCalendarOutline,
   IoChevronDown,
 } from "react-icons/io5";
+import NaverReservationViewer from "../components/Reservation/NaverReservationViewer";
 
 const MainZone = styled.div`
   display: flex;
@@ -388,6 +389,8 @@ const Schedule = () => {
     department === "물리치료팀" ? "물리치료" : "진료"
   ); // 부서가 물리치료팀이면 물리치료 모드로 시작
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
+  // 네이버 예약 모달 상태 추가
+  const [naverReservationVisible, setNaverReservationVisible] = useState(false);
 
   const timeSlots = generateTimeSlots();
 
@@ -1037,6 +1040,57 @@ const Schedule = () => {
     );
   };
 
+  // 네이버 예약 데이터 처리 핸들러
+  const handleExtractedData = (data) => {
+    // 추출된 데이터를 기반으로 새 예약 생성
+    if (!data) return;
+
+    try {
+      const newAppointment = {
+        title: `${data.customerName} - ${data.service}`,
+        date: data.appointmentDate,
+        startTime: data.appointmentTime,
+        // 30분 후 종료 시간 설정
+        endTime: data.appointmentTime.replace(/(\d+):(\d+)/, (_, h, m) => {
+          const hour = parseInt(h);
+          const minute = parseInt(m) + 30;
+          if (minute >= 60) {
+            return `${(hour + 1).toString().padStart(2, "0")}:${(minute - 60)
+              .toString()
+              .padStart(2, "0")}`;
+          }
+          return `${hour.toString().padStart(2, "0")}:${minute
+            .toString()
+            .padStart(2, "0")}`;
+        }),
+        staffId:
+          staffData[viewMode].length > 0 ? staffData[viewMode][0].id : "",
+        notes: data.notes || "",
+        // dateIndex는 선택된 날짜에 맞게 설정
+        dateIndex: displayDates.findIndex(
+          (date) => format(date, "yyyy-MM-dd") === data.appointmentDate
+        ),
+      };
+
+      // 날짜가 현재 표시 범위에 없으면 알림
+      if (newAppointment.dateIndex === -1) {
+        showToast(
+          "추출된 예약 날짜가 현재 표시 범위에 없습니다. 날짜를 조정해주세요.",
+          "warning"
+        );
+        return;
+      }
+
+      // 예약 생성 처리
+      handleAppointmentCreate(newAppointment);
+
+      showToast("네이버 예약이 성공적으로 등록되었습니다.", "success");
+    } catch (error) {
+      console.error("네이버 예약 데이터 처리 중 오류:", error);
+      showToast("예약 데이터 처리 중 오류가 발생했습니다.", "error");
+    }
+  };
+
   return (
     <div className="flex flex-row w-full h-screen bg-onceBackground items-center">
       <div className="w-[250px] h-full flex flex-col">
@@ -1062,6 +1116,23 @@ const Schedule = () => {
                 물리치료 예약
               </ToggleOption>
             </ToggleContainer>
+
+            {/* 네이버 예약 연동 버튼 추가 */}
+            <div className="w-full flex justify-end mb-4">
+              <button
+                onClick={() => setNaverReservationVisible(true)}
+                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l3.69 3.69a.75.75 0 11-1.06 1.06l-3.69-3.69A8.25 8.25 0 012.25 10.5z" />
+                </svg>
+                네이버 예약 확인
+              </button>
+            </div>
 
             {/* 예약 알림 안내 */}
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1164,6 +1235,13 @@ const Schedule = () => {
           </GridContainer>
         </section>
       </MainZone>
+
+      {/* 네이버 예약 모달 */}
+      <NaverReservationViewer
+        isVisible={naverReservationVisible}
+        setIsVisible={setNaverReservationVisible}
+        onDataExtract={handleExtractedData}
+      />
     </div>
   );
 };
