@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import RenderTitlePart from "../common/RenderTitlePart";
 import ToDo from "../common/ToDo";
 import InsideHeader from "../common/InsideHeader";
@@ -53,6 +54,7 @@ import { useToast } from "../../contexts/ToastContext";
 import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
 import { getUnreadMessageCount } from "../Chat/ChatService";
+import RequestStatusModal from "../Requests/RequestStatusModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -133,6 +135,11 @@ export default function HomeMainCanvas() {
   const [isMiniMode, setIsMiniMode] = useState(false);
   const [stockRequestModalOn, setStockRequestModalOn] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const navigate = useNavigate();
+  const [requestStatusModalVisible, setRequestStatusModalVisible] =
+    useState(false);
+  const [requestStatusModalTab, setRequestStatusModalTab] =
+    useState("vacation");
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -549,6 +556,12 @@ export default function HomeMainCanvas() {
     setIsMiniMode((prev) => !prev);
   };
 
+  // 신청 현황 모달 열기 함수
+  const openRequestStatusModal = (tabType) => {
+    setRequestStatusModalTab(tabType);
+    setRequestStatusModalVisible(true);
+  };
+
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
       <TopZone className="flex-[1] w-full pt-[20px] px-[20px]">
@@ -661,10 +674,10 @@ export default function HomeMainCanvas() {
                   </div>
                 ) : (
                   <div className="w-[240px] flex flex-row justify-between">
-                    <div onClick={() => setStockRequestModalOn(true)}>
+                    <div onClick={() => openRequestStatusModal("stock")}>
                       <Square title={"비품신청"} />
                     </div>
-                    <div onClick={() => setVacationModalOn(true)}>
+                    <div onClick={() => openRequestStatusModal("vacation")}>
                       <Square title={"휴가신청"} />
                     </div>
                   </div>
@@ -673,7 +686,7 @@ export default function HomeMainCanvas() {
                   <div onClick={openTimerWindow}>
                     <Square title={"타이머"} />
                   </div>
-                  <div onClick={() => setRequestModalOn(true)}>
+                  <div onClick={() => openRequestStatusModal("request")}>
                     <Square title={"요청하기"} />
                   </div>
                 </div>
@@ -705,18 +718,17 @@ export default function HomeMainCanvas() {
         setIsVisible={setShowChatHistory}
         recentCalls={[]}
       />
-      <RequestModal
-        isVisible={requestModalOn}
-        setIsVisible={setRequestModalOn}
-      />
-      <StockRequestModal
-        isVisible={stockRequestModalOn}
-        setIsVisible={setStockRequestModalOn}
-      />
       <TaskRecordModal
         isVisible={showTaskHistory}
         setIsVisible={setShowTaskHistory}
         task={selectedTask}
+      />
+
+      {/* 신청 현황 모달 */}
+      <RequestStatusModal
+        isVisible={requestStatusModalVisible}
+        setIsVisible={setRequestStatusModalVisible}
+        initialTab={requestStatusModalTab}
       />
     </div>
   );

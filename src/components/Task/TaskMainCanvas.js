@@ -473,18 +473,20 @@ export function ToDoDragComponent({
           className="relative bg-gray-50 p-4 rounded shadow h-[280px] w-full"
         >
           {/* 우상단 포스트잇 스타일의 날짜별 보기 탭 - 그리드와 딱 맞닿게 배치 */}
-          <div className="absolute right-4 -top-[60px] z-10">
+          <div className="absolute right-4 -top-[44px] z-10">
             {/* 단일 파란색 탭 */}
             <div
-              className="relative w-24 h-[60px] cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
+              className="relative w-[110px] h-[60px] cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
               onClick={handleOpenDateModal} // 모달 열기 함수 연결
               title="날짜별 보기"
             >
               {/* 상단 색상 부분 */}
-              <div className="h-6 bg-onceBlue rounded-t-md shadow-sm border-t border-l border-r border-gray-200 flex items-center justify-center">
+              <div className="h-[10px] bg-onceBlue rounded-t-md shadow-sm border-t border-l border-r border-gray-200 flex items-center justify-center"></div>
+              {/* 반투명 중간 부분 */}
+              <div className="h-[36px] bg-gray-50 bg-opacity-90 rounded-b-none border-l border-r border-gray-200 shadow-sm flex items-center justify-center px-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 text-white"
+                  className="h-4 w-4 text-onceBlue mr-2"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -495,10 +497,6 @@ export function ToDoDragComponent({
                   <line x1="8" y1="2" x2="8" y2="6" />
                   <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
-              </div>
-
-              {/* 반투명 중간 부분 */}
-              <div className="h-[36px] bg-onceChipBlue bg-opacity-90 rounded-b-none border-l border-r border-gray-200 shadow-sm flex items-center justify-center">
                 <span className="text-onceBlue text-sm font-medium">
                   날짜별 보기
                 </span>

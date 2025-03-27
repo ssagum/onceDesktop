@@ -20,6 +20,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  Timestamp,
 } from "firebase/firestore";
 import {
   BarChart,
@@ -60,6 +61,11 @@ const MainZone = styled.div``;
 const calculateStaffVacationInfo = (userData) => {
   // 입사일 처리
   let hireDate = userData.hireDate || null;
+
+  // hireDate가 Timestamp 객체인 경우 처리
+  if (hireDate && typeof hireDate === "object" && hireDate.seconds) {
+    hireDate = format(new Date(hireDate.seconds * 1000), "yyyy-MM-dd");
+  }
 
   // 기사용 휴가 일수
   const usedVacationDays = userData.usedVacationDays || 0;
@@ -155,6 +161,12 @@ const StaffDetailModal = ({
     }
   }, [staff]);
 
+  // Timestamp로 저장된 날짜를 Firebase에 저장할 때 변환하는 함수
+  const formatDateForFirebase = (dateString) => {
+    if (!dateString) return null;
+    return Timestamp.fromDate(new Date(dateString));
+  };
+
   if (!isVisible || !staff) return null;
 
   // 숫자만 추출하는 함수
@@ -206,11 +218,19 @@ const StaffDetailModal = ({
     }
   };
 
+  // 실제 Firebase에 저장하는 함수
   const handleSave = async () => {
     try {
+      // 날짜 형식을 Timestamp로 변환
+      const firestoreData = {
+        ...editedStaff,
+        hireDate: formatDateForFirebase(editedStaff.hireDate),
+        resignationDate: formatDateForFirebase(editedStaff.resignationDate),
+      };
+
       // Firebase에 직원 정보 업데이트
       const userDocRef = doc(db, "users", editedStaff.id);
-      await setDoc(userDocRef, editedStaff, { merge: true });
+      await setDoc(userDocRef, firestoreData, { merge: true });
 
       showToast("직원 정보가 성공적으로 저장되었습니다.", "success");
 
@@ -658,16 +678,59 @@ const StaffManagement = () => {
         querySnapshot.forEach((doc) => {
           const userData = doc.data();
 
+          // Timestamp를 문자열로 변환
+          let formattedHireDate = "";
+          let formattedResignationDate = "";
+
+          // 입사일 처리
+          if (userData.hireDate) {
+            // Timestamp 객체인 경우
+            if (
+              userData.hireDate instanceof Timestamp ||
+              userData.hireDate.seconds
+            ) {
+              formattedHireDate = format(
+                new Date(userData.hireDate.seconds * 1000),
+                "yyyy-MM-dd"
+              );
+            }
+            // 문자열인 경우 그대로 사용
+            else if (typeof userData.hireDate === "string") {
+              formattedHireDate = userData.hireDate;
+            }
+          }
+
+          // 퇴사일 처리
+          if (userData.resignationDate) {
+            // Timestamp 객체인 경우
+            if (
+              userData.resignationDate instanceof Timestamp ||
+              userData.resignationDate.seconds
+            ) {
+              formattedResignationDate = format(
+                new Date(userData.resignationDate.seconds * 1000),
+                "yyyy-MM-dd"
+              );
+            }
+            // 문자열인 경우 그대로 사용
+            else if (typeof userData.resignationDate === "string") {
+              formattedResignationDate = userData.resignationDate;
+            }
+          }
+
           // 휴가 정보 계산
-          const vacationInfo = calculateStaffVacationInfo(userData);
+          const vacationInfo = calculateStaffVacationInfo({
+            ...userData,
+            hireDate: formattedHireDate, // 문자열로 변환된 입사일 전달
+          });
 
           users.push({
             id: doc.id,
             name: userData.name || "",
             department: userData.department || "",
             role: userData.role || "",
-            hireDate: userData.hireDate || "",
-            resignationDate: userData.resignationDate || "",
+            hireDate: formattedHireDate,
+            resignationDate: formattedResignationDate,
             email: userData.email || "",
             phoneNumber: userData.phoneNumber || "",
             status: userData.resignationDate ? "퇴직" : "재직",

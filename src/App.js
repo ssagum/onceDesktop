@@ -28,6 +28,8 @@ import Management from "./pages/Managemnet";
 import { useUserLevel } from "./utils/UserLevelContext";
 import Parking from "./pages/Parking";
 import { initializeChatRooms } from "./components/Chat/ChatService";
+// 신청 현황 페이지 추가
+import Requests from "./pages/Requests";
 // TODO: Add SDKs for Firebase products that you want to use
 
 // 앱 시작 시간 기록 (처음 실행 시 이전 메시지 알림 방지용)
@@ -164,6 +166,7 @@ const App = () => {
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/management" element={<Management />} />
           <Route path="/parking" element={<Parking />} />
+          <Route path="/requests" element={<Requests />} />
         </Routes>
         {/* <ChatBot /> */}
       </div>

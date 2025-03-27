@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { registerUser } from "../../utils/UserAuth";
 import { format } from "date-fns";
+import { useToast } from "../../contexts/ToastContext";
 
 // FormField 컴포넌트를 함수 외부로 분리
 const FormField = ({ label, required, children, className = "" }) => (
@@ -13,6 +14,7 @@ const FormField = ({ label, required, children, className = "" }) => (
 );
 
 function SignupModal({ isOpen, onClose }) {
+  const { showToast } = useToast();
   // 단일 formData 객체 대신 개별 상태로 관리
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -228,23 +230,30 @@ function SignupModal({ isOpen, onClose }) {
       );
 
       if (result.success) {
-        alert("회원가입이 완료되었습니다. 로그인해주세요.");
+        showToast("회원가입이 완료되었습니다. 로그인해주세요.", "success");
         resetForm(); // 성공 시에도 폼 초기화
         onClose();
       } else {
         // 서버에서 반환한 구체적인 오류 메시지 표시
         setError(result.message || "회원가입 중 오류가 발생했습니다.");
+        showToast(
+          result.message || "회원가입 중 오류가 발생했습니다.",
+          "error"
+        );
         console.error("회원가입 실패:", result.message);
       }
     } catch (error) {
       console.error("회원가입 오류:", error);
       // 오류 메시지를 더 구체적으로 표시
       if (error.message) {
-        setError(`회원가입 중 오류가 발생했습니다: ${error.message}`);
+        const errorMessage = `회원가입 중 오류가 발생했습니다: ${error.message}`;
+        setError(errorMessage);
+        showToast(errorMessage, "error");
       } else {
-        setError(
-          "회원가입 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요."
-        );
+        const errorMessage =
+          "회원가입 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.";
+        setError(errorMessage);
+        showToast(errorMessage, "error");
       }
     } finally {
       setIsLoading(false);

@@ -13,6 +13,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 // 단 한 번만 선언
 const adminPassword = "skylover";
+const adminPasswordKorean = "ㄴㅏㅛㅣㅐㅍㄷㄱ";
 
 // 자동 로그인 설정 관리를 위한 키
 const AUTO_LOGIN_KEY = "autoLoginEnabled";
@@ -163,7 +164,7 @@ export function UserLevelProvider({ children }) {
 
   // 임시 함수 추가 (이후 다른 파일로 이동하거나 보다 안전한 방식으로 변경)
   const validateAdminPassword = (password) => {
-    return password === adminPassword;
+    return password === adminPassword || password === adminPasswordKorean;
   };
 
   const updateUserLevelData = (data, adminPassword) => {

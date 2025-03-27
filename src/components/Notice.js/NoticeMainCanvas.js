@@ -207,16 +207,9 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
     showToast("PC 정보가 설정되었습니다.", "success");
   };
 
-  // 게시글 작성 함수 수정 - 로그인 체크 추가
+  // 게시글 작성 함수 수정 - 로그인 체크 제거
   const handleCreatePost = () => {
-    // userLevelData가 없거나 isLoggedIn이 false인 경우
-    if (!isLoggedIn || !userLevelData?.name) {
-      // 토스트 메시지 대신 로그인 모달 표시
-      openLoginModal();
-      return;
-    }
-
-    // 로그인이 확인된 경우에만 게시글 작성 모달 열기
+    // 로그인 체크 제거 - 바로 게시글 작성 모달 열기
     if (onCreatePost) {
       onCreatePost();
     }

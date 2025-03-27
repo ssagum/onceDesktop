@@ -17,7 +17,12 @@ import {
 } from "react-icons/fa";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+} from "firebase/firestore";
 import { db } from "../firebase";
 import UserChipText from "./common/UserChipText";
 import { useUserLevel } from "../utils/UserLevelContext";
@@ -111,12 +116,136 @@ const TextEditorModal = ({
   const [uploadedImages, setUploadedImages] = useState([]);
   const [currentFontSize, setCurrentFontSize] = useState("16px");
   const [loginModalOpen, setLoginModalOpen] = useState(false);
-
-  // 팀장급 이상 여부 확인
-  const isLeaderRole = userLevelData ? isLeaderOrHigher(userLevelData) : false;
+  const [selectedAuthor, setSelectedAuthor] = useState(null);
+  const [showAuthorDropdown, setShowAuthorDropdown] = useState(false);
+  const [departmentUsers, setDepartmentUsers] = useState([]);
 
   // useToast 훅 사용
   const { showToast } = useToast();
+
+  // 모든 사용자 목록 가져오기
+  const getAllUsers = async () => {
+    try {
+      // users 컬렉션에서 모든 사용자 가져오기
+      const usersRef = collection(db, "users");
+      const snapshot = await getDocs(usersRef);
+
+      if (snapshot.empty) {
+        // 테스트용 더미 데이터 반환
+        return [
+          {
+            id: "dummy1",
+            name: "테스트 사용자 1",
+            role: "의사",
+            department: "원무과",
+          },
+          {
+            id: "dummy2",
+            name: "테스트 사용자 2",
+            role: "간호사",
+            department: "내과",
+          },
+          {
+            id: "dummy3",
+            name: "테스트 사용자 3",
+            role: "원장",
+            department: "경영팀",
+          },
+        ];
+      }
+
+      const users = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || data.displayName || "사용자",
+          role: data.role || "",
+          department: data.department || "",
+        };
+      });
+
+      return users;
+    } catch (error) {
+      console.error("사용자 목록 가져오기 오류:", error);
+
+      // 오류 발생 시 테스트용 더미 데이터 반환
+      return [
+        {
+          id: "error1",
+          name: "에러 테스트 1",
+          role: "테스트",
+          department: "오류",
+        },
+        {
+          id: "error2",
+          name: "에러 테스트 2",
+          role: "테스트",
+          department: "오류",
+        },
+      ];
+    }
+  };
+
+  // 사용자 목록 초기 로드
+  useEffect(() => {
+    if (show) {
+      const loadUsers = async () => {
+        try {
+          const users = await getAllUsers();
+          if (users.length > 0) {
+            setDepartmentUsers(users);
+          }
+        } catch (error) {
+          console.error("사용자 목록 로드 실패:", error);
+        }
+      };
+
+      loadUsers();
+    }
+  }, [show]);
+
+  // 작성자 드롭다운 토글
+  const toggleAuthorDropdown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 사용자 목록 새로 로드
+    getAllUsers()
+      .then((users) => {
+        if (users.length > 0) {
+          setDepartmentUsers(users);
+        }
+        setShowAuthorDropdown(!showAuthorDropdown);
+      })
+      .catch((error) => {
+        console.error("사용자 목록 로드 실패:", error);
+        setShowAuthorDropdown(!showAuthorDropdown);
+      });
+  };
+
+  // 작성자 선택
+  const handleSelectAuthor = (e, user) => {
+    e.stopPropagation();
+    setSelectedAuthor(user);
+    setShowAuthorDropdown(false);
+  };
+
+  // 드롭다운 외부 클릭 감지
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const selector = document.querySelector(".author-selector");
+      if (selector && !selector.contains(e.target) && showAuthorDropdown) {
+        setShowAuthorDropdown(false);
+      }
+    };
+
+    if (showAuthorDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showAuthorDropdown]);
 
   // 초기 제목과 내용 설정
   useEffect(() => {
@@ -132,6 +261,19 @@ const TextEditorModal = ({
         setUploadedFiles(editingPost.attachedFiles || []);
         setUploadedImages(editingPost.attachedImages || []);
 
+        // 작성자 정보가 있는 경우 설정
+        if (editingPost.authorId) {
+          const authorData = {
+            id: editingPost.authorId,
+            name: editingPost.author || "",
+            department: editingPost.department || "",
+            role: "",
+          };
+          setSelectedAuthor(authorData);
+        } else {
+          setSelectedAuthor(null);
+        }
+
         // 다음 렌더링 사이클에서 에디터 내용 초기화
         setTimeout(() => {
           if (editorRef.current) {
@@ -146,6 +288,7 @@ const TextEditorModal = ({
         setContent("");
         setUploadedFiles([]);
         setUploadedImages([]);
+        setSelectedAuthor(null);
 
         // 다음 렌더링 사이클에서 에디터 내용 초기화
         setTimeout(() => {
@@ -644,10 +787,8 @@ const TextEditorModal = ({
       return;
     }
 
-    // 로그인 확인
-    if (!isLoggedIn || !userLevelData?.name) {
-      // 토스트 메시지 대신 로그인 모달 표시
-      openLoginModal();
+    if (!selectedAuthor) {
+      showToast("작성자를 선택해주세요", "error");
       return;
     }
 
@@ -657,7 +798,7 @@ const TextEditorModal = ({
         title,
         content: editorRef.current.innerHTML,
         createdAt: Date.now(),
-        author: userLevelData?.name || "익명",
+        author: selectedAuthor.name || "익명",
         classification: selectedDepartment,
         pinned: isPinned,
         noticeType: isPinned ? "notice" : "regular",
@@ -667,13 +808,10 @@ const TextEditorModal = ({
           name: img.name,
           src: img.src,
         })),
-        isHidden: false, // 기본적으로 숨김 처리되지 않음
+        isHidden: false,
+        authorId: selectedAuthor.id,
+        department: selectedAuthor.department || "",
       };
-
-      // authorId가 있는 경우에만 추가 (undefined 방지)
-      if (userLevelData?.id) {
-        postData.authorId = userLevelData.id;
-      }
 
       if (handleSave) {
         await handleSave(postData);
@@ -752,6 +890,145 @@ const TextEditorModal = ({
               />
             </div>
             <div className="flex items-center space-x-2 mb-3">
+              <div
+                style={{
+                  position: "relative",
+                  minWidth: "120px",
+                  zIndex: 10,
+                  marginRight: "12px",
+                }}
+              >
+                <div
+                  onClick={toggleAuthorDropdown}
+                  style={{
+                    position: "relative",
+                    minWidth: "120px",
+                    border: "1px solid #e6e6e6",
+                    borderRadius: "4px",
+                    padding: "8px 10px",
+                    backgroundColor: "#f5f5f5",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "14px",
+                    color: "#333",
+                    transition: "all 0.2s",
+                    height: "42px",
+                  }}
+                  className="author-selector"
+                >
+                  {selectedAuthor ? (
+                    <>
+                      <span style={{ marginLeft: "5px", flex: 1 }}>
+                        {selectedAuthor.name}
+                      </span>
+                      <span style={{ fontSize: "10px", marginLeft: "4px" }}>
+                        ▼
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>작성자 선택</span>
+                      <span style={{ fontSize: "10px", marginLeft: "4px" }}>
+                        ▼
+                      </span>
+                    </>
+                  )}
+
+                  {showAuthorDropdown && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        width: "240px",
+                        maxHeight:
+                          Math.min(300, departmentUsers.length * 50 + 60) +
+                          "px",
+                        backgroundColor: "#fff",
+                        border: "1px solid #e6e6e6",
+                        borderRadius: "4px",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                        zIndex: 1000,
+                        padding: "10px 0",
+                        marginTop: "5px",
+                        display: "block",
+                        overflow: "visible",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div
+                        style={{
+                          padding: "0 15px 10px",
+                          fontWeight: "600",
+                          color: "#333",
+                          fontSize: "16px",
+                          borderBottom: "1px solid #e6e6e6",
+                        }}
+                      >
+                        작성자 선택 ({departmentUsers.length}명)
+                      </div>
+                      <div
+                        style={{
+                          maxHeight: "250px",
+                          overflow: "auto",
+                        }}
+                      >
+                        {departmentUsers.length > 0 ? (
+                          departmentUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              onClick={(e) => handleSelectAuthor(e, user)}
+                              style={{
+                                padding: "8px 15px",
+                                display: "flex",
+                                alignItems: "center",
+                                cursor: "pointer",
+                                transition: "background-color 0.2s",
+                                backgroundColor:
+                                  selectedAuthor?.id === user.id
+                                    ? "#f0f8ff"
+                                    : "transparent",
+                              }}
+                            >
+                              <div style={{ flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontSize: "16px",
+                                    fontWeight: "500",
+                                  }}
+                                >
+                                  {user.name || "이름없음"}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "14px",
+                                    color: "#666",
+                                  }}
+                                >
+                                  {user.department ? `${user.department} ` : ""}
+                                  {user.role || "사용자"}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div
+                            style={{
+                              padding: "10px 15px",
+                              color: "#999",
+                              textAlign: "center",
+                            }}
+                          >
+                            로딩 중...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
               <select
                 value={selectedDepartment}
                 onChange={(e) => setSelectedDepartment(e.target.value)}
@@ -763,37 +1040,19 @@ const TextEditorModal = ({
                   </option>
                 ))}
               </select>
+
               <div className="flex items-center ml-4">
                 <input
                   type="checkbox"
                   id="isPinned"
                   checked={isPinned}
                   onChange={(e) => {
-                    // 팀장급 이상만 공지사항 등록 가능
-                    if (e.target.checked && !isLeaderRole) {
-                      showToast(
-                        "공지사항 등록은 팀장급 이상만 가능합니다.",
-                        "error"
-                      );
-                      return;
-                    }
                     setIsPinned(e.target.checked);
                   }}
                   className="h-4 w-4 mr-2"
-                  disabled={!isLeaderRole}
                 />
-                <label
-                  htmlFor="isPinned"
-                  className={`text-sm font-medium ${
-                    !isLeaderRole ? "text-gray-400" : ""
-                  }`}
-                >
+                <label htmlFor="isPinned" className="text-sm font-medium">
                   공지사항으로 등록 (상단에 고정됩니다)
-                  {!isLeaderRole && (
-                    <span className="text-xs text-red-500 ml-2">
-                      (팀장급 이상 권한 필요)
-                    </span>
-                  )}
                 </label>
               </div>
             </div>
