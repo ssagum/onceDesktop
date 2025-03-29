@@ -30,6 +30,7 @@ import {
   orderBy,
   onSnapshot,
   where,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import ReceivedCallList from "../call/ReceivedCallList";
@@ -58,6 +59,7 @@ import RequestStatusModal from "../Requests/RequestStatusModal";
 import { isHospitalOwner } from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
 import NaverReservationViewer from "../Reservation/NaverReservationViewer";
+import TextEditorModal from "../TextEditorModal";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -145,6 +147,7 @@ export default function HomeMainCanvas() {
     useState("vacation");
   const [managementModalVisible, setManagementModalVisible] = useState(false);
   const [naverReservationVisible, setNaverReservationVisible] = useState(false);
+  const [showNoticeEditor, setShowNoticeEditor] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -588,6 +591,26 @@ export default function HomeMainCanvas() {
     }
   };
 
+  const handleCreateNotice = async (postData) => {
+    try {
+      // Firebase에 공지사항 추가
+      await addDoc(collection(db, "notices"), {
+        ...postData,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        isHidden: false,
+        author: userLevelData?.name || "관리자",
+        writer: userLevelData?.uid || "",
+      });
+
+      showToast("공지사항이 등록되었습니다.", "success");
+      setShowNoticeEditor(false);
+    } catch (error) {
+      console.error("Error creating notice:", error);
+      showToast("공지사항 등록에 실패했습니다.", "error");
+    }
+  };
+
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
       <TopZone className="flex-[1] w-full pt-[20px] px-[20px]">
@@ -695,8 +718,12 @@ export default function HomeMainCanvas() {
               <div className="w-[240px] h-[240px] flex-col flex justify-between">
                 {isHospitalOwner(userLevelData) ? (
                   <div className="w-[240px] flex flex-row justify-between">
-                    <Square title={"공지등록"} />
-                    <Square title={"업무추가"} />
+                    <div onClick={() => setShowNoticeEditor(true)}>
+                      <Square title={"공지등록"} />
+                    </div>
+                    <div onClick={() => setShowTaskAdd(true)}>
+                      <Square title={"업무추가"} />
+                    </div>
                   </div>
                 ) : (
                   <div className="w-[240px] flex flex-row justify-between">
@@ -709,8 +736,8 @@ export default function HomeMainCanvas() {
                   </div>
                 )}
                 <div className="w-[240px] flex flex-row justify-between">
-                  <div onClick={() => setNaverReservationVisible(true)}>
-                    <Square title={"네이버 예약"} />
+                  <div onClick={openTimerWindow}>
+                    <Square title={"타이머"} />
                   </div>
                   {isHospitalOwner(userLevelData) ? (
                     <div onClick={() => setManagementModalVisible(true)}>
@@ -774,6 +801,16 @@ export default function HomeMainCanvas() {
         isVisible={naverReservationVisible}
         setIsVisible={setNaverReservationVisible}
         onDataExtract={handleExtractedData}
+      />
+
+      {/* 공지등록 에디터 모달 */}
+      <TextEditorModal
+        show={showNoticeEditor}
+        handleClose={() => setShowNoticeEditor(false)}
+        content=""
+        setContent={() => {}}
+        handleSave={handleCreateNotice}
+        isEditing={false}
       />
     </div>
   );

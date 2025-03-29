@@ -28,7 +28,6 @@ import UserChipText from "./common/UserChipText";
 import { useUserLevel } from "../utils/UserLevelContext";
 import { useToast } from "../contexts/ToastContext";
 import { isLeaderOrHigher } from "../utils/permissionUtils";
-import LoginPCModal from "./common/LoginPCModal";
 
 const COLORS = [
   { label: "검정", value: "#000000" },
@@ -115,7 +114,6 @@ const TextEditorModal = ({
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [currentFontSize, setCurrentFontSize] = useState("16px");
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [selectedAuthor, setSelectedAuthor] = useState(null);
   const [showAuthorDropdown, setShowAuthorDropdown] = useState(false);
   const [departmentUsers, setDepartmentUsers] = useState([]);
@@ -186,49 +184,158 @@ const TextEditorModal = ({
     }
   };
 
-  // 사용자 목록 초기 로드
+  // 초기화 로직을 단일 useEffect로 통합
   useEffect(() => {
     if (show) {
-      const loadUsers = async () => {
+      // 초기 제목과 내용 설정
+      if (isEditing && editingPost) {
+        setTitle(editingPost.title || "");
+        setIsPinned(editingPost.pinned || false);
+        setSelectedDepartment(
+          editingPost.classification || DEPARTMENTS[0].value
+        );
+        setContent(editingPost.content || "");
+        setUploadedFiles(editingPost.attachedFiles || []);
+        setUploadedImages(editingPost.attachedImages || []);
+      } else {
+        setTitle("");
+        setIsPinned(false);
+        setSelectedDepartment(DEPARTMENTS[0].value);
+        setContent("");
+        setUploadedFiles([]);
+        setUploadedImages([]);
+      }
+
+      // 다음 렌더링 사이클에서 에디터 내용 초기화
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.innerHTML =
+            isEditing && editingPost ? editingPost.content || "" : "";
+        }
+      }, 0);
+
+      // 작성자 초기화 로직
+      const initAuthor = async () => {
         try {
+          console.log("TextEditorModal 작성자 설정 시도:", userLevelData);
+
+          // 수정 모드이고 기존 게시글 데이터가 있으면 해당 작성자 사용
+          if (isEditing && editingPost?.authorId) {
+            console.log("수정 모드: 기존 작성자 정보 사용");
+            const authorData = {
+              id: editingPost.authorId,
+              name: editingPost.author || "",
+              department: editingPost.department || "",
+              role: editingPost.role || "",
+            };
+            setSelectedAuthor(authorData);
+
+            // 로컬 스토리지에 작성자 정보 저장
+            try {
+              localStorage.setItem(
+                "lastPostAuthor",
+                JSON.stringify(authorData)
+              );
+            } catch (err) {
+              console.error("작성자 정보 저장 실패:", err);
+            }
+          }
+          // 로그인 상태인 경우 현재 사용자를 작성자로 설정
+          else if (userLevelData?.uid || userLevelData?.name) {
+            console.log("로그인 상태: 현재 사용자로 작성자 설정");
+
+            const authorData = {
+              id: userLevelData?.uid || `temp-${Date.now()}`,
+              name:
+                userLevelData?.name || userLevelData?.displayName || "사용자",
+              role: userLevelData?.role || "",
+              department: userLevelData?.department || "",
+            };
+
+            setSelectedAuthor(authorData);
+            console.log(
+              "작성자가 현재 로그인 사용자로 설정됨:",
+              authorData.name
+            );
+
+            // 로컬 스토리지에 작성자 정보 저장
+            try {
+              localStorage.setItem(
+                "lastPostAuthor",
+                JSON.stringify(authorData)
+              );
+            } catch (err) {
+              console.error("작성자 정보 저장 실패:", err);
+            }
+          } else {
+            console.log(
+              "로그인되지 않은 상태: 작성자 복원 또는 수동 선택 필요"
+            );
+
+            // 로컬 스토리지에서 이전 작성자 정보 복원 시도
+            try {
+              const savedAuthor = localStorage.getItem("lastPostAuthor");
+              if (savedAuthor) {
+                const authorData = JSON.parse(savedAuthor);
+                console.log("저장된 작성자 정복 복원:", authorData.name);
+                setSelectedAuthor(authorData);
+              } else {
+                setSelectedAuthor(null);
+              }
+            } catch (err) {
+              console.error("저장된 작성자 정보 복원 실패:", err);
+              setSelectedAuthor(null);
+            }
+          }
+
+          // 사용자 목록 로드
           const users = await getAllUsers();
-          if (users.length > 0) {
+          if (users && users.length > 0) {
             setDepartmentUsers(users);
+            console.log(`사용자 목록 ${users.length}명 로드 완료`);
+          } else {
+            console.warn("사용자 목록이 비어 있습니다");
           }
         } catch (error) {
-          console.error("사용자 목록 로드 실패:", error);
+          console.error("작성자 초기화 중 오류 발생:", error);
         }
       };
 
-      loadUsers();
+      initAuthor();
+    } else {
+      // 모달이 닫힐 때 수행할 작업
+      if (selectedAuthor) {
+        console.log("모달 닫힘, 작성자 정보 유지:", selectedAuthor.name);
+      }
     }
-  }, [show]);
+  }, [show, userLevelData, isEditing, editingPost, setContent]);
 
-  // 작성자 드롭다운 토글
-  const toggleAuthorDropdown = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // 문서 클릭 이벤트 처리를 위한 useEffect
+  useEffect(() => {
+    const handleDocumentClick = (e) => {
+      // 색상 선택기와 글자 크기 선택기 영역 외부를 클릭하면 닫기
+      const colorPicker = document.querySelector(".color-picker-container");
+      const fontSizePicker = document.querySelector(
+        ".fontsize-picker-container"
+      );
 
-    // 사용자 목록 새로 로드
-    getAllUsers()
-      .then((users) => {
-        if (users.length > 0) {
-          setDepartmentUsers(users);
-        }
-        setShowAuthorDropdown(!showAuthorDropdown);
-      })
-      .catch((error) => {
-        console.error("사용자 목록 로드 실패:", error);
-        setShowAuthorDropdown(!showAuthorDropdown);
-      });
-  };
+      if (colorPicker && !colorPicker.contains(e.target)) {
+        setShowColorPicker(false);
+      }
 
-  // 작성자 선택
-  const handleSelectAuthor = (e, user) => {
-    e.stopPropagation();
-    setSelectedAuthor(user);
-    setShowAuthorDropdown(false);
-  };
+      if (fontSizePicker && !fontSizePicker.contains(e.target)) {
+        setShowFontSizePicker(false);
+      }
+    };
+
+    // 이벤트 리스너 등록
+    document.addEventListener("mousedown", handleDocumentClick);
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+    };
+  }, []);
 
   // 드롭다운 외부 클릭 감지
   useEffect(() => {
@@ -245,60 +352,10 @@ const TextEditorModal = ({
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
+
+    // showAuthorDropdown이 false일 때도 항상 빈 cleanup 함수 반환
+    return () => {};
   }, [showAuthorDropdown]);
-
-  // 초기 제목과 내용 설정
-  useEffect(() => {
-    if (show) {
-      // 수정 모드인 경우 기존 데이터로 초기화
-      if (isEditing && editingPost) {
-        setTitle(editingPost.title || "");
-        setIsPinned(editingPost.pinned || false);
-        setSelectedDepartment(
-          editingPost.classification || DEPARTMENTS[0].value
-        );
-        setContent(editingPost.content || "");
-        setUploadedFiles(editingPost.attachedFiles || []);
-        setUploadedImages(editingPost.attachedImages || []);
-
-        // 작성자 정보가 있는 경우 설정
-        if (editingPost.authorId) {
-          const authorData = {
-            id: editingPost.authorId,
-            name: editingPost.author || "",
-            department: editingPost.department || "",
-            role: "",
-          };
-          setSelectedAuthor(authorData);
-        } else {
-          setSelectedAuthor(null);
-        }
-
-        // 다음 렌더링 사이클에서 에디터 내용 초기화
-        setTimeout(() => {
-          if (editorRef.current) {
-            editorRef.current.innerHTML = editingPost.content || "";
-          }
-        }, 0);
-      } else {
-        // 새 게시글 작성 모드
-        setTitle("");
-        setIsPinned(false);
-        setSelectedDepartment(DEPARTMENTS[0].value);
-        setContent("");
-        setUploadedFiles([]);
-        setUploadedImages([]);
-        setSelectedAuthor(null);
-
-        // 다음 렌더링 사이클에서 에디터 내용 초기화
-        setTimeout(() => {
-          if (editorRef.current) {
-            editorRef.current.innerHTML = "";
-          }
-        }, 0);
-      }
-    }
-  }, [show, setContent, isEditing, editingPost]);
 
   const execCommand = useCallback((command, value = null) => {
     if (command === "fontSize") {
@@ -399,33 +456,6 @@ const TextEditorModal = ({
     if (editorRef.current) {
       editorRef.current.focus();
     }
-  }, []);
-
-  // 문서 클릭 이벤트 처리를 위한 useEffect
-  useEffect(() => {
-    const handleDocumentClick = (e) => {
-      // 색상 선택기와 글자 크기 선택기 영역 외부를 클릭하면 닫기
-      const colorPicker = document.querySelector(".color-picker-container");
-      const fontSizePicker = document.querySelector(
-        ".fontsize-picker-container"
-      );
-
-      if (colorPicker && !colorPicker.contains(e.target)) {
-        setShowColorPicker(false);
-      }
-
-      if (fontSizePicker && !fontSizePicker.contains(e.target)) {
-        setShowFontSizePicker(false);
-      }
-    };
-
-    // 이벤트 리스너 등록
-    document.addEventListener("mousedown", handleDocumentClick);
-
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
   }, []);
 
   // 현재 선택된 텍스트의 폰트 크기를 조회하는 함수
@@ -752,26 +782,7 @@ const TextEditorModal = ({
     }
   };
 
-  // 로그인 모달 관련 함수들
-  const openLoginModal = () => {
-    setLoginModalOpen(true);
-  };
-
-  const closeLoginModal = () => {
-    setLoginModalOpen(false);
-  };
-
-  const handleLoginSuccess = () => {
-    closeLoginModal();
-    // 로그인 성공 후 게시글 저장 시도
-    handleSaveContent();
-  };
-
-  const handlePCAllocationSubmit = (pcData) => {
-    closeLoginModal();
-    showToast("PC 정보가 설정되었습니다.", "success");
-  };
-
+  // 메시지 저장 함수 수정 - 로그인 검사 로직 제거
   const handleSaveContent = async () => {
     if (!title.trim()) {
       showToast("제목을 입력해주세요", "error");
@@ -867,6 +878,40 @@ const TextEditorModal = ({
 
     // 색상 선택기 닫기
     setShowColorPicker(false);
+  };
+
+  // 작성자 드롭다운 토글
+  const toggleAuthorDropdown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 사용자 목록 새로 로드
+    getAllUsers()
+      .then((users) => {
+        if (users.length > 0) {
+          setDepartmentUsers(users);
+        }
+        setShowAuthorDropdown(!showAuthorDropdown);
+      })
+      .catch((error) => {
+        console.error("사용자 목록 로드 실패:", error);
+        setShowAuthorDropdown(!showAuthorDropdown);
+      });
+  };
+
+  // 작성자 선택
+  const handleSelectAuthor = (e, user) => {
+    e.stopPropagation();
+    setSelectedAuthor(user);
+    setShowAuthorDropdown(false);
+
+    // 선택된 작성자 정보 저장
+    try {
+      localStorage.setItem("lastPostAuthor", JSON.stringify(user));
+      console.log("선택된 작성자 정보 저장:", user.name);
+    } catch (err) {
+      console.error("작성자 정보 저장 실패:", err);
+    }
   };
 
   return (
@@ -1310,15 +1355,6 @@ const TextEditorModal = ({
           </div>
         </div>
       </div>
-
-      {/* 로그인/PC할당 통합 모달 */}
-      <LoginPCModal
-        isOpen={loginModalOpen}
-        onClose={closeLoginModal}
-        onLoginSuccess={handleLoginSuccess}
-        onPCAllocationSubmit={handlePCAllocationSubmit}
-        defaultDepartment={userLevelData?.department || ""}
-      />
     </>
   );
 };

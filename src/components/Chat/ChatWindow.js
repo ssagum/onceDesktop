@@ -1269,23 +1269,64 @@ const ChatWindow = () => {
   // 초기 발신자 설정 - 로그인 상태면 해당 사용자, 아니면 부서의 첫 번째 사용자
   useEffect(() => {
     const initSender = async () => {
-      if (userLevelData?.uid && userLevelData?.name) {
-        // 로그인 상태
-        setSelectedSender({
-          id: userLevelData.uid,
-          name: userLevelData.name || userLevelData.displayName || "사용자",
-          department: userLevelData.department || "",
-        });
-      } else if (userLevelData?.department) {
-        // 부서는 알지만 로그인은 안 된 상태
-        try {
-          const users = await getUsersFromDepartment(userLevelData.department);
-          setDepartmentUsers(users);
-          // 자동 선택하지 않음 (첫 번째 사용자 자동 선택 제거)
-          setSelectedSender(null);
-        } catch (error) {
-          console.error("부서 사용자 목록 가져오기 오류:", error);
+      try {
+        console.log("발신자 설정 시도:", userLevelData);
+
+        // 현재 사용자 설정
+        if (userLevelData?.uid || userLevelData?.name) {
+          const sender = {
+            id: userLevelData?.uid || `temp-${Date.now()}`,
+            name: userLevelData?.name || userLevelData?.displayName || "사용자",
+            role: userLevelData?.role || "",
+            department: userLevelData?.department || "",
+          };
+
+          console.log("로그인 유저로 발신자 설정:", sender.name);
+          setSelectedSender(sender);
+
+          // 사용자 정보 저장 (로컬 스토리지)
+          try {
+            localStorage.setItem("lastSender", JSON.stringify(sender));
+          } catch (err) {
+            console.error("발신자 정보 저장 실패:", err);
+          }
+        } else if (userLevelData?.department) {
+          // 부서는 알지만 로그인은 안 된 상태
+          try {
+            const users = await getUsersFromDepartment(
+              userLevelData.department
+            );
+            if (users && users.length > 0) {
+              setDepartmentUsers(users);
+
+              // 이전에 저장된 발신자 정보 확인
+              try {
+                const savedSender = localStorage.getItem("lastSender");
+                if (savedSender) {
+                  const sender = JSON.parse(savedSender);
+                  console.log("저장된 발신자 정보 사용:", sender.name);
+                  setSelectedSender(sender);
+                } else {
+                  // 저장된 정보 없음 - 미설정
+                  setSelectedSender(null);
+                  console.log(
+                    "로그인 안된 상태로 발신자 미설정, 부서원 목록 로드됨:",
+                    users.length
+                  );
+                }
+              } catch (err) {
+                console.error("저장된 발신자 정보 복원 실패:", err);
+                setSelectedSender(null);
+              }
+            } else {
+              console.warn("부서에 사용자가 없습니다. 발신자를 선택해주세요.");
+            }
+          } catch (error) {
+            console.error("부서 사용자 목록 가져오기 오류:", error);
+          }
         }
+      } catch (error) {
+        console.error("발신자 초기화 중 오류 발생:", error);
       }
     };
 
@@ -1312,6 +1353,7 @@ const ChatWindow = () => {
     console.log("채팅방 타입:", room.type);
     console.log("유저 레벨 데이터:", userLevelData);
     console.log("사용자 부서:", userLevelData?.department);
+    console.log("현재 발신자:", selectedSender);
 
     // 메시지 전송 권한 설정 - 개선된 로직
     if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL) {
@@ -1345,17 +1387,37 @@ const ChatWindow = () => {
       // 채팅방 멤버를 발신자 선택 목록으로도 사용
       setDepartmentUsers(roomMembers);
 
-      // 로그인 상태에서만 사용자 자신을 발신자로 설정, 비로그인 상태에서는 선택하지 않음
-      if (userLevelData?.uid) {
-        const currentUser = roomMembers.find(
-          (member) => member.id === userLevelData.uid
-        );
-        if (currentUser) {
-          setSelectedSender(currentUser);
+      // 아직 발신자가 설정되지 않았거나 로그인 상태에서만 발신자 재설정
+      if (!selectedSender) {
+        if (userLevelData?.uid) {
+          // 로그인 상태 - 사용자 정보로 설정
+          const currentUser = roomMembers.find(
+            (member) => member.id === userLevelData.uid
+          );
+          if (currentUser) {
+            console.log(
+              "채팅방 진입 시 로그인 사용자를 발신자로 설정:",
+              currentUser.name
+            );
+            setSelectedSender(currentUser);
+          } else if (roomMembers.length > 0) {
+            // 목록에 사용자가 없으면 첫 번째 멤버로 설정
+            console.log(
+              "사용자를 찾을 수 없어 첫 번째 멤버로 설정:",
+              roomMembers[0].name
+            );
+            setSelectedSender(roomMembers[0]);
+          }
+        } else if (roomMembers.length > 0) {
+          // 비로그인 상태 - 첫 번째 멤버로 설정
+          console.log(
+            "비로그인 상태에서 첫 번째 멤버로 설정:",
+            roomMembers[0].name
+          );
+          setSelectedSender(roomMembers[0]);
         }
       } else {
-        // 비로그인 상태에서는 발신자 선택 안함
-        setSelectedSender(null);
+        console.log("이미 발신자가 설정됨:", selectedSender.name);
       }
     } catch (error) {
       console.error("채팅방 멤버 가져오기 오류:", error);

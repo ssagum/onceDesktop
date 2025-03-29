@@ -2281,7 +2281,7 @@ const ScheduleGrid = ({
             position: "relative",
             height: "240px", // 탭 UI 제거로 높이 다시 감소
             overflow: "visible",
-            zIndex: 50,
+            zIndex: 10,
           }}
         >
           <MemoOverlay>
