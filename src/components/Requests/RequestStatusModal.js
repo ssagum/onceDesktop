@@ -38,6 +38,7 @@ import RequestModal from "../Home/RequestModal";
 import { format } from "date-fns";
 import ChipText from "../common/ChipText";
 import { useToast } from "../../contexts/ToastContext";
+import { useFirestore } from "../../hooks/useFirestore";
 
 // 전역 상태 변수 추가 - 동시에 여러 요소가 하이라이트되는 문제 방지
 let currentHighlightedElement = null;
@@ -48,7 +49,7 @@ let globalDragState = {
 };
 
 // 드래그 가능한 항목 컴포넌트
-const DraggableItem = ({ id, data, type, onItemClick }) => {
+const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
   const {
     attributes,
     listeners,
@@ -428,6 +429,8 @@ const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
       status: id,
     },
   });
+
+  // 관리자 아닐 때는 드래그 불가능하도록 설정 제거
 
   // 현재 이 영역 위에 마우스가 있는지 여부를 확인하고 UI 업데이트
   useEffect(() => {
@@ -881,6 +884,7 @@ const RequestStatusModal = ({
 }) => {
   const { userLevelData } = useUserLevel();
   const { showToast } = useToast();
+  const { autoHideOldDocuments } = useFirestore();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [vacationRequests, setVacationRequests] = useState([]);
   const [stockRequests, setStockRequests] = useState([]);
@@ -967,6 +971,19 @@ const RequestStatusModal = ({
 
     if (!userLevelData?.id || !isVisible) return;
 
+    // 모달이 열릴 때 일주일이 지난 항목들을 숨김 처리
+    const hideOldItems = async () => {
+      try {
+        await autoHideOldDocuments("vacations");
+        await autoHideOldDocuments("stockRequests");
+        await autoHideOldDocuments("requests");
+      } catch (error) {
+        console.error("오래된 항목 숨김 처리 오류:", error);
+      }
+    };
+
+    hideOldItems();
+
     // 휴가 신청 데이터 가져오기
     const vacationQuery = query(
       collection(db, "vacations"),
@@ -1020,7 +1037,7 @@ const RequestStatusModal = ({
       unsubscribeStock();
       unsubscribeRequest();
     };
-  }, [userLevelData?.id, isVisible, useDummyData]);
+  }, [userLevelData?.id, isVisible, useDummyData, autoHideOldDocuments]);
 
   // 컴포넌트 마운트 시 초기 탭 설정
   useEffect(() => {
@@ -1209,11 +1226,10 @@ const RequestStatusModal = ({
     // 변경된 내용 DB에 업데이트 (더미 데이터 사용 중에는 로컬 상태만 변경)
     if (useDummyData) {
       updateFunction(newStatus);
-      showToast(
+      console.log(
         `상태가 '${
           STATUS_DISPLAY_NAMES[newStatus] || newStatus
-        }'(으)로 변경되었습니다.`,
-        "success"
+        }'(으)로 변경되었습니다.`
       );
     } else {
       try {
@@ -1230,16 +1246,14 @@ const RequestStatusModal = ({
           updatedByName: userLevelData?.name || "System",
         }).then(() => {
           updateFunction(newStatus);
-          showToast(
+          console.log(
             `상태가 '${
               STATUS_DISPLAY_NAMES[newStatus] || newStatus
-            }'(으)로 변경되었습니다.`,
-            "success"
+            }'(으)로 변경되었습니다.`
           );
         });
       } catch (error) {
         console.error("상태 업데이트 오류:", error);
-        showToast("상태 변경에 실패했습니다.", "error");
       }
     }
   };
@@ -1513,7 +1527,10 @@ const RequestStatusModal = ({
                   관리자 권한으로 항목을 드래그하여 상태를 변경할 수 있습니다.
                 </span>
               ) : (
-                <span>신청 상태에 따라 자동으로 분류됩니다.</span>
+                <span>
+                  신청 상태에 따라 자동으로 분류됩니다. 반려된 사안과 승인된
+                  사안(비품의 경우 주문완료)은 일주일 후 목록에서 사라집니다.
+                </span>
               )}
             </div>
             <button

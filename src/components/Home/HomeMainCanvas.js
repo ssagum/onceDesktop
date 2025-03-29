@@ -723,8 +723,11 @@ export default function HomeMainCanvas() {
                     <div onClick={() => setShowNoticeEditor(true)}>
                       <Square title={"공지등록"} />
                     </div>
-                    <div onClick={() => setShowTaskAdd(true)}>
+                    {/* <div onClick={() => setShowTaskAdd(true)}>
                       <Square title={"업무추가"} />
+                    </div> */}
+                    <div onClick={() => openRequestStatusModal("vacation")}>
+                      <Square title={"휴가신청"} />
                     </div>
                   </div>
                 ) : (

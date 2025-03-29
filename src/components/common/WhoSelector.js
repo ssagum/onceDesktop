@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import ModalTemplate from "./ModalTemplate";
 import HospitalStaffSelector from "./HospitalStaffSelector";
 import NameCoin from "./NameCoin";
-import hospitalStaff from "../../datas/users";
+import { db } from "../../firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 const SelectorButton = styled.div`
   height: 40px;
@@ -27,6 +28,42 @@ export default function WhoSelector({
   disabled = false,
 }) {
   const [whoModalOpen, setWhoModalOpen] = useState(false);
+  const [hospitalStaff, setHospitalStaff] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Firebase에서 사용자 데이터 가져오기
+  useEffect(() => {
+    const fetchStaffData = async () => {
+      try {
+        setIsLoading(true);
+        const usersQuery = query(collection(db, "users"));
+        const querySnapshot = await getDocs(usersQuery);
+
+        const staffData = [];
+        querySnapshot.forEach((doc) => {
+          const userData = doc.data();
+
+          // 퇴직자가 아닌 경우만 추가
+          if (!userData.status || userData.status !== "퇴직") {
+            staffData.push({
+              id: doc.id,
+              name: userData.name || "",
+              department: userData.department || "",
+              role: userData.role || "",
+            });
+          }
+        });
+
+        setHospitalStaff(staffData);
+      } catch (error) {
+        console.error("직원 데이터를 가져오는 중 오류 발생:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStaffData();
+  }, []);
 
   const selectedStaff = hospitalStaff.filter((staff) =>
     selectedPeople.includes(staff.id)
@@ -53,6 +90,8 @@ export default function WhoSelector({
       });
 
       onPeopleChange(uniqueStaffIds);
+      // 모달 닫기
+      setWhoModalOpen(false);
     }
   };
 
@@ -67,6 +106,10 @@ export default function WhoSelector({
   };
 
   const renderSelectedStaff = () => {
+    if (isLoading) {
+      return <span className="text-onceGray">로딩 중...</span>;
+    }
+
     if (selectedStaff.length === 0) {
       return <span className="text-onceGray">{who} ▼</span>;
     }
@@ -94,7 +137,7 @@ export default function WhoSelector({
   return (
     <SelectorButton
       onClick={handleClick}
-      className="h-[40px] bg-white flex justify-center items-center border border-gray-300 rounded-md px-4 w-[120px]"
+      className="h-[40px] bg-white flex justify-center items-center border border-gray-300 rounded-md px-4 w-full"
       disabled={disabled}
     >
       {renderSelectedStaff()}

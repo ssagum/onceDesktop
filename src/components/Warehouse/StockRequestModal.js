@@ -488,7 +488,7 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
           <TopZone className="w-full flex flex-row justify-between mb-4">
             <div className="flex justify-between mb-4">
               <div className="flex items-center space-x-4">
-                <label className="text-black font-semibold">
+                <label className="text-black font-semibold w-[120px]">
                   작성자:<span className="text-red-500">*</span>
                 </label>
                 <WhoSelector

@@ -106,7 +106,8 @@ const TypeButton = ({ active, onClick, children }) => {
         active
           ? "bg-onceBlue text-white border-onceBlue"
           : "bg-white text-onceBlue border-onceBlue"
-      }`}>
+      }`}
+    >
       {children}
     </button>
   );
@@ -974,7 +975,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         isVisible={isVisible}
         setIsVisible={setIsVisible}
         showCancel={false}
-        modalClassName="rounded-xl">
+        modalClassName="rounded-xl"
+      >
         {!isLoggedIn ? (
           <div className="flex flex-col items-center w-onceBigModal h-[400px] bg-white px-[40px] py-[30px] justify-center">
             <ModalHeaderZone className="flex flex-row w-full justify-between h-[50px] items-center mb-[20px]">
@@ -997,7 +999,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
             <button
               onClick={openLoginModal}
-              className="mt-4 px-6 py-3 bg-onceBlue text-white rounded-md font-medium hover:bg-onceBlue transition-colors">
+              className="mt-4 px-6 py-3 bg-onceBlue text-white rounded-md font-medium hover:bg-onceBlue transition-colors"
+            >
               로그인하기
             </button>
           </div>
@@ -1113,17 +1116,20 @@ export default function VacationModal({ isVisible, setIsVisible }) {
                       <div className="flex space-x-2">
                         <TypeButton
                           active={vacationForm.vacationType === "휴가"}
-                          onClick={() => handleVacationTypeChange("휴가")}>
+                          onClick={() => handleVacationTypeChange("휴가")}
+                        >
                           휴가
                         </TypeButton>
                         <TypeButton
                           active={vacationForm.vacationType === "반차"}
-                          onClick={() => handleVacationTypeChange("반차")}>
+                          onClick={() => handleVacationTypeChange("반차")}
+                        >
                           반차
                         </TypeButton>
                         <TypeButton
                           active={vacationForm.vacationType === "경조사"}
-                          onClick={() => handleVacationTypeChange("경조사")}>
+                          onClick={() => handleVacationTypeChange("경조사")}
+                        >
                           경조사
                         </TypeButton>
                       </div>

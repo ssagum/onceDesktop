@@ -112,26 +112,30 @@ export default function RequestModal({ isVisible, setIsVisible }) {
           </div>
         </ModalHeaderZone>
         <WhoZone className="flex flex-row items-center w-full px-[20px] my-[20px] justify-between">
-          <div className="flex flex-row items-center">
-            <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[60px]">
-              발신:
-            </label>
-            <WhoSelector
-              who={"발신자"}
-              selectedPeople={senderPeople}
-              onPeopleChange={handleSenderChange}
-            />
-            <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] ml-[40px]">
-              수신:
-            </label>
-            <WhoSelector
-              who={"수신자"}
-              selectedPeople={receiverPeople}
-              onPeopleChange={handleReceiverChange}
-            />
+          <div className="flex flex-row items-center justify-between">
+            <div className="flex flex-row items-center">
+              <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] whitespace-nowrap">
+                발신:
+              </label>
+              <WhoSelector
+                who={"발신자"}
+                selectedPeople={senderPeople}
+                onPeopleChange={handleSenderChange}
+              />
+            </div>
+            <div className="flex flex-row items-center">
+              <label className="h-[40px] ml-[20px] flex flex-row items-center font-semibold text-black w-[80px] whitespace-nowrap">
+                수신:
+              </label>
+              <WhoSelector
+                who={"수신자"}
+                selectedPeople={receiverPeople}
+                onPeopleChange={handleReceiverChange}
+              />
+            </div>
           </div>
-          <div className="flex flex-row items-center">
-            <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] ml-[40px]">
+          <div className="flex flex-row items-center justify-end">
+            <label className="h-[40px] flex flex-row items-center font-semibold text-black w-[80px] whitespace-nowrap">
               중요도:
             </label>
             <div className="flex flex-row gap-x-[10px]">
