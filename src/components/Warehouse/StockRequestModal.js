@@ -424,6 +424,7 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
         status: "대기중", // 초기 상태: 대기중
         requestedBy: userLevelData?.id || "",
         requestedByName: userLevelData?.name || "",
+        requestType: "manual", // 수동 신청 표시
       };
 
       console.log("저장할 비품신청 데이터:", stockRequestData);

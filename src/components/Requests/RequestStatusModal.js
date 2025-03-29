@@ -29,6 +29,9 @@ import {
   onSnapshot,
   doc,
   updateDoc,
+  getDocs,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useUserLevel } from "../../utils/UserLevelContext";
@@ -39,6 +42,7 @@ import { format } from "date-fns";
 import ChipText from "../common/ChipText";
 import { useToast } from "../../contexts/ToastContext";
 import { useFirestore } from "../../hooks/useFirestore";
+import VendorModal from "../Warehouse/VendorModal";
 
 // 애니메이션 스타일 추가
 const styles = `
@@ -291,6 +295,22 @@ const ItemDetailModal = ({
                 <h3 className="text-sm font-medium text-gray-500">현재 상태</h3>
                 <p className={`text-base ${getStatusColor(item.status)}`}>
                   {item.status}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">신청 유형</h3>
+                <p className="text-base">
+                  {item.requestType === "auto" ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      자동 신청
+                    </span>
+                  ) : item.requestType === "manual" ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      수동 신청
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </p>
               </div>
               <div className="col-span-2">
@@ -956,18 +976,64 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
             <span>{data.category}</span>
           </div>
 
-          <div className="flex flex-wrap text-sm text-gray-600 mb-2">
-            <span className="mr-2 bg-gray-100 px-2 py-0.5 rounded-full text-xs">
+          <div className="flex items-center text-sm text-gray-700 mb-2">
+            {data.requestType === "auto" ? (
+              <span className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full mr-2">
+                자동
+              </span>
+            ) : data.requestType === "manual" ? (
+              <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full mr-2">
+                수동
+              </span>
+            ) : null}
+
+            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
+              {data.department || "미지정"}
+            </span>
+          </div>
+
+          {/* 수량, 단가, 총액을 같은 스타일로 한 줄에 배치 */}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">
               수량: {data.quantity} {data.measure || "개"}
             </span>
-            {data.price > 0 && (
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs mt-2">
-                단가: {data.price.toLocaleString()}원
+            <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">
+              단가: {data.price ? data.price.toLocaleString() + "원" : "미지정"}
+            </span>
+            {data.price > 0 && data.quantity > 0 && (
+              <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">
+                총액: {(data.price * data.quantity).toLocaleString()}원
               </span>
             )}
           </div>
 
-          <div className="flex justify-between items-center mt-1 text-xs text-gray-500 pt-1 border-t border-gray-100">
+          {data.vendor && (
+            <div
+              className="flex items-center text-sm text-blue-600 mt-2 cursor-pointer hover:text-blue-800"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleVendorClick(data.vendor);
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+              <span className="underline">{data.vendor}</span>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center text-xs text-gray-500 mt-3">
             <div className="flex items-center">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -983,9 +1049,9 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 />
               </svg>
-              {data.requestedByName}
+              {data.writer || "Unknown"}
             </div>
-            <div>{formatShortDate(data.timestamp)}</div>
+            <div>{formatShortDate(data.createdAt)}</div>
           </div>
         </>
       );
@@ -1349,6 +1415,7 @@ const DUMMY_VACATION_REQUESTS = [
     days: 3,
     reason: "연차 사용",
     timestamp: new Date("2023/12/10").getTime(),
+    requestType: "manual",
   },
   {
     id: "vac2",
@@ -1363,6 +1430,7 @@ const DUMMY_VACATION_REQUESTS = [
     days: 0.5,
     reason: "개인 사정",
     timestamp: new Date("2023/12/13").getTime(),
+    requestType: "manual",
   },
   {
     id: "vac3",
@@ -1376,6 +1444,7 @@ const DUMMY_VACATION_REQUESTS = [
     days: 3,
     reason: "결혼식 참석",
     timestamp: new Date("2023/12/01").getTime(),
+    requestType: "manual",
   },
   {
     id: "vac4",
@@ -1389,6 +1458,7 @@ const DUMMY_VACATION_REQUESTS = [
     days: 3,
     reason: "크리스마스 휴가",
     timestamp: new Date("2023/12/18").getTime(),
+    requestType: "manual",
   },
 ];
 
@@ -1403,6 +1473,9 @@ const DUMMY_STOCK_REQUESTS = [
     status: "입고 완료",
     requestedByName: "김의사",
     timestamp: new Date("2023/12/05").getTime(),
+    requestType: "manual",
+    department: "진료", // 명시적 부서 추가
+    requestReason: "소독제 부족으로 추가 구매 필요",
   },
   {
     id: "stock2",
@@ -1414,6 +1487,9 @@ const DUMMY_STOCK_REQUESTS = [
     status: "승인됨",
     requestedByName: "박간호",
     timestamp: new Date("2023/12/10").getTime(),
+    requestType: "manual",
+    department: "간호", // 명시적 부서 추가
+    requestReason: "문서 작업용 프린터 용지 신청",
   },
   {
     id: "stock3",
@@ -1425,17 +1501,24 @@ const DUMMY_STOCK_REQUESTS = [
     status: "장바구니",
     requestedByName: "최관리",
     timestamp: new Date("2023/12/15").getTime(),
+    requestType: "manual",
+    requestReason: "노후 장비 교체 필요",
+    department: "원무",
   },
   {
     id: "stock4",
     itemName: "수술 장갑",
     category: "의료용 소모품",
-    quantity: 20,
+    quantity: 30,
     measure: "박스",
     price: 120000,
     status: "주문완료",
     requestedByName: "이과장",
     timestamp: new Date("2023/12/12").getTime(),
+    requestType: "auto",
+    requestReason: "안전재고(25) 이하로 수량(15)이 감소하여 자동 신청됨",
+    safeStock: 25,
+    department: "진료",
   },
   {
     id: "stock5",
@@ -1447,6 +1530,9 @@ const DUMMY_STOCK_REQUESTS = [
     status: "대기중",
     requestedByName: "최과장",
     timestamp: new Date("2023/12/17").getTime(),
+    requestType: "manual",
+    requestReason: "추가 근무 공간 설치를 위한 신청",
+    department: "원무",
   },
   {
     id: "stock6",
@@ -1458,6 +1544,40 @@ const DUMMY_STOCK_REQUESTS = [
     status: "장바구니",
     requestedByName: "김간호",
     timestamp: new Date("2023/12/19").getTime(),
+    requestType: "auto",
+    requestReason: "안전재고(40) 이하로 수량(30)이 감소하여 자동 신청됨",
+    safeStock: 40,
+    department: "간호",
+  },
+  {
+    id: "stock7",
+    itemName: "소독용 알코올",
+    category: "의료용 소모품",
+    quantity: 20,
+    measure: "통",
+    price: 8000,
+    status: "대기중",
+    requestedByName: "시스템",
+    timestamp: new Date("2023/12/20").getTime(),
+    requestType: "auto",
+    requestReason: "안전재고(15) 이하로 수량(8)이 감소하여 자동 신청됨",
+    safeStock: 15,
+    department: "원무",
+  },
+  {
+    id: "stock8",
+    itemName: "주사기",
+    category: "의료용 소모품",
+    quantity: 100,
+    measure: "개",
+    price: 5000,
+    status: "승인됨",
+    requestedByName: "시스템",
+    timestamp: new Date("2023/12/18").getTime(),
+    requestType: "auto",
+    requestReason: "안전재고(80) 이하로 수량(35)이 감소하여 자동 신청됨",
+    safeStock: 80,
+    department: "원무",
   },
 ];
 
@@ -1472,6 +1592,7 @@ const DUMMY_REQUESTS = [
     senderPeople: ["user1"],
     priority: "상",
     timestamp: new Date("2023/12/01").getTime(),
+    requestType: "manual",
   },
   {
     id: "req2",
@@ -1482,6 +1603,7 @@ const DUMMY_REQUESTS = [
     senderPeople: ["user1"],
     priority: "중",
     timestamp: new Date("2023/12/10").getTime(),
+    requestType: "manual",
   },
   {
     id: "req3",
@@ -1492,6 +1614,7 @@ const DUMMY_REQUESTS = [
     senderPeople: ["user1"],
     priority: "하",
     timestamp: new Date("2023/12/15").getTime(),
+    requestType: "manual",
   },
   {
     id: "req4",
@@ -1503,6 +1626,7 @@ const DUMMY_REQUESTS = [
     senderPeople: ["user1"],
     priority: "중",
     timestamp: new Date("2023/12/18").getTime(),
+    requestType: "manual",
   },
 ];
 
@@ -1555,6 +1679,8 @@ const RequestStatusModal = ({
   const [vacationRequests, setVacationRequests] = useState([]);
   const [stockRequests, setStockRequests] = useState([]);
   const [generalRequests, setGeneralRequests] = useState([]);
+  // 누락된 상태 변수 추가
+  const [stockItems, setStockItems] = useState([]);
 
   // 모달 상태
   const [showVacationModal, setShowVacationModal] = useState(false);
@@ -1609,40 +1735,16 @@ const RequestStatusModal = ({
   useEffect(() => {
     // 더미 데이터 사용시 기본 데이터 설정
     if (useDummyData) {
-      // 상태 이름 변경
-      const updatedVacations = DUMMY_VACATION_REQUESTS.map((item) => ({
-        ...item,
-        status:
-          item.status === "승인됨"
-            ? "승인됨"
-            : item.status === "반려됨"
-            ? "반려됨"
-            : item.status,
-      }));
-
+      // 부서 정보가 포함된 더미 데이터 생성
       const updatedStocks = DUMMY_STOCK_REQUESTS.map((item) => ({
         ...item,
-        status:
-          item.status === "승인됨"
-            ? "승인됨"
-            : item.status === "반려됨"
-            ? "반려됨"
-            : item.status,
+        department: item.department || "진료", // 기본값으로 진료 설정
       }));
 
-      const updatedRequests = DUMMY_REQUESTS.map((item) => ({
-        ...item,
-        status:
-          item.status === "승인됨"
-            ? "승인됨"
-            : item.status === "반려됨"
-            ? "반려됨"
-            : item.status,
-      }));
-
-      setVacationRequests(updatedVacations);
+      // 모든 더미 데이터 상태 업데이트
       setStockRequests(updatedStocks);
-      setGeneralRequests(updatedRequests);
+      setVacationRequests(DUMMY_VACATION_REQUESTS);
+      setGeneralRequests(DUMMY_REQUESTS);
       return;
     }
 
@@ -2295,6 +2397,159 @@ const RequestStatusModal = ({
     }
   };
 
+  // RequestStatusModal 컴포넌트에서 필요한 상태와 핸들러 추가
+  const [vendorModalVisible, setVendorModalVisible] = useState(false);
+  const [selectedVendorData, setSelectedVendorData] = useState(null);
+
+  // 거래처 클릭 핸들러
+  const handleVendorClick = async (vendorName) => {
+    if (!vendorName) return;
+
+    try {
+      // Firestore에서 거래처 데이터 가져오기
+      const vendorsRef = query(
+        collection(db, "vendors"),
+        where("clientName", "==", vendorName)
+      );
+
+      const querySnapshot = await getDocs(vendorsRef);
+      if (!querySnapshot.empty) {
+        const vendorDoc = querySnapshot.docs[0];
+        setSelectedVendorData({ id: vendorDoc.id, ...vendorDoc.data() });
+        setVendorModalVisible(true);
+      } else {
+        // 더미 데이터에서 거래처 찾기 (실제 환경에서는 필요 없을 수 있음)
+        const dummyVendors = [
+          {
+            id: "1",
+            clientName: "메디컬 서플라이",
+            url: "medicalsupply.co.kr",
+          },
+          { id: "2", clientName: "의료기기마트", url: "medicalmart.com" },
+          {
+            id: "3",
+            clientName: "헬스케어솔루션",
+            url: "healthcare-solution.kr",
+          },
+          // 필요에 따라 더 추가
+        ];
+
+        const foundVendor = dummyVendors.find(
+          (v) => v.clientName === vendorName
+        );
+        if (foundVendor) {
+          setSelectedVendorData(foundVendor);
+          setVendorModalVisible(true);
+        } else {
+          showToast("해당 거래처 정보를 찾을 수 없습니다.", "error");
+        }
+      }
+    } catch (error) {
+      console.error("거래처 정보 조회 오류:", error);
+      showToast("거래처 정보를 불러오는 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  // 비품 신청 시 부서 정보 활용 (수정)
+  const handleNewStockRequest = () => {
+    // 사용자의 부서 정보 가져오기
+    const userDepartment = userLevelData?.department || "미지정";
+
+    // 초기 데이터 설정 - 부서 정보 포함
+    const initialData = {
+      department: userDepartment,
+      requestType: "manual", // 수동 신청으로 기본값 설정
+      writer: userLevelData?.name || "",
+      // 기타 필요한 초기 데이터
+    };
+
+    // 비품 신청 모달 열기
+    setStockRequestModalVisible(true);
+    setStockRequestInitialData(initialData);
+  };
+
+  // 비품 데이터 로드 부분
+  useEffect(() => {
+    if (!isVisible) return;
+
+    // 재고 요청 데이터 가져오기
+    const stockRef = query(
+      collection(db, "stockRequests"),
+      orderBy("createdAt2", "desc")
+    );
+
+    const unsubscribe = onSnapshot(stockRef, (snapshot) => {
+      const stockData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          department: data.department || userLevelData?.department || "미지정", // 부서 정보 명시적 설정
+          createdAt: data.createdAt2?.toDate() || new Date(),
+          // 다른 필요한 필드들...
+        };
+      });
+
+      setStockItems(stockData);
+    });
+
+    return () => unsubscribe();
+  }, [isVisible, userLevelData?.department]);
+
+  // 테스트를 위한 더미 데이터 (실제 데이터가 없을 경우에만 사용)
+  useEffect(() => {
+    if (!isVisible) return;
+
+    // 실제 데이터가 없거나 테스트가 필요한 경우에만 더미 데이터 사용
+    if (stockItems.length === 0) {
+      // 더미 비품 데이터 설정
+      const dummyStockItems = [
+        {
+          id: "stock1",
+          itemName: "주사기 세트",
+          category: "의료용 소모품",
+          department: "진료", // 명시적 부서 정보
+          quantity: 50,
+          price: 15000,
+          requestType: "auto",
+          status: "대기중",
+          writer: "김의사",
+          createdAt: new Date(),
+          vendor: "메디컬 서플라이",
+        },
+        {
+          id: "stock2",
+          itemName: "소독용 알코올",
+          category: "의료용 소모품",
+          department: "간호", // 명시적 부서 정보
+          quantity: 30,
+          price: 8000,
+          requestType: "manual",
+          status: "승인됨",
+          writer: "이간호",
+          createdAt: new Date(),
+          vendor: "의료기기마트",
+        },
+        {
+          id: "stock3",
+          itemName: "프린터 토너",
+          category: "사무용품",
+          department: "원무", // 명시적 부서 정보
+          quantity: 5,
+          price: 120000,
+          requestType: "manual",
+          status: "대기중",
+          writer: "최원무",
+          createdAt: new Date(),
+          vendor: "삼성메디컬",
+        },
+      ];
+
+      // 상태 업데이트
+      setStockItems(dummyStockItems);
+    }
+  }, [isVisible, stockItems.length]);
+
   return (
     <>
       {/* 애니메이션 스타일 적용 */}
@@ -2524,6 +2779,17 @@ const RequestStatusModal = ({
         isVisible={showRequestModal}
         setIsVisible={setShowRequestModal}
       />
+
+      {/* 거래처 정보 모달 */}
+      {vendorModalVisible && selectedVendorData && (
+        <VendorModal
+          isVisible={vendorModalVisible}
+          setIsVisible={setVendorModalVisible}
+          vendor={selectedVendorData}
+          mode="view"
+          viewOnly={true}
+        />
+      )}
     </>
   );
 };

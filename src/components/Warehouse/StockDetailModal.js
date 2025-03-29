@@ -371,6 +371,44 @@ export default function StockDetailModal({
         if (newQuantity <= Number(item.safeStock || 0)) {
           newState = "주문 필요";
           historyState = "주문 필요";
+
+          // 안전재고 이하로 떨어진 경우 자동 비품 신청 생성
+          if (item.safeStock && Number(item.safeStock) > 0) {
+            try {
+              // 안전재고까지 채우기 위해 필요한 수량 계산
+              const requiredQuantity = Number(item.safeStock) - newQuantity + 5; // 안전재고 + 여유분
+
+              // 자동 비품 신청 데이터 생성
+              const autoRequestData = {
+                itemName: item.itemName,
+                category: item.category,
+                department: item.department,
+                quantity: requiredQuantity,
+                vendor: item.vendor || "",
+                measure: item.measure || "",
+                requestReason: `안전재고(${item.safeStock}) 이하로 수량(${newQuantity})이 감소하여 자동 신청됨`,
+                writer: simpleStockData.writer,
+                price: item.price || 0,
+                safeStock: item.safeStock,
+                vat: item.vat !== undefined ? item.vat : true,
+                createdAt: Date.now(),
+                createdAt2: serverTimestamp(),
+                status: "대기중",
+                requestedBy: "system",
+                requestedByName: "시스템",
+                requestType: "auto", // 자동 신청 표시
+                parentItemId: item.id, // 원본 아이템 ID 저장
+              };
+
+              // stockRequests 컬렉션에 자동 비품 신청 저장
+              await addDoc(collection(db, "stockRequests"), autoRequestData);
+
+              console.log("자동 비품 신청 생성 완료:", autoRequestData);
+            } catch (autoRequestError) {
+              console.error("자동 비품 신청 생성 중 오류:", autoRequestError);
+              // 자동 신청 오류는 사용자에게 보여주지 않고 로그만 남김
+            }
+          }
         }
         // 출고 시에는 기본적으로 상태를 변경하지 않음
       }
@@ -417,6 +455,18 @@ export default function StockDetailModal({
       });
       setIsSimpleStockModalOn(false);
       showToast(`${stockAction} 처리가 완료되었습니다.`, "success");
+
+      // 안전재고 이하일 때 알림 표시
+      if (
+        stockAction === "출고" &&
+        newQuantity <= Number(item.safeStock || 0) &&
+        item.safeStock
+      ) {
+        showToast(
+          `재고가 안전재고 이하로 감소하여 자동으로 비품 신청이 생성되었습니다.`,
+          "info"
+        );
+      }
     } catch (error) {
       console.error("Error updating stock:", error);
       showToast(`${stockAction} 처리 중 오류가 발생했습니다.`, "error");

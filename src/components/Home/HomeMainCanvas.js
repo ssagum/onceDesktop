@@ -121,6 +121,142 @@ const openChatWindow = () => {
   window.electron.openChatWindow();
 };
 
+const StatusBar = ({ currentDate, onOpenRequestModal }) => {
+  const [vacationCount, setVacationCount] = useState(0);
+  const [approvalCount, setApprovalCount] = useState(0);
+  const [orderCount, setOrderCount] = useState(0);
+
+  // 실제 구현에서는 데이터를 가져오는 로직이 필요합니다
+  useEffect(() => {
+    // 예시 데이터 - 실제로는 API나 Firestore에서 데이터를 가져와야 합니다
+    const formatDate = format(currentDate, "yyyy/MM/dd");
+    // 1. 휴가자 정보 가져오기
+    const fetchVacations = async () => {
+      try {
+        // 실제 구현 시 여기서 API 호출
+        setVacationCount(2); // 예시 값
+      } catch (error) {
+        console.error("휴가 정보 조회 오류:", error);
+      }
+    };
+
+    // 2. 결제 필요 건수 가져오기
+    const fetchPendingApprovals = async () => {
+      try {
+        // 실제 구현 시 여기서 API 호출
+        setApprovalCount(5); // 예시 값
+      } catch (error) {
+        console.error("결제 필요 정보 조회 오류:", error);
+      }
+    };
+
+    // 3. 주문 필요 건수 가져오기
+    const fetchOrderItems = async () => {
+      try {
+        // 실제 구현 시 여기서 API 호출
+        setOrderCount(3); // 예시 값
+      } catch (error) {
+        console.error("주문 필요 정보 조회 오류:", error);
+      }
+    };
+
+    fetchVacations();
+    fetchPendingApprovals();
+    fetchOrderItems();
+  }, [currentDate]);
+
+  return (
+    <div className="w-full mt-4">
+      <div className="flex justify-between items-center bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* 휴가자 */}
+        <div
+          className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-all"
+          onClick={() => onOpenRequestModal("vacation")}
+        >
+          <div className="rounded-full bg-blue-100 p-2 mr-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-blue-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-600">휴가자</p>
+            <p className="text-base font-bold text-blue-600">
+              {vacationCount > 0 ? `${vacationCount}명` : "없음"}
+            </p>
+          </div>
+        </div>
+
+        {/* 결제 필요 */}
+        <div
+          className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-yellow-50 transition-all"
+          onClick={() => onOpenRequestModal("request")}
+        >
+          <div className="rounded-full bg-yellow-100 p-2 mr-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-yellow-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-600">결제 필요</p>
+            <p className="text-base font-bold text-yellow-600">
+              {approvalCount}건
+            </p>
+          </div>
+        </div>
+
+        {/* 주문 필요 */}
+        <div
+          className="flex-1 py-3 px-4 flex items-center cursor-pointer hover:bg-green-50 transition-all"
+          onClick={() => onOpenRequestModal("stock")}
+        >
+          <div className="rounded-full bg-green-100 p-2 mr-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+              />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-600">주문 필요</p>
+            <p className="text-base font-bold text-green-600">{orderCount}건</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function HomeMainCanvas() {
   const { userLevelData, updateUserLevelData } = useUserLevel();
   const [selectedTask, setSelectedTask] = useState(null);
@@ -655,6 +791,12 @@ export default function HomeMainCanvas() {
               onNextDay={handleNextDay}
             />
           </div>
+
+          <StatusBar
+            currentDate={currentDate}
+            onOpenRequestModal={openRequestStatusModal}
+          />
+
           <ToDoZone className="flex-1 mt-[20px] overflow-auto">
             <ToDo
               tasks={filteredTasks}

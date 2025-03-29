@@ -1122,26 +1122,26 @@ const Schedule = () => {
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <GridContainer>
-            <ToggleContainer>
-              <ToggleSlider position={viewMode === "진료" ? "left" : "right"} />
-              <ToggleOption
-                active={viewMode === "진료"}
-                onClick={() => setViewMode("진료")}
-              >
-                <ToggleIcon>👨‍⚕️</ToggleIcon>
-                진료 예약
-              </ToggleOption>
-              <ToggleOption
-                active={viewMode === "물리치료"}
-                onClick={() => setViewMode("물리치료")}
-              >
-                <ToggleIcon>💪</ToggleIcon>
-                물리치료 예약
-              </ToggleOption>
-            </ToggleContainer>
-
-            {/* 네이버 예약 연동 버튼 추가 
-            <div className="w-full flex justify-end mb-4">
+            <div className="w-full flex justify-between mb-4">
+              <ToggleContainer>
+                <ToggleSlider
+                  position={viewMode === "진료" ? "left" : "right"}
+                />
+                <ToggleOption
+                  active={viewMode === "진료"}
+                  onClick={() => setViewMode("진료")}
+                >
+                  <ToggleIcon>👨‍⚕️</ToggleIcon>
+                  진료 예약
+                </ToggleOption>
+                <ToggleOption
+                  active={viewMode === "물리치료"}
+                  onClick={() => setViewMode("물리치료")}
+                >
+                  <ToggleIcon>💪</ToggleIcon>
+                  물리치료 예약
+                </ToggleOption>
+              </ToggleContainer>
               <button
                 onClick={() => setNaverReservationVisible(true)}
                 className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors text-sm font-medium"
@@ -1156,7 +1156,7 @@ const Schedule = () => {
                 네이버 예약 확인
               </button>
             </div>
-            */}
+
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 text-[15px]">
                 {viewMode === "진료" ? (
