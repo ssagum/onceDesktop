@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import ModalTemplate from "../common/ModalTemplate";
 import { cancel } from "../../assets";
 import {
@@ -9,10 +9,6 @@ import {
   useSensors,
   closestCorners,
   DragOverlay,
-  pointerWithin,
-  rectIntersection,
-  useDndMonitor,
-  MeasuringStrategy,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -39,14 +35,6 @@ import { format } from "date-fns";
 import ChipText from "../common/ChipText";
 import { useToast } from "../../contexts/ToastContext";
 
-// 전역 상태 변수 추가 - 동시에 여러 요소가 하이라이트되는 문제 방지
-let currentHighlightedElement = null;
-let globalDragState = {
-  isDragging: false,
-  activeId: null,
-  targetStatus: null,
-};
-
 // 드래그 가능한 항목 컴포넌트
 const DraggableItem = ({ id, data, type, onItemClick }) => {
   const {
@@ -56,7 +44,6 @@ const DraggableItem = ({ id, data, type, onItemClick }) => {
     transform,
     transition,
     isDragging,
-    over,
   } = useSortable({
     id,
     data: {
@@ -64,122 +51,6 @@ const DraggableItem = ({ id, data, type, onItemClick }) => {
       item: data,
       itemType: type,
       id,
-      parent: data.status, // 부모 상태 저장
-    },
-  });
-
-  // 컴포넌트의 ref
-  const itemRef = useRef(null);
-  const [isBeingHoveredOver, setIsBeingHoveredOver] = useState(false);
-
-  // DndContext에서 모니터링을 위한 훅 사용
-  const dndContext = useDndMonitor({
-    onDragStart() {
-      // 드래그 시작 시 전역 상태 초기화
-      globalDragState.isDragging = true;
-      currentHighlightedElement = null;
-    },
-    onDragOver({ active, over }) {
-      // 아이템 위에 드래그했는지 확인
-      const isOverThisItem = over && over.id === id && active.id !== id;
-
-      // 이전 상태와 다를 때만 상태 업데이트 (불필요한 리렌더링 방지)
-      if (isOverThisItem !== isBeingHoveredOver) {
-        setIsBeingHoveredOver(isOverThisItem);
-      }
-
-      if (isOverThisItem) {
-        // 부모 드롭 영역 찾기
-        const parentDropArea = itemRef.current?.closest(
-          '[data-droppable="true"]'
-        );
-
-        if (parentDropArea && currentHighlightedElement !== parentDropArea) {
-          // 이전에 하이라이트된 요소가 있으면 모두 제거
-          if (currentHighlightedElement) {
-            currentHighlightedElement.removeAttribute("data-highlight");
-            currentHighlightedElement.classList.remove(
-              "ring-2",
-              "ring-blue-400",
-              "bg-blue-50/20",
-              "shadow-md",
-              "scale-[1.01]",
-              "z-10"
-            );
-          }
-
-          // 현재 영역을 하이라이트하고 전역 참조 업데이트
-          currentHighlightedElement = parentDropArea;
-          parentDropArea.setAttribute("data-highlight", "true");
-          parentDropArea.classList.add(
-            "ring-2",
-            "ring-blue-400",
-            "bg-blue-50/20",
-            "shadow-md",
-            "scale-[1.01]",
-            "z-10"
-          );
-
-          // 전역 상태 업데이트
-          globalDragState.targetStatus =
-            parentDropArea.getAttribute("data-status");
-        }
-      }
-    },
-    onDragEnd() {
-      // 드래그 종료 시 상태 초기화
-      setIsBeingHoveredOver(false);
-      globalDragState.isDragging = false;
-      globalDragState.targetStatus = null;
-
-      // 하이라이트된 요소 정리
-      if (currentHighlightedElement) {
-        currentHighlightedElement.removeAttribute("data-highlight");
-        currentHighlightedElement.classList.remove(
-          "ring-2",
-          "ring-blue-400",
-          "bg-blue-50/20",
-          "shadow-md",
-          "scale-[1.01]",
-          "z-10"
-        );
-        currentHighlightedElement = null;
-      }
-
-      // 혹시나 남아있는 다른 하이라이트된 요소들도 모두 정리
-      document
-        .querySelectorAll('[data-highlight="true"], [data-hovered="true"]')
-        .forEach((el) => {
-          el.removeAttribute("data-highlight");
-          el.removeAttribute("data-hovered");
-          el.classList.remove(
-            "ring-2",
-            "ring-blue-400",
-            "bg-blue-50/20",
-            "shadow-md",
-            "scale-[1.01]",
-            "z-10"
-          );
-        });
-    },
-    onDragCancel() {
-      // 드래그 취소 시도 정리 작업 수행
-      setIsBeingHoveredOver(false);
-      globalDragState.isDragging = false;
-      globalDragState.targetStatus = null;
-
-      if (currentHighlightedElement) {
-        currentHighlightedElement.removeAttribute("data-highlight");
-        currentHighlightedElement.classList.remove(
-          "ring-2",
-          "ring-blue-400",
-          "bg-blue-50/20",
-          "shadow-md",
-          "scale-[1.01]",
-          "z-10"
-        );
-        currentHighlightedElement = null;
-      }
     },
   });
 
@@ -187,8 +58,6 @@ const DraggableItem = ({ id, data, type, onItemClick }) => {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 9999 : isBeingHoveredOver ? 30 : 1,
-    pointerEvents: isDragging ? "none" : "auto",
   };
 
   // 날짜 포맷 간소화 (YYYY/MM/DD만 표시)
@@ -376,106 +245,31 @@ const DraggableItem = ({ id, data, type, onItemClick }) => {
       content = <div>Unknown item type</div>;
   }
 
-  // 이벤트 핸들러를 래핑하여 이벤트 버블링 제어
-  const handleItemClick = (e) => {
-    if (isDragging) return; // 드래그 중일 때는 클릭 무시
-    e.stopPropagation(); // 이벤트 전파 중단
-    if (onItemClick) {
-      onItemClick(data);
-    }
-  };
-
   return (
     <div
-      ref={(node) => {
-        setNodeRef(node);
-        itemRef.current = node;
-      }}
+      ref={setNodeRef}
       {...attributes}
       {...listeners}
       style={style}
-      className={`bg-white p-3 mb-2 rounded-lg shadow-sm cursor-grab border border-gray-200 hover:shadow-md transition-all relative ${
-        isBeingHoveredOver
-          ? "border-blue-500 border-2 bg-blue-50/20 shadow-md"
-          : ""
-      }`}
-      onClick={handleItemClick}
-      data-item-id={id}
-      data-item-type={type}
-      data-parent-status={data.status}
+      className="bg-white p-3 mb-2 rounded-lg shadow-sm cursor-grab border border-gray-200 hover:shadow-md transition-shadow"
+      onClick={() => onItemClick && onItemClick(data)}
     >
       {content}
-
-      {/* 아이템 위에 드래그 중일 때 드롭 대상 표시 - 크기 축소 */}
-      {isBeingHoveredOver && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-blue-500/5 border border-blue-300 pointer-events-none z-10"></div>
-      )}
     </div>
   );
 };
 
-// 완전히 새로운 드롭 영역 컴포넌트
+// 드롭 영역 컴포넌트 - 전면적 재설계
 const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
-  const containerRef = useRef(null);
-
-  // Droppable 훅 사용
-  const { setNodeRef, isOver, active, over } = useDroppable({
+  // useDroppable로 드롭 영역 정의
+  const { setNodeRef, isOver } = useDroppable({
     id,
     data: {
       type: "container",
       accepts: itemType,
       id,
-      status: id,
     },
   });
-
-  // 현재 이 영역 위에 마우스가 있는지 여부를 확인하고 UI 업데이트
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    if (isOver) {
-      // 다른 하이라이트된 요소들 정리
-      if (
-        currentHighlightedElement &&
-        currentHighlightedElement !== containerRef.current
-      ) {
-        currentHighlightedElement.removeAttribute("data-highlight");
-        currentHighlightedElement.classList.remove(
-          "ring-2",
-          "ring-blue-400",
-          "bg-blue-50/20",
-          "shadow-md",
-          "scale-[1.01]",
-          "z-10"
-        );
-      }
-
-      // 이 요소를 현재 하이라이트된 요소로 설정
-      currentHighlightedElement = containerRef.current;
-      containerRef.current.setAttribute("data-hovered", "true");
-      globalDragState.targetStatus = id;
-    } else if (
-      containerRef.current.hasAttribute("data-hovered") &&
-      currentHighlightedElement !== containerRef.current
-    ) {
-      containerRef.current.removeAttribute("data-hovered");
-    }
-
-    // 하위 아이템에 부모 상태 정보 전달
-    const items = containerRef.current.querySelectorAll("[data-item-id]");
-    items.forEach((item) => {
-      item.setAttribute("data-parent-status", id);
-    });
-  }, [isOver, id]);
-
-  // 컴포넌트 언마운트 시 정리
-  useEffect(() => {
-    return () => {
-      if (currentHighlightedElement === containerRef.current) {
-        currentHighlightedElement = null;
-      }
-    };
-  }, []);
 
   // 상태에 따라 아이콘 선택
   const getStatusIcon = (status) => {
@@ -595,52 +389,70 @@ const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
     }
   };
 
+  // 기본 컨테이너 배경색 결정
+  const baseClass = className || "bg-gray-50";
+
   return (
     <div
-      ref={(node) => {
-        setNodeRef(node);
-        containerRef.current = node;
-      }}
-      className={`h-full flex flex-col rounded-lg p-[2px] ${
-        className || "bg-gray-50"
-      } ${
-        isOver
-          ? "ring-2 ring-blue-400 bg-blue-50/20 shadow-md scale-[1.01] z-10 overflow-visible"
-          : "overflow-hidden"
-      } transition-all duration-150`}
-      data-status={id}
-      data-type="container"
-      data-droppable="true"
+      className={`h-full flex flex-col relative ${baseClass} rounded-lg p-2`}
+      style={{ position: "relative" }}
     >
+      {/* 전체 영역을 커버하는 완전히 투명한 드롭 영역 */}
       <div
-        className={`flex items-center justify-between mb-2 p-2 rounded-lg shadow-sm ${getHeaderBgColor(
-          id
-        )}`}
-      >
-        <div className="flex items-center">
-          {getStatusIcon(id)}
-          <h3 className="font-medium text-gray-700 ml-2">{statusName}</h3>
-        </div>
-        <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full flex items-center justify-center min-w-[28px]">
-          {itemCount}
-        </span>
-      </div>
+        ref={setNodeRef}
+        className={`absolute inset-0 z-[1] ${
+          isOver ? "ring-2 ring-blue-500" : ""
+        } rounded-lg`}
+        style={{
+          touchAction: "none",
+          // 투명 영역에 hover와 다른 이벤트를 줄 수 있도록 포인터 이벤트 활성화
+          pointerEvents: "auto",
+        }}
+        data-droppable-id={id}
+        data-droppable-type="container"
+      />
 
-      <div className="flex-1 overflow-y-auto p-1 min-h-[250px] max-h-[600px] rounded-md">
-        <SortableContext
-          items={items.map((item) => item.id)}
-          strategy={verticalListSortingStrategy}
+      {/* 드래그 오버 시 보여줄 시각적 표시 영역 */}
+      {isOver && (
+        <div className="absolute inset-0 bg-blue-100/30 z-[2] rounded-lg pointer-events-none" />
+      )}
+
+      {/* 컨텐츠 영역 - 좌표 이벤트가 투명 영역으로 전달되도록 pointer-events: none 적용 */}
+      <div className="flex flex-col h-full z-[3] relative">
+        {/* 헤더 */}
+        <div
+          className={`flex items-center justify-between mb-2 p-2 rounded-lg shadow-sm ${getHeaderBgColor(
+            id
+          )}`}
+          style={{ pointerEvents: "auto" }} // 헤더는 클릭 가능하도록
         >
-          {items.length > 0 ? (
-            <div className="px-1 pb-2">
-              {items.map((item) => renderItem({ ...item, status: id }))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400 text-sm italic">항목 없음</p>
-            </div>
-          )}
-        </SortableContext>
+          <div className="flex items-center">
+            {getStatusIcon(id)}
+            <h3 className="font-medium text-gray-700 ml-2">{statusName}</h3>
+          </div>
+          <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full flex items-center justify-center min-w-[28px]">
+            {itemCount}
+          </span>
+        </div>
+
+        {/* 태스크 영역 */}
+        <div
+          className="flex-1 overflow-y-auto p-1 min-h-[250px] max-h-[600px]"
+          style={{ pointerEvents: "auto" }} // 스크롤과 태스크 클릭 가능하도록
+        >
+          <SortableContext
+            items={items.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {items.length > 0 ? (
+              items.map((item) => renderItem(item))
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-400 text-sm italic">항목 없음</p>
+              </div>
+            )}
+          </SortableContext>
+        </div>
       </div>
     </div>
   );
@@ -862,18 +674,6 @@ const formatDate = (timestamp) => {
   return format(date, "yyyy/MM/dd HH:mm");
 };
 
-// 개선된 충돌 감지 함수 - rectIntersection과 pointerWithin의 조합
-const customCollisionDetection = (args) => {
-  // 첫 번째로 rectIntersection을 시도
-  const rectCollisions = rectIntersection(args);
-  if (rectCollisions.length > 0) {
-    return rectCollisions;
-  }
-
-  // 그 다음 pointerWithin을 시도
-  return pointerWithin(args);
-};
-
 const RequestStatusModal = ({
   isVisible,
   setIsVisible,
@@ -907,19 +707,19 @@ const RequestStatusModal = ({
   const isAdmin =
     userLevelData?.role === "admin" || userLevelData?.role === "manager";
 
-  // 개선된 센서 설정
+  // dnd-kit 센서 설정 - 더 민감하게 조정
   const sensors = useSensors(
     useSensor(MouseSensor, {
-      // 마우스 감도 높임 - 빨리 시작
+      // 더 민감한 마우스 감지를 위해 거리 축소
       activationConstraint: {
-        distance: 1, // 최소 이동 거리 (픽셀)
+        distance: 3,
       },
     }),
     useSensor(TouchSensor, {
-      // 터치 감도 높임 - 빨리 시작
+      // 터치 감지 딜레이 축소
       activationConstraint: {
-        delay: 100, // 지연시간 (ms)
-        tolerance: 5, // 허용 오차
+        delay: 150,
+        tolerance: 5,
       },
     })
   );
@@ -1054,37 +854,15 @@ const RequestStatusModal = ({
   const handleDragStart = (event) => {
     const { active } = event;
     setActiveId(active.id);
-    globalDragState.activeId = active.id;
-    console.log("Drag started:", active.id);
   };
 
-  // 개선된 드래그 종료 핸들러
+  // 드래그 종료 핸들러 개선
   const handleDragEnd = (event) => {
     const { active, over } = event;
     setActiveId(null);
-    globalDragState.activeId = null;
-    globalDragState.isDragging = false;
-    globalDragState.targetStatus = null;
-
-    // 모든 하이라이트된 요소 정리
-    currentHighlightedElement = null;
-    document
-      .querySelectorAll('[data-highlight="true"], [data-hovered="true"]')
-      .forEach((el) => {
-        el.removeAttribute("data-highlight");
-        el.removeAttribute("data-hovered");
-        el.classList.remove(
-          "ring-2",
-          "ring-blue-400",
-          "bg-blue-50/20",
-          "shadow-md",
-          "scale-[1.01]",
-          "z-10"
-        );
-      });
 
     // 디버그 정보 로깅
-    console.log("Drag End Event:", {
+    console.log("Drag End:", {
       activeId: active.id,
       activeData: active.data.current,
       overId: over?.id,
@@ -1103,25 +881,16 @@ const RequestStatusModal = ({
       return;
     }
 
-    // 드롭 타겟 식별 로직 - HTML 요소의 부모 찾기까지 포함
-    let targetStatusId = over.id;
-    const overElement = document.querySelector(`[data-item-id="${over.id}"]`);
-
-    // DraggableItem 위에 드롭된 경우
-    if (overElement) {
-      // 가장 가까운 드롭 영역 찾기
-      const closestDroppable = overElement.closest('[data-droppable="true"]');
-      if (closestDroppable) {
-        targetStatusId = closestDroppable.getAttribute("data-status");
-        console.log("Found parent droppable:", targetStatusId);
+    // 드롭 대상이 컨테이너인지 확인 - data.type이 없어도 id만으로 처리
+    if (over.data.current?.type !== "container") {
+      // ID가 STATUS_FLOW에 속하는 값이라면 컨테이너로 간주
+      const targetStatus = STATUS_FLOW[activeTab]?.find(
+        (status) => status === over.id
+      );
+      if (!targetStatus) {
+        console.log("Drop target is not a valid container");
+        return;
       }
-    }
-
-    // 유효한 드롭 대상인지 확인
-    const isValidStatus = STATUS_FLOW[activeTab]?.includes(targetStatusId);
-    if (!isValidStatus) {
-      console.log("Invalid drop target:", targetStatusId);
-      return;
     }
 
     // 현재 아이템 정보 가져오기
@@ -1202,8 +971,8 @@ const RequestStatusModal = ({
       return;
     }
 
-    // 상태 변경 - targetStatusId를 사용
-    const newStatus = targetStatusId;
+    // 상태 변경 - 컨테이너 ID를 사용
+    const newStatus = over.data.current.id;
     console.log("New status:", newStatus);
 
     // 변경된 내용 DB에 업데이트 (더미 데이터 사용 중에는 로컬 상태만 변경)
@@ -1319,9 +1088,6 @@ const RequestStatusModal = ({
 
     if (!currentItem) return null;
 
-    // 전역 상태에서 타겟 상태 가져오기
-    const targetStatus = globalDragState.targetStatus;
-
     // 아이템 유형별 아이콘
     const getTypeIcon = () => {
       switch (activeTab) {
@@ -1408,19 +1174,12 @@ const RequestStatusModal = ({
     };
 
     return (
-      <div className="bg-white p-3 rounded-lg shadow-xl border-2 border-blue-400 w-64 opacity-95 cursor-grabbing relative z-50">
+      <div className="bg-white p-3 rounded-lg shadow-lg border-2 border-blue-300 w-64 opacity-95 cursor-grabbing">
         <div className="flex items-center border-l-4 border-blue-500 pl-2 py-1 mb-2">
           {getTypeIcon()}
           <div className="font-medium text-gray-800 truncate">{getTitle()}</div>
         </div>
         <div className="text-sm text-gray-600 pl-2">{getSubtitle()}</div>
-
-        {/* 현재 호버 중인 영역 정보 표시 - 크기 축소 */}
-        {/* {targetStatus && (
-          <div className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/3 bg-blue-400 text-white px-1.5 py-0.5 rounded-full text-xs shadow-sm">
-            {STATUS_DISPLAY_NAMES[targetStatus] || targetStatus}
-          </div>
-        )} */}
       </div>
     );
   };
@@ -1533,23 +1292,16 @@ const RequestStatusModal = ({
               sensors={sensors}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
-              collisionDetection={customCollisionDetection}
+              collisionDetection={closestCorners}
+              autoScroll={true}
               measuring={{
                 droppable: {
-                  strategy: MeasuringStrategy.Always,
+                  strategy: "always",
                 },
-              }}
-              autoScroll={{
-                enabled: true,
-                threshold: { x: 0.1, y: 0.1 },
-                acceleration: 12,
-                interval: 5,
               }}
             >
               <div
-                className={`grid ${getGridColsClass(
-                  activeTab
-                )} gap-2 h-full p-2`}
+                className={`grid ${getGridColsClass(activeTab)} gap-4 h-full`}
               >
                 {STATUS_FLOW[activeTab]?.map((status) => {
                   const itemsByStatus = getItemsByStatus();
@@ -1593,19 +1345,7 @@ const RequestStatusModal = ({
                 })}
               </div>
 
-              <DragOverlay
-                adjustScale={false}
-                dropAnimation={null}
-                zIndex={1000}
-                modifiers={[
-                  ({ transform }) => ({
-                    ...transform,
-                    y: transform.y - 10, // 위로 들어올리는 높이 축소
-                  }),
-                ]}
-              >
-                {renderDragOverlay()}
-              </DragOverlay>
+              <DragOverlay adjustScale>{renderDragOverlay()}</DragOverlay>
             </DndContext>
           </div>
         </div>
