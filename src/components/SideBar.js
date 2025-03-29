@@ -24,7 +24,10 @@ import PCAllocation from "./PCAllocation";
 import packageJson from "../../package.json";
 import { useContext } from "react";
 import { useUserLevel } from "../utils/UserLevelContext";
-import { isHospitalOwner } from "../utils/permissionUtils";
+import {
+  isHospitalOwner,
+  canAccessTaskManagement,
+} from "../utils/permissionUtils";
 
 const TopZone = styled.div``;
 const LoginZone = styled.div``;
@@ -150,12 +153,38 @@ export default function SideBar() {
               nowURL={nowURL === "/contact" ? "CONTACT" : nowURL}
             />
           </Link> */}
-          <Link to="/task">
-            <RenderIndex
-              indexValue="업무분장"
-              nowURL={nowURL === "/task" ? "업무분장" : nowURL}
-            />
-          </Link>
+          {(() => {
+            console.log(
+              "사이드바 - 사용자 권한 정보 전체:",
+              JSON.stringify(userLevelData, null, 2)
+            );
+            console.log("사이드바 - 현재 사용자:", currentUser);
+            console.log("사이드바 - 역할:", userLevelData?.role);
+            console.log("사이드바 - PC 부서:", userLevelData?.department);
+            console.log("사이드바 - Firebase 부서:", currentUser?.department);
+            console.log(
+              "사이드바 - 팀장여부:",
+              userLevelData?.departmentLeader
+            );
+
+            // Firebase 부서 정보가 있는 currentUser 객체를 함께 전달
+            const userDataWithFirebaseDept = {
+              ...userLevelData,
+              currentUser, // Firebase에서 가져온 사용자 정보를 함께 전달
+            };
+
+            const canAccess = canAccessTaskManagement(userDataWithFirebaseDept);
+            console.log("사이드바 - 업무분장 접근 권한:", canAccess);
+
+            return canAccess ? (
+              <Link to="/task">
+                <RenderIndex
+                  indexValue="업무분장"
+                  nowURL={nowURL === "/task" ? "업무분장" : nowURL}
+                />
+              </Link>
+            ) : null;
+          })()}
           <Link to="/schedule">
             <RenderIndex
               indexValue="예약관리"

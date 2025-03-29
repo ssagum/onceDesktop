@@ -43,6 +43,8 @@ import { collection, query, onSnapshot, where } from "firebase/firestore";
 import JcyTable from "../common/JcyTable";
 import { useToast } from "../../contexts/ToastContext"; // Toast 메시지 사용을 위한 훅 추가
 import DateViewModal from "./DateViewModal";
+import { useUserLevel } from "../../utils/UserLevelContext";
+import { getVisibleFolders } from "../../utils/permissionUtils";
 
 // styled-components 영역
 const TitleZone = styled.div``;
@@ -154,14 +156,24 @@ const initialTasks = {
 
 // 초기 컬럼 데이터 - 부서와 역할명만 유지
 const initialColumns = {
+  대표원장: {
+    id: "대표원장",
+    title: "대표원장",
+    taskIds: [],
+  },
   미배정: {
     id: "미배정",
     title: "미배정",
     taskIds: [],
   },
-  원장: {
-    id: "원장",
-    title: "원장",
+  진료팀: {
+    id: "진료팀",
+    title: "진료팀",
+    taskIds: [],
+  },
+  경영지원팀: {
+    id: "경영지원팀",
+    title: "경영지원팀",
     taskIds: [],
   },
   경영지원팀장: {
@@ -184,14 +196,9 @@ const initialColumns = {
     title: "물리치료팀장",
     taskIds: [],
   },
-  방사선팀장: {
-    id: "방사선팀장",
-    title: "방사선팀장",
-    taskIds: [],
-  },
-  경영지원팀: {
-    id: "경영지원팀",
-    title: "경영지원팀",
+  영상의학팀장: {
+    id: "영상의학팀장",
+    title: "영상의학팀장",
     taskIds: [],
   },
   원무팀: {
@@ -209,9 +216,9 @@ const initialColumns = {
     title: "물리치료팀",
     taskIds: [],
   },
-  방사선팀: {
-    id: "방사선팀",
-    title: "방사선팀",
+  영상의학팀: {
+    id: "영상의학팀",
+    title: "영상의학팀",
     taskIds: [],
   },
 };
@@ -219,16 +226,17 @@ const initialColumns = {
 // 화면에 보여줄 컬럼 순서
 const columnOrder = [
   "미배정",
-  "경영지원팀장",
-  "원무과장",
+  "대표원장",
+  "진료팀",
+  "경영지원팀",
   "간호팀장",
   "물리치료팀장",
-  "방사선팀장",
-  "경영지원팀",
-  "원무팀",
+  "원무과장",
+  "영상의학팀장",
   "간호팀",
   "물리치료팀",
-  "방사선팀",
+  "원무팀",
+  "영상의학팀",
 ];
 
 /* ==============================================
@@ -289,19 +297,27 @@ function ToDoItem({ task, onViewHistory, onClick }) {
    1) SortableTask: 드래그 가능한 실제 아이템 컴포넌트
 ============================================== */
 function SortableTask({ id, task, containerId, onViewHistory, onClick }) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({
-      id,
-      data: {
-        type: "item",
-        task,
-        containerId,
-      },
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id,
+    data: {
+      type: "task",
+      task,
+      containerId,
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 1,
   };
 
   return (
@@ -310,7 +326,9 @@ function SortableTask({ id, task, containerId, onViewHistory, onClick }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="cursor-grab flex items-center justify-center w-full h-full"
+      className={`cursor-grab flex items-center justify-center w-full h-full ${
+        isDragging ? "opacity-50" : ""
+      }`}
     >
       <ToDoItem task={task} onViewHistory={onViewHistory} onClick={onClick} />
     </div>
@@ -400,12 +418,14 @@ export function ToDoDragComponent({
     taskIdsToUse[index] ? taskIdsToUse[index] : `empty-${index}-${column.id}`
   );
 
-  const { setNodeRef } = useDroppable({
-    id: column.id,
+  // 드롭 가능한 영역으로 설정 - 중요: 폴더 선택 상태와 무관하게 항상 드롭 가능해야 함
+  const { setNodeRef, isOver } = useDroppable({
+    id: `Sortable-${column.id}`, // Sortable- 접두사 추가로 구분
     data: {
       type: "container",
       containerId: column.id,
       assignee: column.title, // assignee 정보 추가
+      isSortableGrid: true, // 소트 가능한 그리드임을 표시
     },
   });
 
@@ -470,8 +490,15 @@ export function ToDoDragComponent({
       <div className="relative">
         <div
           ref={setNodeRef}
-          className="relative bg-gray-50 p-4 rounded shadow h-[280px] w-full"
+          className={`relative bg-gray-50 p-4 rounded shadow h-[280px] w-full ${
+            isOver ? "ring-2 ring-blue-400 bg-blue-50" : ""
+          }`}
         >
+          {/* 드롭 가능 상태 표시 */}
+          {isOver && (
+            <div className="absolute inset-0 border-2 border-dashed border-blue-400 rounded pointer-events-none z-10 bg-blue-50 bg-opacity-30"></div>
+          )}
+
           {/* 우상단 포스트잇 스타일의 날짜별 보기 탭 - 그리드와 딱 맞닿게 배치 */}
           <div className="absolute right-4 -top-[44px] z-10">
             {/* 단일 파란색 탭 */}
@@ -521,7 +548,13 @@ export function ToDoDragComponent({
                   }}
                 >
                   {isEmpty ? (
-                    <div className="w-full h-full rounded border border-dashed"></div>
+                    <div
+                      className={`w-full h-full rounded border border-dashed ${
+                        isOver
+                          ? "border-blue-300 bg-blue-50"
+                          : "border-gray-300"
+                      }`}
+                    ></div>
                   ) : (
                     <SortableTask
                       id={id}
@@ -905,6 +938,35 @@ function TaskMainCanvas() {
   const [selectedFolderId, setSelectedFolderId] = useState("미배정"); // 선택된 폴더 ID
   const [viewMode, setViewMode] = useState("dnd"); // 뷰 모드 (dnd: 드래그 앤 드롭 모드, board: 게시판 모드)
   const [filteredTasks, setFilteredTasks] = useState([]); // 필터링된 작업 목록
+  const { userLevelData, currentUser } = useUserLevel(); // 사용자 권한 정보 및 현재 사용자 추가
+
+  // 디버깅: 사용자 정보 상세 출력
+  useEffect(() => {
+    console.log("=== 사용자 정보 상세 디버깅 ===");
+    console.log("TaskMainCanvas - userLevelData:", userLevelData);
+    console.log("TaskMainCanvas - currentUser:", currentUser);
+    console.log("역할:", userLevelData?.role);
+    console.log("부서:", userLevelData?.department);
+    console.log("이름:", userLevelData?.name);
+    console.log("팀장여부:", userLevelData?.departmentLeader);
+    console.log("=========================");
+  }, [userLevelData, currentUser]);
+
+  // 사용자 권한에 따라 볼 수 있는 폴더 목록 가져오기
+  const visibleFolders = useMemo(() => {
+    console.log("TaskMainCanvas - 사용자 데이터:", userLevelData);
+    console.log("TaskMainCanvas - 현재 사용자:", currentUser);
+
+    // Firebase 부서 정보가 있는 currentUser 객체를 함께 전달
+    const userDataWithFirebaseDept = {
+      ...userLevelData,
+      currentUser, // Firebase에서 가져온 사용자 정보를 함께 전달
+    };
+
+    const folders = getVisibleFolders(userDataWithFirebaseDept);
+    console.log("TaskMainCanvas - 접근 가능한 폴더:", folders);
+    return folders;
+  }, [userLevelData, currentUser]);
 
   // 파생 상태 대신 useEffect 사용하여 tasks나 selectedFolderId가 변경될 때마다 필터링
   useEffect(() => {
@@ -940,6 +1002,16 @@ function TaskMainCanvas() {
     }
   }, [tasks, selectedFolderId]); // selectedFolderId 의존성 추가
 
+  // 컴포넌트 마운트 시 권한에 따라 선택된 폴더 초기값 설정
+  useEffect(() => {
+    if (visibleFolders.length > 0) {
+      console.log("TaskMainCanvas - 초기 폴더 선택:", visibleFolders[0]);
+      setSelectedFolderId(visibleFolders[0]); // 볼 수 있는 첫 번째 폴더 선택
+    } else {
+      console.log("TaskMainCanvas - 접근 가능한 폴더 없음");
+    }
+  }, [visibleFolders]);
+
   // Toast 메시지를 사용하기 위한 훅
   const { showToast } = useToast();
 
@@ -962,8 +1034,14 @@ function TaskMainCanvas() {
     })
   );
 
-  // 폴더 선택 처리 함수 - 간소화됨
+  // 폴더 선택 처리 함수 - 최종 개선
   const handleFolderSelect = (folderId) => {
+    // 권한 체크: 해당 폴더를 볼 수 있는지 확인
+    if (!visibleFolders.includes(folderId)) {
+      showToast(`접근 권한이 없는 폴더입니다.`, "error");
+      return;
+    }
+
     // 이미 선택된 폴더를 다시 클릭하면 선택 해제
     if (selectedFolderId === folderId) {
       setSelectedFolderId("미배정");
@@ -1256,6 +1334,17 @@ function TaskMainCanvas() {
     return id && typeof id === "string" && id.startsWith("Sortable-");
   };
 
+  // 컨테이너의 assignee 값을 가져오는 헬퍼 함수
+  const getAssigneeFromContainer = (containerId) => {
+    // Sortable 컨테이너인 경우 접두사 제거
+    if (isSortableContainer(containerId)) {
+      const actualId = containerId.replace("Sortable-", "");
+      return columns[actualId]?.title || actualId;
+    }
+    // 일반 폴더인 경우
+    return columns[containerId]?.title || containerId;
+  };
+
   // 컬럼 상태 업데이트 함수 - 일관된 방식으로 컬럼 상태를 업데이트
   const updateColumnTaskIds = (updates) => {
     setColumns((prevColumns) => {
@@ -1288,24 +1377,23 @@ function TaskMainCanvas() {
     const activeContainer = active.data.current?.sortable?.containerId;
     const overContainer = over.data.current?.sortable?.containerId || over.id;
 
-    // 새 담당자 결정
-    const newAssignee =
-      over.data.current?.assignee ||
-      columns[overContainer]?.title ||
-      overContainer;
+    // 새 담당자 결정 - Sortable 컨테이너 처리 추가
+    const newAssignee = getAssigneeFromContainer(overContainer);
+
+    console.log("드래그 종료 정보:", {
+      taskId,
+      activeContainer,
+      overContainer,
+      "over.id": over.id,
+      newAssignee,
+      selectedFolder: selectedFolderId,
+    });
 
     // 드래그된 아이템이 task이고, 드랍 컨테이너가 담당자 폴더인 경우
     if (
       active.data.current?.type === "task" &&
       over.data.current?.type === "container"
     ) {
-      // 컬럼 유효성 검사
-      if (!columns[overContainer]) {
-        console.error(`컬럼을 찾을 수 없습니다: ${overContainer}`);
-        setActiveTaskId(null);
-        return;
-      }
-
       try {
         // 담당자 정보 업데이트 - 같은 폴더에 드롭해도 처리하도록 함
         await updateTaskAssignee(taskId, newAssignee, false);
@@ -1348,6 +1436,18 @@ function TaskMainCanvas() {
             // 이미 있는 경우 기존 배열 유지
             updates[overContainer] = [...columns[overContainer].taskIds];
           }
+        } else if (isSortableContainer(overContainer)) {
+          // Sortable 컨테이너인 경우, 실제 담당자 컬럼에 추가
+          const actualContainerId = overContainer.replace("Sortable-", "");
+          if (
+            columns[actualContainerId] &&
+            !columns[actualContainerId].taskIds.includes(taskId)
+          ) {
+            updates[actualContainerId] = [
+              ...columns[actualContainerId].taskIds,
+              taskId,
+            ];
+          }
         }
 
         // 한 번의 호출로 모든 컬럼 상태 업데이트
@@ -1362,9 +1462,9 @@ function TaskMainCanvas() {
     }
 
     // 목적지가 폴더인 경우를 처리
-    if (isFolder(overContainer)) {
+    if (isFolder(overContainer) || isSortableContainer(overContainer)) {
       try {
-        // 담당자 업데이트
+        // 담당자 업데이트 - isSortableContainer 처리 추가
         await updateTaskAssignee(taskId, newAssignee, false);
         showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
 
@@ -1393,16 +1493,25 @@ function TaskMainCanvas() {
         }
 
         // 도착 컨테이너에 작업 추가
-        if (columns[overContainer]) {
-          // 이미 이 taskId가 overContainer에 있지 않은 경우에만 추가
+        if (isFolder(overContainer) && columns[overContainer]) {
+          // 일반 폴더인 경우
           if (!columns[overContainer].taskIds.includes(taskId)) {
             updates[overContainer] = [
               ...columns[overContainer].taskIds,
               taskId,
             ];
-          } else {
-            // 이미 있는 경우 기존 배열 유지
-            updates[overContainer] = [...columns[overContainer].taskIds];
+          }
+        } else if (isSortableContainer(overContainer)) {
+          // Sortable 컨테이너인 경우, 실제 담당자 컬럼에 추가
+          const actualContainerId = overContainer.replace("Sortable-", "");
+          if (
+            columns[actualContainerId] &&
+            !columns[actualContainerId].taskIds.includes(taskId)
+          ) {
+            updates[actualContainerId] = [
+              ...columns[actualContainerId].taskIds,
+              taskId,
+            ];
           }
         }
 
@@ -1428,18 +1537,55 @@ function TaskMainCanvas() {
       const oldIndex = column.taskIds.indexOf(taskId);
       const newIndex = column.taskIds.indexOf(over.id);
 
-      if (oldIndex !== newIndex) {
+      if (oldIndex !== newIndex && oldIndex !== -1 && newIndex !== -1) {
         const newTaskIds = arrayMove(column.taskIds, oldIndex, newIndex);
         updateColumnTaskIds({ [activeContainer]: newTaskIds });
         showToast("업무 순서가 변경되었습니다.", "success");
       }
     }
-    // Sortable 컨테이너 간 이동
+    // Sortable 컨테이너 간 이동 처리 구현
     else if (
       isSortableContainer(activeContainer) &&
       isSortableContainer(overContainer)
     ) {
-      // Sortable 컨테이너 간 이동은 처리하지 않음
+      try {
+        // 담당자 업데이트
+        await updateTaskAssignee(taskId, newAssignee, false);
+        showToast(`업무 담당이 ${newAssignee}으로 변경되었습니다.`, "success");
+
+        // 실제 담당자 컬럼 ID 가져오기
+        const actualSourceContainerId = activeContainer.replace(
+          "Sortable-",
+          ""
+        );
+        const actualDestContainerId = overContainer.replace("Sortable-", "");
+
+        // 업데이트 준비
+        const updates = {};
+
+        // 소스 컬럼에서 작업 제거
+        if (columns[actualSourceContainerId]) {
+          updates[actualSourceContainerId] = columns[
+            actualSourceContainerId
+          ].taskIds.filter((id) => id !== taskId);
+        }
+
+        // 대상 컬럼에 작업 추가
+        if (columns[actualDestContainerId]) {
+          if (!columns[actualDestContainerId].taskIds.includes(taskId)) {
+            updates[actualDestContainerId] = [
+              ...columns[actualDestContainerId].taskIds,
+              taskId,
+            ];
+          }
+        }
+
+        // 컬럼 상태 업데이트
+        updateColumnTaskIds(updates);
+      } catch (error) {
+        console.error("Sortable 컨테이너 간 이동 중 오류:", error);
+        showToast("업무 이동 중 오류가 발생했습니다.", "error");
+      }
     }
     // 다른 컨테이너로 이동하는 경우
     else {
@@ -1638,88 +1784,135 @@ function TaskMainCanvas() {
               )}
             </PaginationZone>
 
-            {/* 폴더 구조 */}
+            {/* 폴더 구조 - 권한에 따라 표시 */}
             <div className="flex flex-row gap-x-[20px]">
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DragGoalFolder
-                  column={columns.미배정}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "미배정"}
-                />
-                <DragGoalFolder
-                  column={columns.원장}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "원장"}
-                />
-                {/* 원장님 col에 미배정 폴더 추가 */}
+                {visibleFolders.includes("미배정") && (
+                  <DragGoalFolder
+                    column={columns.미배정}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "미배정"}
+                  />
+                )}
+                {visibleFolders.includes("대표원장") && (
+                  <DragGoalFolder
+                    column={columns.대표원장}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "대표원장"}
+                  />
+                )}
+                {visibleFolders.includes("진료팀") && (
+                  <DragGoalFolder
+                    column={columns.진료팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "진료팀"}
+                  />
+                )}
+                {visibleFolders.includes("경영지원팀") && (
+                  <DragGoalFolder
+                    column={columns.경영지원팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "경영지원팀"}
+                  />
+                )}
               </div>
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DragGoalFolder
-                  column={columns.원무과장}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "원무과장"}
-                />
-                <DragGoalFolder
-                  column={columns.간호팀장}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "간호팀장"}
-                />
-                <DragGoalFolder
-                  column={columns.물리치료팀장}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "물리치료팀장"}
-                />
-                <DragGoalFolder
-                  column={columns.방사선팀장}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "방사선팀장"}
-                />
+                {visibleFolders.includes("간호팀장") && (
+                  <DragGoalFolder
+                    column={columns.간호팀장}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "간호팀장"}
+                  />
+                )}
+                {visibleFolders.includes("물리치료팀장") && (
+                  <DragGoalFolder
+                    column={columns.물리치료팀장}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "물리치료팀장"}
+                  />
+                )}
+                {visibleFolders.includes("원무과장") && (
+                  <DragGoalFolder
+                    column={columns.원무과장}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "원무과장"}
+                  />
+                )}
+                {visibleFolders.includes("영상의학팀장") && (
+                  <DragGoalFolder
+                    column={columns.영상의학팀장}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "영상의학팀장"}
+                  />
+                )}
               </div>
               <div className="flex-1 flex flex-col items-center gap-y-[10px]">
-                <DragGoalFolder
-                  column={columns.간호팀}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "간호팀"}
-                />
-                <DragGoalFolder
-                  column={columns.원무팀}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "원무팀"}
-                />
-                <DragGoalFolder
-                  column={columns.물리치료팀}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "물리치료팀"}
-                />
-                <DragGoalFolder
-                  column={columns.방사선팀}
-                  tasks={tasks}
-                  onClick={handleFolderSelect}
-                  isSelected={selectedFolderId === "방사선팀"}
-                />
+                {visibleFolders.includes("간호팀") && (
+                  <DragGoalFolder
+                    column={columns.간호팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "간호팀"}
+                  />
+                )}
+                {visibleFolders.includes("물리치료팀") && (
+                  <DragGoalFolder
+                    column={columns.물리치료팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "물리치료팀"}
+                  />
+                )}
+                {visibleFolders.includes("원무팀") && (
+                  <DragGoalFolder
+                    column={columns.원무팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "원무팀"}
+                  />
+                )}
+                {visibleFolders.includes("영상의학팀") && (
+                  <DragGoalFolder
+                    column={columns.영상의학팀}
+                    tasks={tasks}
+                    onClick={handleFolderSelect}
+                    isSelected={selectedFolderId === "영상의학팀"}
+                  />
+                )}
               </div>
             </div>
 
-            <DragOverlay>
+            {/* DragOverlay - 더 멋진 드래그 미리보기를 위해 업데이트 */}
+            <DragOverlay
+              dropAnimation={{
+                duration: 250,
+                easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
+              }}
+            >
               {activeTaskId && (
-                <div className="p-2 bg-white rounded shadow">
+                <div className="p-2 bg-white rounded-md shadow-lg border border-blue-300 transform scale-105 z-50">
                   {(() => {
                     const activeTask = tasks.find(
                       (task) => task.id === activeTaskId
                     );
+
+                    // 실제 ToDoItem 컴포넌트를 사용하여 드래그 중에도 같은 스타일 유지
+                    if (activeTask) {
+                      return <ToDoItem task={activeTask} />;
+                    }
+
                     return (
-                      activeTask?.title ||
-                      activeTask?.content ||
-                      `업무 ${activeTaskId}`
+                      <div className="flex items-center justify-center h-[56px] w-[300px] bg-blue-50">
+                        <span className="font-medium">{`업무 ${activeTaskId}`}</span>
+                      </div>
                     );
                   })()}
                 </div>

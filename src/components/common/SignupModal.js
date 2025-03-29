@@ -403,7 +403,7 @@ function SignupModal({ isOpen, onClose }) {
           <FormField label="부서" required={true}>
             <div className="flex space-x-2">
               {[
-                "원장팀",
+                "진료팀",
                 "간호팀",
                 "물리치료팀",
                 "원무팀",

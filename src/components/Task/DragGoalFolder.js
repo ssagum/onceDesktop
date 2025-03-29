@@ -12,6 +12,34 @@ const FolderContainer = styled.div.attrs((props) => ({
     box-shadow 0.3s ease;
   transform: ${(props) => (props.isOver ? "scale(1.10)" : "scale(1)")};
   cursor: pointer;
+  position: relative;
+
+  &:after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: ${(props) => (props.isOver ? "3px dashed #4299e1" : "none")};
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 5;
+  }
+`;
+
+// 드롭 가능 상태를 표시할 오버레이 추가
+const DropOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(66, 153, 225, 0.1);
+  border-radius: 4px;
+  z-index: 3;
+  pointer-events: none;
+  display: ${(props) => (props.isVisible ? "block" : "none")};
 `;
 
 export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
@@ -25,15 +53,35 @@ export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
     },
   });
 
-  // 클릭 핸들러
+  // 클릭 핸들러 - 이벤트 전파를 멈추지 않도록 수정
   const handleClick = () => {
+    // 폴더 선택 기능 실행 (click 이벤트와 drop 이벤트는 별도로 처리됨)
     if (onClick) {
       onClick(column.id);
     }
   };
 
+  // 업무 개수 뱃지
+  const TaskCount = () => (
+    <div
+      className={`w-10 h-10 rounded-full ${
+        isSelected ? "bg-blue-200" : "bg-gray-200"
+      } ${isOver ? "bg-blue-300" : ""} flex items-center justify-center`}
+    >
+      {`+${column.taskIds.length}`}
+    </div>
+  );
+
   return (
-    <FolderContainer ref={setNodeRef} isOver={isOver} onClick={handleClick}>
+    <FolderContainer
+      ref={setNodeRef}
+      isOver={isOver}
+      onClick={handleClick}
+      className={isOver ? "ring-2 ring-blue-400" : ""}
+    >
+      {/* 드롭 가능 상태 오버레이 */}
+      {isOver && <DropOverlay isVisible={isOver} />}
+
       {/* 폴더 하단: 배경색이 기본적으로 bg-onceHover 클래스 적용 */}
       <div className="relative inline-block">
         <svg
@@ -75,17 +123,9 @@ export default function DragGoalFolder({ column, tasks, onClick, isSelected }) {
         <div
           className={`w-[240px] h-[50px] bg-onceHover flex flex-wrap gap-2 justify-center items-center ${
             isSelected ? "bg-blue-100" : ""
-          }`}
+          } ${isOver ? "bg-blue-50" : ""}`}
         >
-          {column.taskIds.length > 0 && (
-            <div
-              className={`w-10 h-10 rounded-full ${
-                isSelected ? "bg-blue-200" : "bg-gray-200"
-              } flex items-center justify-center`}
-            >
-              {`+${column.taskIds.length}`}
-            </div>
-          )}
+          {column.taskIds.length > 0 && <TaskCount />}
         </div>
       </div>
     </FolderContainer>
