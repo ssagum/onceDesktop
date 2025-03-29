@@ -736,6 +736,10 @@ const ScheduleGrid = ({
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  // 휴가 상세 정보 모달 관련 상태 추가
+  const [selectedVacation, setSelectedVacation] = useState(null);
+  const [showVacationDetail, setShowVacationDetail] = useState(false);
+
   // 확인 모달 관련 상태 추가
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showVacationConflictModal, setShowVacationConflictModal] =
@@ -1366,6 +1370,12 @@ const ScheduleGrid = ({
       setSelection(null); // 선택 영역 초기화
       setCurrentCell(null); // 선택된 셀 초기화
     }
+
+    // 휴가 상세 정보 모달이 표시되어 있고, 클릭한 요소가 폼 내부가 아닌 경우에만 처리
+    if (showVacationDetail && !e.target.closest(".appointment-form")) {
+      setShowVacationDetail(false);
+      setSelectedVacation(null);
+    }
   };
 
   // 전역 클릭 이벤트 리스너 추가
@@ -1377,7 +1387,7 @@ const ScheduleGrid = ({
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
-  }, [showForm]); // showForm 상태가 변경될 때마다 이펙트 재실행
+  }, [showForm, showVacationDetail]); // showForm과 showVacationDetail 상태가 변경될 때마다 이펙트 재실행
 
   // 일정 생성 함수 수정 - 더 세밀한 시간 단위 지원
   const createAppointment = async (data) => {
@@ -2782,9 +2792,10 @@ const ScheduleGrid = ({
             border: "1px solid #D1D5DB",
           }}
           title={`${vacation.vacationType}: ${vacation.reason || "휴가"}`}
+          onClick={(e) => handleVacationClick(vacation, staffMember, e)}
         >
           {/* 참고사항 표시기 */}
-          {hasNotes && (
+          {/* {hasNotes && (
             <div
               className="notes-indicator"
               title="참고사항 있음"
@@ -2799,7 +2810,7 @@ const ScheduleGrid = ({
                 borderColor: "transparent #9CA3AF transparent transparent",
               }}
             />
-          )}
+          )} */}
 
           <div className="appointment-content">
             <div className="title flex items-center">
@@ -2823,6 +2834,37 @@ const ScheduleGrid = ({
     });
   };
 
+  // 휴가 클릭 핸들러 추가
+  const handleVacationClick = (vacation, staffMember, e) => {
+    e.stopPropagation();
+
+    // 폼 위치 계산
+    let left = e.clientX + 10;
+    let top = e.clientY;
+
+    // 화면 경계를 벗어나지 않도록 조정
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const formWidth = 300;
+    const formHeight = 400;
+
+    if (left + formWidth > viewportWidth) {
+      left = Math.max(10, left - formWidth - 20);
+    }
+
+    if (top + formHeight > viewportHeight) {
+      top = Math.max(10, viewportHeight - formHeight - 10);
+    }
+
+    // 폼 위치 설정
+    setFormPosition({ left, top });
+
+    // 선택된 휴가 및 상태 설정
+    setSelectedVacation({ ...vacation, staffName: staffMember.name });
+    setShowVacationDetail(true);
+  };
+
+  // 휴가 충돌 검사 함수 수정 - 차단하지 않고 확인만 하도록 변경
   // 휴가 충돌 검사 함수 수정 - 차단하지 않고 확인만 하도록 변경
   const checkVacationConflict = (
     dateIndex,
@@ -3196,6 +3238,107 @@ const ScheduleGrid = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 휴가 상세 정보 모달 */}
+      {showVacationDetail && selectedVacation && (
+        <AppointmentForm
+          className="appointment-form"
+          style={{
+            left: formPosition.left,
+            top: formPosition.top,
+            position: "fixed",
+            maxHeight: "80vh",
+            overflowY: "auto",
+          }}
+        >
+          <h3>휴가 상세 정보</h3>
+
+          <TimeFieldContainer>
+            <div className="time-input-container">
+              <label>유형</label>
+              <Input
+                type="text"
+                value={selectedVacation.vacationType || "휴가"}
+                disabled={true}
+              />
+            </div>
+            <div className="time-input-container">
+              <label>휴가자</label>
+              <Input
+                type="text"
+                value={selectedVacation.staffName || "의료진"}
+                disabled={true}
+              />
+            </div>
+          </TimeFieldContainer>
+
+          <TimeFieldContainer>
+            <div className="time-input-container">
+              <label>날짜</label>
+              <Input
+                type="text"
+                value={format(
+                  new Date(selectedVacation.startDate),
+                  "yyyy-MM-dd"
+                )}
+                disabled={true}
+              />
+            </div>
+          </TimeFieldContainer>
+
+          <TimeFieldContainer>
+            <div className="time-input-container">
+              <label>시작 시간</label>
+              <Input
+                type="text"
+                value={selectedVacation.startTime || ""}
+                disabled={true}
+              />
+            </div>
+            <div className="time-input-container">
+              <label>종료 시간</label>
+              <Input
+                type="text"
+                value={selectedVacation.endTime || ""}
+                disabled={true}
+              />
+            </div>
+          </TimeFieldContainer>
+
+          <FormField>
+            <label>사유</label>
+            <TextArea
+              value="개인정보 보호를 위해 표시되지 않습니다"
+              disabled={true}
+              style={{ color: "#777" }}
+            />
+          </FormField>
+
+          <FormActions>
+            <Button
+              className="secondary"
+              onClick={() => {
+                setShowVacationDetail(false);
+                setSelectedVacation(null);
+              }}
+            >
+              닫기
+            </Button>
+            <Button
+              className="danger"
+              onClick={() => {
+                // 휴가 숨김 처리 로직
+                setShowVacationDetail(false);
+                setSelectedVacation(null);
+                // 추가: 위와 같은 기능의 숨김 처리
+                showToast("휴가가 목록에서 숨김 처리되었습니다.", "success");
+              }}
+            >
+              숨김
+            </Button>
+          </FormActions>
+        </AppointmentForm>
       )}
     </GridContainer>
   );
