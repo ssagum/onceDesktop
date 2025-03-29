@@ -25,6 +25,7 @@ import {
   FaFileImage,
   FaFile,
   FaSpinner,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 import {
   isHospitalOwner,
@@ -41,6 +42,13 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   const { userLevelData, checkUserPermission } = useUserLevel();
   const { showToast } = useToast();
   const [downloadingFiles, setDownloadingFiles] = useState({});
+
+  // 댓글 삭제 확인 모달 상태
+  const [showDeleteCommentModal, setShowDeleteCommentModal] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState(null);
+
+  // 게시글 삭제 확인 모달 상태
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // 댓글 작성자 선택 관련 상태 추가
   const [selectedCommenter, setSelectedCommenter] = useState(null);
@@ -382,15 +390,32 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!confirm("댓글을 삭제하시겠습니까?")) return;
+    // 모달 표시 대신 바로 상태 설정
+    setCommentToDelete(commentId);
+    setShowDeleteCommentModal(true);
+  };
+
+  // 댓글 삭제 확인
+  const confirmDeleteComment = async () => {
+    if (!commentToDelete) return;
 
     try {
-      await deleteDoc(doc(db, "comments", commentId));
+      await deleteDoc(doc(db, "comments", commentToDelete));
       showToast("댓글이 삭제되었습니다.", "success");
     } catch (error) {
       console.error("Error deleting comment:", error);
       showToast("댓글 삭제에 실패했습니다.", "error");
+    } finally {
+      // 모달 닫기 및 상태 초기화
+      setShowDeleteCommentModal(false);
+      setCommentToDelete(null);
     }
+  };
+
+  // 댓글 삭제 취소
+  const cancelDeleteComment = () => {
+    setShowDeleteCommentModal(false);
+    setCommentToDelete(null);
   };
 
   const handleEdit = () => {
@@ -403,6 +428,28 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       onEdit(notice);
       handleClose();
     }
+  };
+
+  // 게시글 삭제 모달 표시 함수
+  const showDeleteConfirmModal = () => {
+    if (notice && notice.id) {
+      setShowDeleteModal(true);
+    } else {
+      showToast("삭제할 게시글 정보가 없습니다.", "error");
+    }
+  };
+
+  // 게시글 삭제 확인
+  const confirmDelete = () => {
+    if (notice && notice.id) {
+      handleDelete(notice.id);
+      setShowDeleteModal(false);
+    }
+  };
+
+  // 게시글 삭제 취소
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
   };
 
   const handleDelete = async (noticeId) => {
@@ -490,15 +537,7 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
             )}
             {canDelete && (
               <button
-                onClick={() => {
-                  if (notice && notice.id) {
-                    if (window.confirm("정말 게시글을 삭제하시겠습니까?")) {
-                      handleDelete(notice.id);
-                    }
-                  } else {
-                    showToast("삭제할 게시글 정보가 없습니다.", "error");
-                  }
-                }}
+                onClick={showDeleteConfirmModal}
                 style={deleteButtonStyle}
                 title="게시글 삭제"
               >
@@ -738,6 +777,65 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
           </div>
         </div>
       </div>
+
+      {/* 게시글 삭제 확인 모달 */}
+      {showDeleteModal && (
+        <div className="confirm-modal-overlay" style={confirmOverlayStyle}>
+          <div className="confirm-modal" style={confirmModalStyle}>
+            <div style={confirmHeaderStyle}>
+              <FaExclamationTriangle
+                style={{ color: "#f44336", marginRight: "10px" }}
+              />
+              <h3 style={confirmTitleStyle}>게시글 삭제 확인</h3>
+            </div>
+            <div style={confirmContentStyle}>
+              <p>정말 이 게시글을 삭제하시겠습니까?</p>
+              {/* <p style={confirmSubtextStyle}>
+                삭제된 게시글은 목록에서 숨겨집니다.
+              </p> */}
+            </div>
+            <div style={confirmButtonsStyle}>
+              <button onClick={cancelDelete} style={confirmCancelButtonStyle}>
+                취소
+              </button>
+              <button onClick={confirmDelete} style={confirmDeleteButtonStyle}>
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 댓글 삭제 확인 모달 */}
+      {showDeleteCommentModal && (
+        <div className="confirm-modal-overlay" style={confirmOverlayStyle}>
+          <div className="confirm-modal" style={confirmModalStyle}>
+            <div style={confirmHeaderStyle}>
+              <FaExclamationTriangle
+                style={{ color: "#f44336", marginRight: "10px" }}
+              />
+              <h3 style={confirmTitleStyle}>댓글 삭제 확인</h3>
+            </div>
+            <div style={confirmContentStyle}>
+              <p>정말 이 댓글을 삭제하시겠습니까?</p>
+            </div>
+            <div style={confirmButtonsStyle}>
+              <button
+                onClick={cancelDeleteComment}
+                style={confirmCancelButtonStyle}
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDeleteComment}
+                style={confirmDeleteButtonStyle}
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1142,5 +1240,76 @@ if (typeof document !== "undefined") {
   styleElement.textContent = spinAnimation;
   document.head.appendChild(styleElement);
 }
+
+// 확인 모달 스타일
+const confirmOverlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0, 0, 0, 0.7)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1100,
+};
+
+const confirmModalStyle = {
+  backgroundColor: "white",
+  borderRadius: "8px",
+  width: "400px",
+  padding: "20px",
+  boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
+};
+
+const confirmHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  marginBottom: "15px",
+};
+
+const confirmTitleStyle = {
+  margin: 0,
+  fontSize: "1.2rem",
+  fontWeight: "600",
+  color: "#333",
+};
+
+const confirmContentStyle = {
+  marginBottom: "20px",
+};
+
+const confirmSubtextStyle = {
+  fontSize: "0.9rem",
+  color: "#666",
+  marginTop: "5px",
+};
+
+const confirmButtonsStyle = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: "10px",
+};
+
+const confirmCancelButtonStyle = {
+  padding: "8px 16px",
+  backgroundColor: "#f5f5f5",
+  color: "#333",
+  border: "1px solid #ddd",
+  borderRadius: "4px",
+  cursor: "pointer",
+  fontWeight: "500",
+};
+
+const confirmDeleteButtonStyle = {
+  padding: "8px 16px",
+  backgroundColor: "#f44336",
+  color: "white",
+  border: "none",
+  borderRadius: "4px",
+  cursor: "pointer",
+  fontWeight: "500",
+};
 
 export default NoticeShowModal;

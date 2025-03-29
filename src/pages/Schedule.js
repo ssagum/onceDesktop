@@ -147,16 +147,17 @@ const GridContainer = styled.div`
 const ToggleContainer = styled.div`
   display: flex;
   position: relative;
-  width: 340px;
+  width: 260px;
   height: 50px;
   margin-bottom: 20px;
-  border-radius: 30px;
+  border-radius: 25px;
   border: 1px solid #e0e0e0;
   overflow: hidden;
   background-color: #f5f5f5;
 `;
 
 const ToggleOption = styled.div.attrs((props) => ({
+  // active 속성은 styled-components 내부에서만 사용하고 HTML로 전달하지 않도록 함
   "data-active": props.active ? "true" : "false",
 }))`
   z-index: 1;
@@ -168,25 +169,26 @@ const ToggleOption = styled.div.attrs((props) => ({
   cursor: pointer;
   transition: color 0.3s ease;
   color: ${(props) => (props.active ? "#fff" : "#555")};
-  font-size: 16px;
+  font-size: 14px;
 `;
 
 const ToggleSlider = styled.div.attrs((props) => ({
+  // position 속성을 HTML로 전달하지 않도록 함
   "data-position": props.position || "left",
 }))`
   position: absolute;
-  top: 4px;
-  left: ${(props) => (props.position === "left" ? "4px" : "50%")};
-  width: calc(50% - 8px);
-  height: calc(100% - 8px);
+  top: 3px;
+  left: ${(props) => (props.position === "left" ? "3px" : "50%")};
+  width: calc(50% - 6px);
+  height: calc(100% - 6px);
   background-color: #007bff;
   border-radius: 16px;
   transition: left 0.3s ease;
 `;
 
 const ToggleIcon = styled.span`
-  margin-right: 10px;
-  font-size: 22px;
+  margin-right: 6px;
+  font-size: 18px;
 `;
 
 const DateControlContainer = styled.div`
@@ -1117,7 +1119,7 @@ const Schedule = () => {
               </ToggleOption>
             </ToggleContainer>
 
-            {/* 네이버 예약 연동 버튼 추가 */}
+            {/* 네이버 예약 연동 버튼 추가 
             <div className="w-full flex justify-end mb-4">
               <button
                 onClick={() => setNaverReservationVisible(true)}
@@ -1133,8 +1135,7 @@ const Schedule = () => {
                 네이버 예약 확인
               </button>
             </div>
-
-            {/* 예약 알림 안내 */}
+            */}
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 text-[15px]">
                 {viewMode === "진료" ? (

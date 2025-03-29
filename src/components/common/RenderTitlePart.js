@@ -3,7 +3,7 @@ import styled from "styled-components";
 import HoverFrame from "./HoverFrame";
 import ShrinkText from "./ShrinkText";
 import NoticeShowModal from "../Notice.js/NoticeShowModal";
-import { doc, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useToast } from "../../contexts/ToastContext";
 
@@ -63,12 +63,16 @@ export default function RenderTitlePart({
   const handleDeleteNotice = async (noticeId) => {
     try {
       const noticeRef = doc(db, "notices", noticeId);
-      await deleteDoc(noticeRef);
+      // 실제 삭제 대신 isHidden 필드를 true로 설정
+      await updateDoc(noticeRef, {
+        isHidden: true,
+        updatedAt: Date.now(),
+      });
       showToast("게시글이 삭제되었습니다.", "success");
       handleCloseModal();
       return true;
     } catch (error) {
-      console.error("Error deleting notice:", error);
+      console.error("Error hiding notice:", error);
       showToast("게시글 삭제에 실패했습니다.", "error");
       return false;
     }

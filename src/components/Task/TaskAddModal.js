@@ -81,17 +81,17 @@ function TaskAddModal({
   useEffect(() => {
     if (isVisible) {
       if (!task) {
-        // task가 없으면 생성 모드
+        // task가 없으면 생성 모드로 설정하고 모든 필드 초기화
         setMode("create");
-        resetFields(); // 필드 초기화
+        resetFields();
       } else if (isEdit) {
         // task가 있고 isEdit이 true면 수정 모드
         setMode("edit");
-        resetFields(); // 필드 초기화
+        resetFields();
       } else {
         // task가 있고 isEdit이 false면 보기 모드
         setMode("view");
-        resetFields(); // 필드 초기화
+        resetFields();
       }
     }
   }, [isVisible, task, isEdit]);
@@ -936,7 +936,7 @@ function TaskAddModal({
         </div>
       </ModalTemplate>
       {/* 업무일지 모달은 기존 업무일 때만 표시 */}
-      {task && (
+      {task && recordModalOn && (
         <TaskRecordModal
           isVisible={recordModalOn}
           setIsVisible={setRecordModalOn}

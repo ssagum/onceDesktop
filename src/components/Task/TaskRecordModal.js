@@ -139,6 +139,14 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     }
   }, [isVisible, task]);
 
+  // 유효하지 않은 task 체크
+  useEffect(() => {
+    if (isVisible && (!task || !task.id)) {
+      console.error("유효하지 않은 업무 데이터:", task);
+      setIsVisible(false); // 유효하지 않은 task면 모달 닫기
+    }
+  }, [isVisible, task, setIsVisible]);
+
   // 작업 이력 조회
   const fetchTaskHistory = async () => {
     if (!task?.id) return;

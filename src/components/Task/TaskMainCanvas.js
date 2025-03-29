@@ -61,15 +61,18 @@ const InfoRow = styled.div``;
 
 // 모드 토글 스위치 컴포넌트 - 스타일드 컴포넌트로 정의
 const ToggleContainer = styled.div`
+  margin-left: 20px;
   display: flex;
   position: relative;
-  width: 340px;
-  height: 50px;
-  margin-left: 25px;
-  border-radius: 30px;
+  width: 260px;
+  height: 40px;
+  border-radius: 25px;
   border: 1px solid #e0e0e0;
   overflow: hidden;
   background-color: #f5f5f5;
+  flex-shrink: 0; /* 추가: 크기 축소 방지 */
+  transform: translateZ(0); /* 추가: 렌더링 최적화 */
+  will-change: transform; /* 추가: 렌더링 최적화 */
 `;
 
 const ToggleOption = styled.div.attrs((props) => ({
@@ -85,7 +88,7 @@ const ToggleOption = styled.div.attrs((props) => ({
   cursor: pointer;
   transition: color 0.3s ease;
   color: ${(props) => (props.active ? "#fff" : "#555")};
-  font-size: 16px;
+  font-size: 14px;
 `;
 
 const ToggleSlider = styled.div.attrs((props) => ({
@@ -93,18 +96,20 @@ const ToggleSlider = styled.div.attrs((props) => ({
   "data-position": props.position || "left",
 }))`
   position: absolute;
-  top: 4px;
-  left: ${(props) => (props.position === "left" ? "4px" : "50%")};
-  width: calc(50% - 8px);
-  height: calc(100% - 8px);
+  top: 3px;
+  left: ${(props) => (props.position === "left" ? "3px" : "50%")};
+  width: calc(50% - 6px);
+  height: calc(100% - 6px);
   background-color: #007bff;
   border-radius: 16px;
-  transition: left 0.3s ease;
+  transform: translateZ(0); /* 추가: 렌더링 최적화 */
+  will-change: transform, left; /* 추가: 렌더링 최적화 */
+  transition: left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1); /* 추가: 더 부드러운 전환 */
 `;
 
 const ToggleIcon = styled.span`
-  margin-right: 10px;
-  font-size: 22px;
+  margin-right: 6px;
+  font-size: 18px;
 `;
 
 // ★ 폴더 컨테이너: 폴더 느낌의 디자인과 드래그 시 애니메이션 효과 적용 ★
@@ -1691,23 +1696,25 @@ function TaskMainCanvas() {
           <span className="text-[34px] font-semibold">업무분장</span>
 
           {/* 모드 전환 토글 개선 */}
-          <ToggleContainer>
-            <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
-            <ToggleOption
-              active={viewMode === "dnd"}
-              onClick={() => setViewMode("dnd")}
-            >
-              <ToggleIcon>🗂️</ToggleIcon>
-              드래그 모드
-            </ToggleOption>
-            <ToggleOption
-              active={viewMode === "board"}
-              onClick={() => setViewMode("board")}
-            >
-              <ToggleIcon>📋</ToggleIcon>
-              게시판 모드
-            </ToggleOption>
-          </ToggleContainer>
+          <div style={{ width: "260px" }}>
+            <ToggleContainer>
+              <ToggleSlider position={viewMode === "dnd" ? "left" : "right"} />
+              <ToggleOption
+                active={viewMode === "dnd"}
+                onClick={() => setViewMode("dnd")}
+              >
+                <ToggleIcon>🗂️</ToggleIcon>
+                드래그 모드
+              </ToggleOption>
+              <ToggleOption
+                active={viewMode === "board"}
+                onClick={() => setViewMode("board")}
+              >
+                <ToggleIcon>📋</ToggleIcon>
+                게시판 모드
+              </ToggleOption>
+            </ToggleContainer>
+          </div>
         </div>
         <div className="w-[160px]">
           <OnceOnOffButton

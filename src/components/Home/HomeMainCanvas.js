@@ -60,6 +60,7 @@ import { isHospitalOwner } from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
 import NaverReservationViewer from "../Reservation/NaverReservationViewer";
 import TextEditorModal from "../TextEditorModal";
+import { filterHiddenDocuments } from "../../utils/filterUtils";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -389,7 +390,7 @@ export default function HomeMainCanvas() {
         ...doc.data(),
         createdAt: doc.data().createdAt || "",
       }));
-      setNotices(noticeList);
+      setNotices(filterHiddenDocuments(noticeList));
     });
 
     return () => unsubscribe();
@@ -623,13 +624,14 @@ export default function HomeMainCanvas() {
           </InsideHeaderZone>
 
           {notices
-            .filter((notice) => notice.pinned)
+            .filter((notice) => notice.pinned && !notice.isHidden)
             .slice(0, 4)
             .map((notice) => (
               <RenderTitlePart key={notice.id} row={notice} isHomeMode={true} />
             ))}
 
-          {notices.filter((notice) => notice.pinned).length === 0 && (
+          {notices.filter((notice) => notice.pinned && !notice.isHidden)
+            .length === 0 && (
             <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
               <span className="mb-[40px]">등록된 공지사항이 없습니다.</span>
             </div>
