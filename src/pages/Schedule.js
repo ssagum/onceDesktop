@@ -942,30 +942,50 @@ const Schedule = () => {
   // 일정 수정 핸들러
   const handleAppointmentUpdate = async (updatedAppointment) => {
     try {
+      console.log("업데이트 시작:", updatedAppointment);
+
+      // FormData 객체가 전달된 경우 처리 (이 부분은 필요 없을 수 있지만 안전을 위해 추가)
+      let appointmentToUpdate = updatedAppointment;
+      if (updatedAppointment instanceof FormData) {
+        console.log("FormData 객체가 전달됨, 변환 필요");
+        const objData = {};
+        for (let [key, value] of updatedAppointment.entries()) {
+          objData[key] = value;
+        }
+        appointmentToUpdate = objData;
+      }
+
       // staffId와 실제 이름 모두 업데이트
       const currentStaff =
         viewMode === "진료" ? staffData.진료 : staffData.물리치료;
       const staffMember = currentStaff.find(
-        (s) => s.id === updatedAppointment.staffId
+        (s) => s.id === appointmentToUpdate.staffId
       );
 
       const appointmentData = {
-        ...updatedAppointment,
+        ...appointmentToUpdate,
         staffName: staffMember ? staffMember.name : "알 수 없음",
         // 색상 정보 유지 또는 업데이트
         staffColor:
-          updatedAppointment.staffColor ||
+          appointmentToUpdate.staffColor ||
           (staffMember ? staffMember.color : "#999"),
         updatedAt: new Date(),
       };
 
+      console.log("Firestore에 업데이트할 데이터:", appointmentData);
+
+      // 업데이트할 데이터에서 불필요한 필드 제거
+      const firestoreData = { ...appointmentData };
+      delete firestoreData._document; // Firestore 내부 필드 제거
+      delete firestoreData._key; // Firestore 내부 필드 제거
+
       // Firestore 업데이트
-      const appointmentRef = doc(db, "reservations", updatedAppointment.id);
-      await updateDoc(appointmentRef, appointmentData);
+      const appointmentRef = doc(db, "reservations", appointmentToUpdate.id);
+      await updateDoc(appointmentRef, firestoreData);
 
       // 상태 업데이트
       const updatedAppointments = appointments.map((app) =>
-        app.id === updatedAppointment.id ? appointmentData : app
+        app.id === appointmentToUpdate.id ? appointmentData : app
       );
 
       setAppointments(updatedAppointments);
@@ -978,6 +998,7 @@ const Schedule = () => {
       return appointmentData;
     } catch (error) {
       console.error("일정 수정 중 오류 발생:", error);
+      console.error("오류 세부 정보:", error.stack);
       showToast("일정 수정에 실패했습니다.", "error");
       return null;
     }

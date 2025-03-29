@@ -6,7 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import styled, { keyframes } from "styled-components";
-import { format, parseISO, isToday } from "date-fns";
+import { format, parseISO, isToday, isEqual } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   collection,
@@ -18,6 +18,10 @@ import {
   query,
   setDoc,
   getDoc,
+  where,
+  orderBy,
+  serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -707,6 +711,7 @@ const ScheduleGrid = ({
   timeSlots = [],
   staff = [],
   appointments: initialAppointments = [],
+  vacations: initialVacations = [], // 휴가 정보 추가
   onAppointmentCreate,
   onAppointmentUpdate,
   onAppointmentDelete,
@@ -716,6 +721,7 @@ const ScheduleGrid = ({
   const gridRef = useRef(null);
   // 초기 appointments 저장
   const [localAppointments, setLocalAppointments] = useState([]);
+  const [vacations, setVacations] = useState(initialVacations); // vacations 상태 변수 추가
   const [showForm, setShowForm] = useState(false);
   const [formPosition, setFormPosition] = useState({ left: 0, top: 0 });
   const [formData, setFormData] = useState({
@@ -729,6 +735,13 @@ const ScheduleGrid = ({
   const [showSelectionForm, setShowSelectionForm] = useState(false);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // 확인 모달 관련 상태 추가
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showVacationConflictModal, setShowVacationConflictModal] =
+    useState(false);
+  const [vacationConflictData, setVacationConflictData] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
 
   // 메모 관련 상태 추가 - 구조 변경
   const [memos, setMemos] = useState({});
@@ -852,6 +865,10 @@ const ScheduleGrid = ({
   // 셀 높이 상수 정의 (헤더 높이 수정)
   const cellHeight = 40;
   const headerHeight = 40 + 40; // 날짜 헤더(85px) + 직원 헤더(40px)
+
+  // 그리드 셀 관련 상수 명시적으로 추가
+  const CELL_HEIGHT = 40; // 셀 높이 픽셀 단위
+  const CELL_WIDTH = 150; // 셀 너비 픽셀 단위
 
   // 마우스 상태 관련 변수 추가
   const [mouseDown, setMouseDown] = useState(false);
@@ -1080,83 +1097,225 @@ const ScheduleGrid = ({
     }
   };
 
+  // handleAppointmentSubmit 함수 수정
   const handleAppointmentSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      if (!formData.date || !formData.startTime || !formData.endTime) {
-        showToast("필수 정보를 모두 입력해주세요.", "error");
+      // 수정 모드일 경우 별도 처리
+      if (isEditing && selectedAppointment) {
+        console.log("수정 모드에서 저장 버튼 클릭됨");
+
+        // 폼 데이터 추출 (직접 폼 요소 또는 상태에서 추출)
+        const formDataObj = {
+          title: formData.title || selectedAppointment.title || "",
+          date: formData.date || selectedAppointment.date,
+          startTime: formData.startTime || selectedAppointment.startTime,
+          endTime: formData.endTime || selectedAppointment.endTime,
+          staffId: formData.staffId || selectedAppointment.staffId,
+          notes: formData.notes || selectedAppointment.notes || "",
+          type: formData.type || selectedAppointment.type || viewMode,
+        };
+
+        // 수정된 일정 처리
+        await processAppointmentSubmit(formDataObj);
         return;
       }
 
-      let result = null;
-
-      if (isEditing && selectedAppointment) {
-        // 기존 일정 수정
-        const updatedAppointment = {
-          ...selectedAppointment,
-          ...formData,
-          dateIndex: selectedAppointment.dateIndex,
-          updatedAt: new Date().toISOString(),
-        };
-
-        // 상위 컴포넌트의 update 함수 호출
-        result = await onAppointmentUpdate(updatedAppointment);
-        showToast("일정이 수정되었습니다.", "success");
-      } else {
-        // 새 일정 생성
-        const newAppointment = {
-          ...formData,
-          dateIndex: dates.findIndex(
-            (date) => format(date, "yyyy-MM-dd") === formData.date
-          ),
-          createdAt: new Date().toISOString(),
-        };
-
-        // 상위 컴포넌트의 create 함수 호출
-        result = await onAppointmentCreate(newAppointment);
-        showToast("일정이 추가되었습니다.", "success");
+      // 새 일정 생성의 경우에만 selectedCell 검사
+      if (!selectedCell) {
+        console.error("선택된 셀이 없습니다.");
+        showToast("일정을 생성할 위치를 선택해주세요.", "error");
+        return;
       }
 
-      // 폼 초기화 및 상태 리셋
-      setFormData({
-        title: "",
-        date: "",
-        startTime: "",
-        endTime: "",
-        staffId: "",
-        notes: "",
-        type: viewMode,
-      });
-      setShowForm(false);
-      setIsEditing(false);
-      setSelectedAppointment(null);
+      const { dateIndex, staffIndex, startTimeIndex, endTimeIndex } =
+        selectedCell;
 
-      console.log("일정 작업 완료, 결과:", result);
+      // 휴가 충돌 검사 추가 - 결과만 받아옴
+      const conflictResult = checkVacationConflict(
+        dateIndex,
+        staffIndex,
+        startTimeIndex,
+        endTimeIndex
+      );
+
+      // 휴가 충돌 시 확인 모달 표시
+      if (conflictResult.hasConflict) {
+        const vacation = conflictResult.vacation;
+        const vacationType = vacation?.vacationType || "휴가";
+
+        // 기존 window.confirm 대신 모달 표시를 위한 데이터 설정
+        setVacationConflictData({
+          vacation,
+          vacationType,
+          formDataFromForm: new FormData(e.target),
+          dateIndex,
+          staffIndex,
+          startTimeIndex,
+          endTimeIndex,
+        });
+
+        // 모달 표시
+        setShowVacationConflictModal(true);
+        return; // 여기서 함수 종료, 모달에서 선택 후 처리 진행
+      }
+
+      // 충돌 없는 경우 정상적으로 처리 (기존 로직)
+      const formDataFromEvent = new FormData(e.target);
+      await processAppointmentSubmit(formDataFromEvent);
     } catch (error) {
       console.error("일정 저장 중 오류 발생:", error);
       showToast("일정 저장 중 오류가 발생했습니다.", "error");
     }
   };
 
+  // 약속 제출 처리를 위한 분리된 함수
+  const processAppointmentSubmit = async (formData) => {
+    // FormData 객체를 일반 JavaScript 객체로 변환
+    const formDataObj = {};
+    if (formData instanceof FormData) {
+      for (let [key, value] of formData.entries()) {
+        formDataObj[key] = value;
+      }
+    } else {
+      // 이미 객체인 경우 그대로 사용
+      Object.assign(formDataObj, formData);
+    }
+
+    // 필수 필드 검사
+    if (!formDataObj.date || !formDataObj.startTime || !formDataObj.endTime) {
+      showToast("필수 정보를 모두 입력해주세요.", "error");
+      return;
+    }
+
+    let result = null;
+
+    if (isEditing && selectedAppointment) {
+      // 기존 일정 수정
+      const updatedAppointment = {
+        ...selectedAppointment,
+        ...formDataObj,
+        dateIndex: selectedAppointment.dateIndex,
+        updatedAt: new Date().toISOString(),
+      };
+
+      console.log("업데이트할 일정 데이터:", updatedAppointment);
+
+      // 상위 컴포넌트의 update 함수 호출
+      try {
+        result = await onAppointmentUpdate(updatedAppointment);
+      } catch (error) {
+        console.error("일정 업데이트 중 오류:", error);
+        showToast("일정 수정 중 오류가 발생했습니다.", "error");
+        return;
+      }
+    } else {
+      // 새 일정 생성
+      const newAppointment = {
+        ...formDataObj,
+        dateIndex: dates.findIndex(
+          (date) => format(date, "yyyy-MM-dd") === formDataObj.date
+        ),
+        createdAt: new Date().toISOString(),
+      };
+
+      // 상위 컴포넌트의 create 함수 호출
+      try {
+        result = await onAppointmentCreate(newAppointment);
+        showToast("일정이 추가되었습니다.", "success");
+      } catch (error) {
+        console.error("일정 추가 중 오류:", error);
+        showToast("일정 추가 중 오류가 발생했습니다.", "error");
+        return;
+      }
+    }
+
+    // 폼 초기화 및 상태 리셋
+    setFormData({
+      title: "",
+      date: "",
+      startTime: "",
+      endTime: "",
+      staffId: "",
+      notes: "",
+      type: viewMode,
+    });
+    setShowForm(false);
+    setIsEditing(false);
+    setSelectedAppointment(null);
+
+    console.log("일정 작업 완료, 결과:", result);
+  };
+
+  // 휴가 충돌 확인 모달 결과 처리 함수
+  const confirmVacationConflict = async () => {
+    if (!vacationConflictData) return;
+
+    // 모달 닫기
+    setShowVacationConflictModal(false);
+
+    // 경고 토스트 표시
+    if (showToast) {
+      showToast(
+        "의사가 휴가 중인 시간에 예약이 추가되었습니다. 조기 복귀 여부를 확인해주세요.",
+        "warning"
+      );
+    }
+
+    // 일정 제출 처리 계속 진행
+    await processAppointmentSubmit(vacationConflictData.formDataFromForm);
+
+    // 데이터 초기화
+    setVacationConflictData(null);
+  };
+
+  // 휴가 충돌 취소 함수
+  const cancelVacationConflict = () => {
+    setShowVacationConflictModal(false);
+    setVacationConflictData(null);
+  };
+
   const handleDeleteAppointment = async () => {
     try {
       if (!selectedAppointment) return;
 
-      if (window.confirm("정말로 이 일정을 삭제하시겠습니까?")) {
-        await onAppointmentDelete(selectedAppointment.id);
-
-        // 폼 닫기 및 상태 초기화
-        setShowForm(false);
-        setShowSelectionForm(false);
-        setIsEditing(false);
-        setSelectedAppointment(null);
-
-        showToast("일정이 삭제되었습니다.", "success");
-      }
+      // window.confirm 대신 모달 표시
+      setShowDeleteModal(true);
     } catch (error) {
       console.error("일정 삭제 중 오류 발생:", error);
       showToast("일정 삭제 중 오류가 발생했습니다.", "error");
     }
+  };
+
+  // 일정 삭제 확인 처리 함수 추가
+  const confirmDeleteAppointment = async () => {
+    try {
+      if (!selectedAppointment) return;
+
+      await onAppointmentDelete(selectedAppointment.id);
+
+      // 폼 닫기 및 상태 초기화
+      setShowForm(false);
+      setShowSelectionForm(false);
+      setIsEditing(false);
+      setSelectedAppointment(null);
+
+      // 모달 닫기
+      setShowDeleteModal(false);
+
+      showToast("일정이 삭제되었습니다.", "success");
+    } catch (error) {
+      console.error("일정 삭제 중 오류 발생:", error);
+      showToast("일정 삭제 중 오류가 발생했습니다.", "error");
+      // 모달 닫기
+      setShowDeleteModal(false);
+    }
+  };
+
+  // 일정 삭제 취소 함수 추가
+  const cancelDeleteAppointment = () => {
+    setShowDeleteModal(false);
   };
 
   // 일정 클릭 핸들러도 비슷하게 수정
@@ -1223,80 +1382,114 @@ const ScheduleGrid = ({
   // 일정 생성 함수 수정 - 더 세밀한 시간 단위 지원
   const createAppointment = async (data) => {
     try {
-      // 시간대 계산 로직
-      const startTime =
-        data.startTime ||
-        (data.startTimeIndex ? effectiveTimeSlots[data.startTimeIndex] : null);
-      const endTime =
-        data.endTime ||
-        (data.endTimeIndex
-          ? getEndTime(effectiveTimeSlots[data.endTimeIndex])
-          : null);
+      // 휴가 충돌 검사 추가 - 결과만 받아옴
+      const conflictResult = checkVacationConflict(
+        data.dateIndex,
+        staff.findIndex((s) => s.id === data.staffId),
+        timeSlots.findIndex((slot) => slot === data.startTime),
+        timeSlots.findIndex((slot) => slot === getEndTime(data.endTime))
+      );
 
-      if (!startTime || !endTime) {
-        alert("시작 시간과 종료 시간을 설정해주세요.");
-        return;
+      // 휴가 충돌 시 확인 모달 표시
+      if (conflictResult.hasConflict) {
+        const vacation = conflictResult.vacation;
+        const vacationType = vacation?.vacationType || "휴가";
+
+        // 기존 window.confirm 대신 모달 표시를 위한 데이터 설정
+        setVacationConflictData({
+          vacation,
+          vacationType,
+          data: data,
+          isCreating: true,
+        });
+
+        // 모달 표시
+        setShowVacationConflictModal(true);
+        return false; // 여기서 함수 종료, 모달에서 선택 후 처리 진행
       }
 
-      // 시간 검증 - 종료 시간이 시작 시간보다 나중인지
-      if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
-        alert("종료 시간은 시작 시간보다 나중이어야 합니다.");
-        return;
-      }
-
-      // 담당자 정보 가져오기
-      const selectedStaff = staff.find((s) => s.id === data.staffId);
-
-      // 새 일정 데이터 생성
-      const newAppointment = {
-        title: data.title || "",
-        staffId: data.staffId,
-        staffName: selectedStaff ? selectedStaff.name : "알 수 없음",
-        date: format(data.date, "yyyy-MM-dd"),
-        startTime,
-        endTime,
-        notes: data.notes || "",
-        // 명시적으로 viewMode에 따라 type 설정
-        type: viewMode === "물리치료" ? "물리치료" : "진료",
-        dateIndex: data.dateIndex,
-        staffColor: selectedStaff ? selectedStaff.color : "#999",
-      };
-
-      console.log("ScheduleGrid - 새 일정 생성:", newAppointment);
-
-      // 상위 컴포넌트 콜백 호출 - 여기서 Firebase 저장 처리
-      let savedAppointment = null;
-      if (onAppointmentCreate) {
-        // 생성된 예약 정보 (id 포함) 받아오기
-        savedAppointment = await onAppointmentCreate(newAppointment);
-
-        // 로컬 상태 업데이트 - 반환된 객체가 있는 경우만
-        if (savedAppointment && savedAppointment.id) {
-          console.log("로컬 상태 업데이트:", savedAppointment);
-          // 로컬 상태에 새 일정 추가
-          setLocalAppointments((prevAppointments) => [
-            ...prevAppointments,
-            savedAppointment,
-          ]);
-
-          // Toast 메시지 표시 (props로 전달받은 경우)
-          if (showToast) {
-            showToast(
-              `${savedAppointment.title || "새 일정"}이(가) 등록되었습니다.`,
-              "success"
-            );
-          }
-        }
-      }
-
-      // 폼 닫기 및 상태 초기화
-      setShowForm(false);
-      setSelection(null); // 선택 영역 초기화
-      setCurrentCell(null); // 선택된 셀 초기화
+      // 시간대 계산 로직 및 기존 처리 과정
+      return await processAppointmentCreate(data);
     } catch (error) {
       console.error("일정 생성 오류:", error);
-      alert("일정을 저장하는 중 오류가 발생했습니다.");
+      showToast("일정을 저장하는 중 오류가 발생했습니다.", "error");
+      return false;
     }
+  };
+
+  // 약속 생성 처리를 위한 분리된 함수
+  const processAppointmentCreate = async (data) => {
+    // 시간대 계산 로직
+    const startTime =
+      data.startTime ||
+      (data.startTimeIndex ? effectiveTimeSlots[data.startTimeIndex] : null);
+    const endTime =
+      data.endTime ||
+      (data.endTimeIndex
+        ? getEndTime(effectiveTimeSlots[data.endTimeIndex])
+        : null);
+
+    if (!startTime || !endTime) {
+      showToast("시작 시간과 종료 시간을 설정해주세요.", "error");
+      return false;
+    }
+
+    // 시간 검증 - 종료 시간이 시작 시간보다 나중인지
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+      showToast("종료 시간은 시작 시간보다 나중이어야 합니다.", "error");
+      return false;
+    }
+
+    // 담당자 정보 가져오기
+    const selectedStaff = staff.find((s) => s.id === data.staffId);
+
+    // 새 일정 데이터 생성
+    const newAppointment = {
+      title: data.title || "",
+      staffId: data.staffId,
+      staffName: selectedStaff ? selectedStaff.name : "알 수 없음",
+      date: format(data.date, "yyyy-MM-dd"),
+      startTime,
+      endTime,
+      notes: data.notes || "",
+      // 명시적으로 viewMode에 따라 type 설정
+      type: viewMode === "물리치료" ? "물리치료" : "진료",
+      dateIndex: data.dateIndex,
+      staffColor: selectedStaff ? selectedStaff.color : "#999",
+    };
+
+    console.log("ScheduleGrid - 새 일정 생성:", newAppointment);
+
+    // 상위 컴포넌트 콜백 호출 - 여기서 Firebase 저장 처리
+    let savedAppointment = null;
+    if (onAppointmentCreate) {
+      // 생성된 예약 정보 (id 포함) 받아오기
+      savedAppointment = await onAppointmentCreate(newAppointment);
+
+      // 로컬 상태 업데이트 - 반환된 객체가 있는 경우만
+      if (savedAppointment && savedAppointment.id) {
+        console.log("로컬 상태 업데이트:", savedAppointment);
+        // 로컬 상태에 새 일정 추가
+        setLocalAppointments((prevAppointments) => [
+          ...prevAppointments,
+          savedAppointment,
+        ]);
+
+        // Toast 메시지 표시 (props로 전달받은 경우)
+        if (showToast) {
+          showToast(
+            `${savedAppointment.title || "새 일정"}이(가) 등록되었습니다.`,
+            "success"
+          );
+        }
+      }
+    }
+
+    // 폼 닫기 및 상태 초기화
+    setShowForm(false);
+    setSelection(null); // 선택 영역 초기화
+    setCurrentCell(null); // 선택된 셀 초기화
+    return true;
   };
 
   // 드래그 영역 계산
@@ -2437,6 +2630,312 @@ const ScheduleGrid = ({
 
   // 시간 유틸 함수
 
+  // 더미 휴가 데이터 생성 (실제로는 Firebase에서 가져옴)
+  useEffect(() => {
+    // 실제 구현 예시: Firebase에서 승인된 휴가 정보를 가져옴
+    const fetchVacations = async () => {
+      try {
+        // 날짜 범위로 필터링할 시작일과 종료일 계산
+        const startDateStr = dates[0];
+        const endDateStr = dates[dates.length - 1];
+
+        // 승인된 휴가만 조회하는 쿼리
+        const vacationsQuery = query(
+          collection(db, "vacations"),
+          where("status", "==", "승인됨"),
+          orderBy("startDate", "asc")
+        );
+
+        // 더미 데이터 사용 시에는 아래 코드를 주석 처리
+        /*
+        const snapshot = await getDocs(vacationsQuery);
+        const fetchedVacations = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            backgroundColor: "#FF8A65" // 휴가 표시 색상 (주황색)
+          }))
+          .filter(vacation => {
+            // 날짜 범위에 포함되는 휴가만 필터링
+            const vacationStart = vacation.startDate.replace(/-/g, "/");
+            const vacationEnd = vacation.endDate.replace(/-/g, "/");
+            
+            // 일정표 날짜 범위와 겹치는 휴가만 표시
+            return (
+              (vacationStart >= startDateStr && vacationStart <= endDateStr) ||
+              (vacationEnd >= startDateStr && vacationEnd <= endDateStr)
+            );
+          });
+        
+        setVacations(fetchedVacations);
+        */
+      } catch (error) {
+        console.error("휴가 정보 조회 오류:", error);
+        if (showToast) {
+          showToast("휴가 정보를 불러오는 중 오류가 발생했습니다.", "error");
+        }
+      }
+    };
+
+    // 더미 데이터 사용 (실제 구현 시 fetchVacations() 호출)
+    const dummyVacations = [
+      {
+        id: "vac1",
+        staffId: staff[0]?.id || "staff1", // 첫 번째 의사
+        startDate: dates[0], // 첫째 날
+        endDate: dates[0],
+        startTime: "09:00",
+        endTime: "12:00",
+        status: "승인됨",
+        vacationType: "휴가",
+        reason: "개인 휴가",
+        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
+      },
+      {
+        id: "vac2",
+        staffId: staff[1]?.id || "staff2", // 두 번째 의사
+        startDate: dates[1], // 둘째 날
+        endDate: dates[1],
+        startTime: "14:00",
+        endTime: "18:00",
+        status: "승인됨",
+        vacationType: "반차",
+        reason: "개인 사정",
+        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
+      },
+      {
+        id: "vac3",
+        staffId: staff[2]?.id || "staff3", // 세 번째 의사
+        startDate: dates[0], // 첫째 날
+        endDate: dates[0],
+        startTime: "09:00",
+        endTime: "18:00",
+        status: "승인됨",
+        vacationType: "경조사",
+        reason: "가족 경조사",
+        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
+      },
+    ];
+
+    setVacations(dummyVacations);
+
+    // fetchVacations(); // 실제 구현 시 주석 해제
+  }, [dates, staff, showToast]);
+
+  // 휴가 표시 렌더링 함수 개선
+  const renderVacations = () => {
+    if (!vacations || vacations.length === 0) return null;
+
+    return vacations.map((vacation) => {
+      if (vacation.status !== "승인됨") return null;
+
+      // 담당자 정보 확인
+      const staffIndex = staff.findIndex((s) => s.id === vacation.staffId);
+      if (staffIndex === -1) return null;
+      const staffMember = staff[staffIndex];
+
+      // 날짜 확인
+      const dateIndex = dates.findIndex((date) =>
+        isEqual(new Date(date), new Date(vacation.startDate))
+      );
+      if (dateIndex === -1) return null;
+
+      // 시간 인덱스 확인
+      const startTimeIndex = timeSlots.findIndex(
+        (slot) => slot === vacation.startTime
+      );
+      if (startTimeIndex === -1) return null;
+
+      const endTimeIndex = timeSlots.findIndex(
+        (slot) => slot === getEndTime(vacation.endTime)
+      );
+      if (endTimeIndex === -1) return null;
+
+      // 컬럼 인덱스 계산
+      const startCol = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
+      const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
+
+      // 참고사항이 있는지 확인
+      const hasNotes = vacation.reason && vacation.reason.trim().length > 0;
+
+      // 휴가 타입별 아이콘 설정
+      let vacationIcon;
+      if (vacation.vacationType === "반차") {
+        vacationIcon = "🕒"; // 반차 - 시계 아이콘
+      } else if (vacation.vacationType === "경조사") {
+        vacationIcon = "💐"; // 경조사 - 꽃 아이콘
+      } else {
+        vacationIcon = "🏖️"; // 일반 휴가 - 해변 아이콘
+      }
+
+      return (
+        <AppointmentBlock
+          key={`vacation-${vacation.id}`}
+          style={{
+            gridColumn: colIndex,
+            gridRow: `${startTimeIndex + 1} / span ${
+              endTimeIndex - startTimeIndex + 1
+            }`,
+            backgroundColor: "#E5E7EB", // 회색으로 변경
+            zIndex: 8, // 예약(10)보다 낮고 기본 셀(1)보다 높게
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            border: "1px solid #D1D5DB",
+          }}
+          title={`${vacation.vacationType}: ${vacation.reason || "휴가"}`}
+        >
+          {/* 참고사항 표시기 */}
+          {hasNotes && (
+            <div
+              className="notes-indicator"
+              title="참고사항 있음"
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                width: 0,
+                height: 0,
+                borderWidth: "0 12px 12px 0",
+                borderStyle: "solid",
+                borderColor: "transparent #9CA3AF transparent transparent",
+              }}
+            />
+          )}
+
+          <div className="appointment-content">
+            <div className="title flex items-center">
+              <span className="mr-1">{vacationIcon}</span>
+              <span className="font-medium text-gray-800 truncate">
+                {vacation.vacationType}
+              </span>
+            </div>
+            <div className="time text-gray-600">
+              {vacation.startTime} - {vacation.endTime}
+            </div>
+            <div
+              className="staff-name text-sm mt-1 font-medium text-gray-700"
+              style={{ fontSize: "0.8em", marginTop: "2px" }}
+            >
+              {staffMember?.name || "의료진"} 휴가중
+            </div>
+          </div>
+        </AppointmentBlock>
+      );
+    });
+  };
+
+  // 휴가 충돌 검사 함수 수정 - 차단하지 않고 확인만 하도록 변경
+  const checkVacationConflict = (
+    dateIndex,
+    staffIndex,
+    startTimeIndex,
+    endTimeIndex
+  ) => {
+    // 휴가 정보가 없으면 충돌 없음
+    if (!vacations || vacations.length === 0) return { hasConflict: false };
+
+    const targetDate = dates[dateIndex];
+    const targetStaffId = staff[staffIndex]?.id;
+
+    // 휴가 중인 의사 및 시간대 확인
+    const conflictingVacation = vacations.find((vacation) => {
+      if (vacation.status !== "승인됨") return false;
+      if (vacation.staffId !== targetStaffId) return false;
+
+      const vacationDateMatches = isEqual(
+        new Date(vacation.startDate),
+        new Date(targetDate)
+      );
+
+      if (!vacationDateMatches) return false;
+
+      const vacationStartTimeIndex = timeSlots.findIndex(
+        (slot) => slot === vacation.startTime
+      );
+
+      const vacationEndTimeIndex = timeSlots.findIndex(
+        (slot) => slot === getEndTime(vacation.endTime)
+      );
+
+      // 시간대 겹치는지 확인
+      const timeOverlaps =
+        startTimeIndex <= vacationEndTimeIndex &&
+        endTimeIndex >= vacationStartTimeIndex;
+
+      return timeOverlaps;
+    });
+
+    return {
+      hasConflict: !!conflictingVacation,
+      vacation: conflictingVacation,
+    };
+  };
+
+  // 확인 모달 스타일
+  const confirmOverlayStyle = {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1100,
+  };
+
+  const confirmModalStyle = {
+    backgroundColor: "white",
+    borderRadius: "8px",
+    width: "400px",
+    padding: "20px",
+    boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
+  };
+
+  const confirmHeaderStyle = {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: "15px",
+  };
+
+  const confirmTitleStyle = {
+    margin: 0,
+    fontSize: "1.2rem",
+    fontWeight: "600",
+    color: "#333",
+  };
+
+  const confirmContentStyle = {
+    marginBottom: "20px",
+  };
+
+  const confirmButtonsStyle = {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+  };
+
+  const confirmCancelButtonStyle = {
+    padding: "8px 16px",
+    backgroundColor: "#f5f5f5",
+    color: "#333",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontWeight: "500",
+  };
+
+  const confirmDeleteButtonStyle = {
+    padding: "8px 16px",
+    backgroundColor: "#f44336",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontWeight: "500",
+  };
+
+  // 렌더링 부분 끝에 모달 컴포넌트 추가
   return (
     <GridContainer ref={gridRef}>
       <HeaderContainer $dates={dates} $staff={staff}>
@@ -2446,6 +2945,8 @@ const ScheduleGrid = ({
       <GridContent $dates={dates} $staff={staff} className="grid-content">
         {renderTimeGridCells()}
         {renderAppointments()}
+        {renderVacations()} {/* 휴가 정보 렌더링 */}
+        {renderDragArea()}
         {renderSelectionArea()}
         {renderSelectedCell()}
         {renderMemoOverlays()}
@@ -2634,6 +3135,67 @@ const ScheduleGrid = ({
             )}
           </FormActions>
         </AppointmentForm>
+      )}
+
+      {/* 삭제 확인 모달 */}
+      {showDeleteModal && (
+        <div className="confirm-modal-overlay" style={confirmOverlayStyle}>
+          <div className="confirm-modal" style={confirmModalStyle}>
+            <div style={confirmHeaderStyle}>
+              <div style={{ color: "#f44336", marginRight: "10px" }}>⚠️</div>
+              <h3 style={confirmTitleStyle}>일정 삭제 확인</h3>
+            </div>
+            <div style={confirmContentStyle}>
+              <p>정말로 이 일정을 삭제하시겠습니까?</p>
+            </div>
+            <div style={confirmButtonsStyle}>
+              <button
+                onClick={cancelDeleteAppointment}
+                style={confirmCancelButtonStyle}
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDeleteAppointment}
+                style={confirmDeleteButtonStyle}
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 휴가 충돌 확인 모달 */}
+      {showVacationConflictModal && vacationConflictData && (
+        <div className="confirm-modal-overlay" style={confirmOverlayStyle}>
+          <div className="confirm-modal" style={confirmModalStyle}>
+            <div style={confirmHeaderStyle}>
+              <div style={{ color: "#f44336", marginRight: "10px" }}>⚠️</div>
+              <h3 style={confirmTitleStyle}>일정 충돌 확인</h3>
+            </div>
+            <div style={confirmContentStyle}>
+              <p>
+                선택한 시간에 의사가 {vacationConflictData.vacationType}{" "}
+                중입니다. 그래도 예약을 진행하시겠습니까?
+              </p>
+            </div>
+            <div style={confirmButtonsStyle}>
+              <button
+                onClick={cancelVacationConflict}
+                style={confirmCancelButtonStyle}
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmVacationConflict}
+                style={confirmDeleteButtonStyle}
+              >
+                진행
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </GridContainer>
   );
