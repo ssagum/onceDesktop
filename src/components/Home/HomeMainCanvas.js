@@ -104,9 +104,10 @@ const Square = ({ title, unreadCount = 0 }) => {
         {title === "병원현황" && (
           <img src={board} alt="Logo" className="w-[36px]" />
         )}
-        {title === "채 팅" && (
+        {title === "채팅" && (
           <img src={chatting} alt="Logo" className="w-[40px]" />
         )}
+        {title === "호출" && <img src={bell} alt="Logo" className="w-[40px]" />}
       </div>
       <span className="text-once18">{title}</span>
     </div>
@@ -831,13 +832,31 @@ export default function HomeMainCanvas() {
             </RightTopZone>
             <RightBottomZone className="w-full flex-row flex">
               <div className="w-[240px] h-[240px] flex-col flex justify-between mr-[20px] gap-y-[20px]">
-                <button
-                  onClick={() => setCallIsVisible(true)}
-                  className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center"
-                >
-                  <img src={bell} alt="Logo" className="w-[46px] mb-[10px]" />
-                  <span className="text-once18">호 출</span>
-                </button>
+                <div className="w-[240px] flex flex-row justify-between">
+                  <div onClick={() => setCallIsVisible(true)}>
+                    <Square title={"호출"} />
+                  </div>
+                  <div>
+                    <Square title={"네이버 예약"} />
+                  </div>
+                </div>
+                <div className="w-[240px] flex flex-row justify-between">
+                  <div onClick={openChatWindow}>
+                    {unreadChatCount > 0 && (
+                      <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full px-1.5 min-w-[20px] h-5 flex items-center justify-center text-xs">
+                        {unreadChatCount > 99
+                          ? "99+"
+                          : unreadChatCount > 9
+                          ? `${unreadChatCount}+`
+                          : unreadChatCount}
+                      </div>
+                    )}
+                    <Square title={"채팅"} />
+                  </div>
+                  <div>
+                    <Square title={"문자 발송"} />
+                  </div>
+                </div>
                 <button
                   onClick={openChatWindow}
                   className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center relative"
