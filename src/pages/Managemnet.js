@@ -6,7 +6,6 @@ import TextEditorModal from "../components/TextEditorModal";
 import HomeMainCanvas from "../components/Home/HomeMainCanvas";
 import HomeTimerCanvas from "../components/Home/HomeTimerCanvas";
 import TaskMainCanvas from "../components/Task/TaskMainCanvas";
-import TaskManagement from "../components/Task/TaskManagement";
 import JcyTable from "../components/common/JcyTable";
 import { FilterButton, FilterChips } from "../components/common/FilterButton";
 import { db } from "../firebase";

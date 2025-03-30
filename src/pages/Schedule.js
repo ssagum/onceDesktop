@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 import SideBar from "../components/SideBar";
@@ -393,6 +393,8 @@ const Schedule = () => {
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
   // 네이버 예약 모달 상태 추가
   const [naverReservationVisible, setNaverReservationVisible] = useState(false);
+  // 초기화 진행 상태 추가
+  const [initialized, setInitialized] = useState(false);
 
   const timeSlots = generateTimeSlots();
 
@@ -549,73 +551,135 @@ const Schedule = () => {
   }, [department]);
 
   // 선택된 월의 주 수 계산
-  const getWeeksForMonth = () => {
+  const getWeeksForMonth = (year = selectedYear, month = selectedMonth) => {
+    console.log(`주차 계산: ${year}년 ${month + 1}월`);
     const weeks = [];
-    const firstDay = startOfMonth(new Date(selectedYear, selectedMonth, 1));
-    const lastDay = endOfMonth(new Date(selectedYear, selectedMonth, 1));
+    const firstDay = startOfMonth(new Date(year, month, 1));
+    const lastDay = endOfMonth(new Date(year, month, 1));
 
     // 첫째 주 시작일이 월요일이 아니면 이전 월의 날짜 포함
     let startOfFirstWeek = startOfWeek(firstDay, { weekStartsOn: 1 }); // 월요일부터 시작
 
-    let currentDate = startOfFirstWeek;
+    let currentDay = new Date(startOfFirstWeek);
     let weekNumber = 0;
 
-    while (currentDate <= lastDay) {
-      const weekEnd = addDays(currentDate, 6);
+    while (currentDay <= lastDay) {
+      const weekEnd = addDays(currentDay, 6);
 
       weeks.push({
         weekNumber: weekNumber,
-        start: new Date(currentDate),
+        start: new Date(currentDay),
         end: new Date(weekEnd),
         label: `${weekNumber + 1}주`,
-        dateRange: `${format(currentDate, "M/d")}-${format(weekEnd, "M/d")}`,
+        dateRange: `${format(currentDay, "M/d")}-${format(weekEnd, "M/d")}`,
       });
 
-      currentDate = addDays(currentDate, 7);
+      currentDay = addDays(currentDay, 7);
       weekNumber++;
     }
 
     return weeks;
   };
 
-  const weeks = getWeeksForMonth();
-
-  // 표시할 월~토 날짜 계산 (초기 렌더링용)
+  // 초기 컴포넌트 마운트 시 오늘 날짜 기준으로 월 설정
   useEffect(() => {
-    // 컴포넌트 마운트 시 오늘 날짜 기준으로 주차를 선택하고 날짜 계산
-    const today = new Date();
+    if (!initialized) {
+      const today = new Date();
+      const todayMonth = getMonth(today);
+      const todayYear = getYear(today);
 
-    // 오늘 날짜가 속한 주차 찾기
-    const foundWeekIndex = weeks.findIndex(
-      (week) => today >= week.start && today <= week.end
-    );
+      console.log(
+        `초기화: 오늘 날짜(${format(
+          today,
+          "yyyy-MM-dd"
+        )})의 월/연도로 설정 - ${todayYear}년 ${todayMonth + 1}월`
+      );
 
-    const weekIndex = foundWeekIndex !== -1 ? foundWeekIndex : 0;
-    const weekStartDate = weeks[weekIndex].start;
-
-    // 해당 주차의 날짜 계산 (월~토)
-    const initialDates = [];
-    for (let i = 0; i < 6; i++) {
-      initialDates.push(addDays(weekStartDate, i));
+      // 오늘 날짜의 월/연도로 설정
+      setSelectedMonth(todayMonth);
+      setSelectedYear(todayYear);
     }
+  }, [initialized]);
 
-    // 상태 업데이트
-    setActiveWeek(weekIndex);
-    setCurrentDate(weekStartDate);
-    setDisplayDates(initialDates);
+  // 선택된 월에 따라 주차 계산
+  const weeks = useMemo(
+    () => getWeeksForMonth(),
+    [selectedMonth, selectedYear]
+  );
 
-    console.log("컴포넌트 초기화: 오늘 날짜 기준 주차 설정 완료");
+  // 오늘 날짜가 속한 주차 찾기 및 표시할 날짜 설정
+  useEffect(() => {
+    if (!initialized && weeks.length > 0) {
+      const today = new Date();
 
-    // 이제 초기 주차 설정이 완료되었으므로 fetchAppointments가 처리됨
-  }, []); // 마운트 시 한 번만 실행
+      // 디버깅용 로그
+      console.log(`오늘 날짜: ${format(today, "yyyy-MM-dd")}`);
+      console.log(`선택된 월/연도: ${selectedYear}년 ${selectedMonth + 1}월`);
+      console.log(`계산된 주차 개수: ${weeks.length}개`);
+
+      weeks.forEach((week, idx) => {
+        const startDate = new Date(week.start);
+        const endDate = new Date(week.end);
+        console.log(
+          `주차 ${idx + 1}: ${format(startDate, "yyyy-MM-dd")} ~ ${format(
+            endDate,
+            "yyyy-MM-dd"
+          )}`
+        );
+      });
+
+      // 오늘 날짜가 속한 주차 찾기 (날짜 객체를 새로 생성하여 비교)
+      const todayDateStr = format(today, "yyyy-MM-dd");
+
+      const foundWeekIndex = weeks.findIndex((week) => {
+        const startDateStr = format(new Date(week.start), "yyyy-MM-dd");
+        const endDateStr = format(new Date(week.end), "yyyy-MM-dd");
+
+        // 문자열로 비교 (더 안정적)
+        return todayDateStr >= startDateStr && todayDateStr <= endDateStr;
+      });
+
+      console.log(`오늘 날짜가 속한 주차 인덱스: ${foundWeekIndex}`);
+
+      // 주차를 찾았으면 해당 주차로 설정, 아니면 첫 번째 주차 사용
+      const weekIndex = foundWeekIndex !== -1 ? foundWeekIndex : 0;
+      const weekStartDate = new Date(weeks[weekIndex].start);
+
+      console.log(
+        `선택된 주차: ${weekIndex + 1}주차, 시작일: ${format(
+          weekStartDate,
+          "yyyy-MM-dd"
+        )}`
+      );
+
+      // 날짜 범위 계산 (월~토)
+      const newDates = [];
+      for (let i = 0; i < 6; i++) {
+        newDates.push(addDays(new Date(weekStartDate), i));
+      }
+
+      console.log(
+        `표시할 날짜 범위: ${format(newDates[0], "yyyy-MM-dd")} ~ ${format(
+          newDates[5],
+          "yyyy-MM-dd"
+        )}`
+      );
+
+      // 상태 업데이트
+      setActiveWeek(weekIndex);
+      setCurrentDate(new Date(weekStartDate));
+      setDisplayDates(newDates);
+      setInitialized(true);
+    }
+  }, [weeks, initialized]);
 
   // displayDates가 변경될 때 일정 데이터 가져오기
   useEffect(() => {
-    if (displayDates.length > 0) {
+    if (displayDates.length > 0 && initialized) {
       console.log("displayDates 변경으로 fetchAppointments 호출됨");
       fetchAppointments();
     }
-  }, [displayDates, staffData, viewMode]); // 필요한 의존성만 포함
+  }, [displayDates, staffData, viewMode, initialized]);
 
   // 일정 데이터 가져오기 (Firebase에서 가져오기) - 컴포넌트 레벨에서 선언
   const fetchAppointments = async () => {
@@ -748,17 +812,17 @@ const Schedule = () => {
   // 오늘로 이동
   const handleToday = () => {
     const today = new Date();
-    setCurrentDate(today);
-    setSelectedMonth(getMonth(today));
-    setSelectedYear(getYear(today));
 
-    // 오늘이 속한 주차 찾기
-    const todayWeeks = getWeeksForMonth();
-    const foundWeek = todayWeeks.findIndex(
-      (week) => today >= week.start && today <= week.end
-    );
+    // 오늘 날짜의 월/연도로 상태 업데이트
+    const todayMonth = getMonth(today);
+    const todayYear = getYear(today);
 
-    setActiveWeek(foundWeek !== -1 ? foundWeek : 0);
+    // 상태 변경 (월/연도가 변경되면 useEffect에서 주차 재계산)
+    setSelectedMonth(todayMonth);
+    setSelectedYear(todayYear);
+
+    // 초기화 상태 리셋 (다시 주차 계산하기 위해)
+    setInitialized(false);
   };
 
   // 월 변경 핸들러

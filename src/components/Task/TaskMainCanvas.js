@@ -858,7 +858,7 @@ function TaskBoardView({
           columns={columns}
           data={filteredData}
           columnWidths="grid-cols-[0.8fr_2.5fr_1fr_0.8fr_1fr_0.8fr]" // 제목 컬럼 넓게, 나머지 좁게
-          itemsPerPage={6}
+          itemsPerPage={10}
           renderRow={renderRow}
           emptyRowHeight="60px"
           emptyMessage={emptyMessage}
