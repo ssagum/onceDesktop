@@ -54,7 +54,7 @@ const TimeInput = styled.input`
 
 /**
  * 날짜와 시간을 함께 선택할 수 있는 컴포넌트
- * @param {string} dateValue - yyyy/MM/dd 형식의 날짜
+ * @param {string} dateValue - yyyy-MM-dd 형식의 날짜
  * @param {string} timeValue - HH:mm 형식의 시간
  * @param {function} onDateChange - 날짜 변경 핸들러
  * @param {function} onTimeChange - 시간 변경 핸들러
@@ -69,21 +69,30 @@ const DateTimeSelector = ({
   timeName,
   disabled = false,
 }) => {
-  // yyyy/MM/dd 형식을 yyyy-MM-dd 형식으로 변환
-  const formattedDate = dateValue ? dateValue.replace(/\//g, "-") : "";
-
   // 날짜 변경 핸들러
   const handleDateChange = (e) => {
-    // yyyy-MM-dd 형식을 yyyy/MM/dd 형식으로 변환
-    const newDate = e.target.value.replace(/-/g, "/");
-    onDateChange(newDate);
+    const newDate = e.target.value;
+    if (onDateChange) {
+      onDateChange(newDate);
+    }
+  };
+
+  const handleTimeChange = (e) => {
+    if (onTimeChange) {
+      onTimeChange({
+        target: {
+          name: timeName,
+          value: e.target.value,
+        },
+      });
+    }
   };
 
   return (
     <Container>
       <DateInput
         type="date"
-        value={formattedDate}
+        value={dateValue}
         onChange={handleDateChange}
         disabled={disabled}
       />
@@ -91,7 +100,7 @@ const DateTimeSelector = ({
         type="time"
         name={timeName}
         value={timeValue}
-        onChange={onTimeChange}
+        onChange={handleTimeChange}
         disabled={disabled}
       />
     </Container>

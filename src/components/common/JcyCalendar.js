@@ -200,7 +200,7 @@ export const JcyCalendar = memo(
       if (preStartDay) {
         try {
           // yyyy/MM/dd 형식 파싱
-          const parsedDate = parse(preStartDay, "yyyy/MM/dd", new Date());
+          const parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
           if (!isNaN(parsedDate.getTime())) {
             console.log(`JcyCalendar: 시작일 ${preStartDay}로 달력 초기화`);
             return parsedDate;
@@ -225,7 +225,7 @@ export const JcyCalendar = memo(
 
     const parseCustomDate = (dateStr) => {
       // yyyy/MM/dd 형식으로 변경
-      const parsedDate = parse(dateStr, "yyyy/MM/dd", new Date());
+      const parsedDate = parse(dateStr, "yyyy-MM-dd", new Date());
 
       if (isNaN(parsedDate.getTime())) {
         console.error(`Invalid date format: ${dateStr}`);
@@ -236,29 +236,14 @@ export const JcyCalendar = memo(
 
     // preStartDay 변경 시 최초 1회는 항상 해당 월로 이동
     useEffect(() => {
-      if (preStartDay) {
-        try {
-          const parsedStartDate = parseCustomDate(preStartDay);
-          if (parsedStartDate) {
-            // 첫 렌더링이거나 preStartDay가 변경된 경우에만 월 변경
-            if (
-              !initializedRef.current ||
-              previousPropsRef.current.preStartDay !== preStartDay
-            ) {
-              console.log(
-                `JcyCalendar: 시작일이 바뀌어 ${preStartDay} 월로 달력 업데이트`
-              );
-              setCurrentMonth(parsedStartDate);
-              setCurrentView(parsedStartDate);
-            }
-          }
-        } catch (error) {
-          console.error("달력 월 업데이트 중 오류:", error);
-        }
+      if (preStartDay && !startDate) {
+        // yyyy-MM-dd 형식 파싱
+        const parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
+        setStartDate(parsedDate);
+        setCurrentMonth(new Date(parsedDate));
+        setCurrentView(new Date(parsedDate));
       }
-      // props 변경 기록 업데이트
-      previousPropsRef.current.preStartDay = preStartDay;
-    }, [preStartDay]);
+    }, [preStartDay, startDate]);
 
     // 날짜 변경 감지 및 설정
     useEffect(() => {
@@ -335,7 +320,7 @@ export const JcyCalendar = memo(
         if (singleDateMode) {
           setStartDate(day);
           setEndDate(day);
-          const formattedDay = format(day, "yyyy/MM/dd");
+          const formattedDay = format(day, "yyyy-MM-dd");
           updateTargetStartDay(formattedDay);
           updateTargetEndDay(formattedDay);
           return;
@@ -344,7 +329,7 @@ export const JcyCalendar = memo(
         // 시작일만 선택 모드 (반복성 업무) - 시작일만 변경, 종료일은 무기한으로 유지
         if (startDayOnlyMode) {
           setStartDate(day);
-          const formattedDay = format(day, "yyyy/MM/dd");
+          const formattedDay = format(day, "yyyy-MM-dd");
           updateTargetStartDay(formattedDay);
           // 종료일 콜백을 호출하지 않음 - 종료일은 TaskAddModal에서 관리됨
           return;
@@ -356,10 +341,10 @@ export const JcyCalendar = memo(
           // 시작일을 선택했는데 종료일보다 이후라면 종료일도 시작일로 설정
           if (endDate && day > endDate) {
             setEndDate(day);
-            const formattedDay = format(day, "yyyy/MM/dd");
+            const formattedDay = format(day, "yyyy-MM-dd");
             updateTargetEndDay(formattedDay);
           }
-          const formattedStartDay = format(day, "yyyy/MM/dd");
+          const formattedStartDay = format(day, "yyyy-MM-dd");
           updateTargetStartDay(formattedStartDay);
           setIsSelectingStart(false);
           setCurrentView(currentMonth); // 현재 보고 있는 월 저장
@@ -368,13 +353,13 @@ export const JcyCalendar = memo(
           if (day < startDate) {
             setStartDate(day);
             setEndDate(startDate);
-            const formattedStartDay = format(day, "yyyy/MM/dd");
-            const formattedEndDay = format(startDate, "yyyy/MM/dd");
+            const formattedStartDay = format(day, "yyyy-MM-dd");
+            const formattedEndDay = format(startDate, "yyyy-MM-dd");
             updateTargetStartDay(formattedStartDay);
             updateTargetEndDay(formattedEndDay);
           } else {
             setEndDate(day);
-            const formattedEndDay = format(day, "yyyy/MM/dd");
+            const formattedEndDay = format(day, "yyyy-MM-dd");
             updateTargetEndDay(formattedEndDay);
           }
           setIsSelectingStart(true);

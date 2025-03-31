@@ -393,6 +393,7 @@ const Schedule = () => {
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
   // 초기화 진행 상태 추가
   const [initialized, setInitialized] = useState(false);
+  const [vacations, setVacations] = useState([]);
 
   const timeSlots = generateTimeSlots();
 
@@ -700,7 +701,7 @@ const Schedule = () => {
         displayDates.map((d) => format(d, "yyyy-MM-dd"))
       );
 
-      // Firestore에서 데이터 가져오기 - 날짜 범위만 필터링
+      // Firestore에서 예약 데이터 가져오기
       const appointmentsRef = collection(db, "reservations");
       const q = query(
         appointmentsRef,
@@ -758,16 +759,107 @@ const Schedule = () => {
         }
       });
 
+      // 휴가 데이터 가져오기
+      const [vacationsData, vacationsError] = await fetchVacationData(
+        startDateStr,
+        endDateStr
+      );
+
       // Map에서 배열로 변환하여 상태 업데이트
       const appointmentsArray = Array.from(appointmentsMap.values());
       console.log(`조회된 일정 수: ${appointmentsArray.length}`);
+      console.log(`조회된 휴가 수: ${vacationsData.length}`);
+
       setAppointments(appointmentsArray);
+      setVacations(vacationsData); // 휴가 데이터 상태 업데이트
     } catch (error) {
       console.error("일정 데이터 가져오기 오류:", error);
       showToast("일정 데이터를 불러오는 중 오류가 발생했습니다.", "error");
     } finally {
       // 항상 로딩 완료 처리
       setIsLoading(false);
+    }
+  };
+
+  // 휴가 데이터 가져오기 함수 추가
+  const fetchVacationData = async (startDateStr, endDateStr) => {
+    try {
+      console.log(`휴가 데이터 조회 시작: ${startDateStr} ~ ${endDateStr}`);
+
+      // vacations 컬렉션에서 승인된 휴가 조회
+      // 1. startDate가 조회 기간 내인 경우
+      // 2. endDate가 조회 기간 내인 경우
+      // 3. startDate가 조회 시작보다 이전이고 endDate가 조회 종료보다 이후인 경우 (휴가 기간이 조회 기간을 포함)
+
+      const vacationsRef = collection(db, "vacations");
+
+      // 시작일이 조회 기간 내에 있는 휴가
+      const q1 = query(
+        vacationsRef,
+        where("startDate", ">=", startDateStr),
+        where("startDate", "<=", endDateStr),
+        where("status", "==", "승인됨")
+      );
+
+      // 종료일이 조회 기간 내에 있는 휴가
+      const q2 = query(
+        vacationsRef,
+        where("endDate", ">=", startDateStr),
+        where("endDate", "<=", endDateStr),
+        where("status", "==", "승인됨")
+      );
+
+      // 시작일이 조회 시작 이전이고 종료일이 조회 종료 이후인 휴가 (조회 기간 전체에 걸친 휴가)
+      const q3 = query(
+        vacationsRef,
+        where("startDate", "<=", startDateStr),
+        where("endDate", ">=", endDateStr),
+        where("status", "==", "승인됨")
+      );
+
+      // 각 쿼리 실행
+      const [snapshot1, snapshot2, snapshot3] = await Promise.all([
+        getDocs(q1),
+        getDocs(q2),
+        getDocs(q3),
+      ]);
+
+      // 중복 제거를 위한 Map 사용
+      const vacationsMap = new Map();
+
+      // 세 쿼리 결과 병합 및 중복 제거
+      const addToMap = (snapshot) => {
+        snapshot.forEach((doc) => {
+          if (!vacationsMap.has(doc.id)) {
+            const data = doc.data();
+
+            // ID를 포함한 휴가 데이터
+            vacationsMap.set(doc.id, {
+              ...data,
+              id: doc.id,
+            });
+          }
+        });
+      };
+
+      addToMap(snapshot1);
+      addToMap(snapshot2);
+      addToMap(snapshot3);
+
+      // Map에서 배열로 변환
+      const vacationsArray = Array.from(vacationsMap.values());
+
+      // 디버깅 정보 로깅
+      vacationsArray.forEach((vacation) => {
+        console.log(
+          `휴가 ID: ${vacation.id}, 이름: ${vacation.userName}, 기간: ${vacation.startDate} ~ ${vacation.endDate}`
+        );
+      });
+
+      return [vacationsArray, null];
+    } catch (error) {
+      console.error("휴가 데이터 가져오기 오류:", error);
+      return [[], error];
     }
   };
 
@@ -1291,6 +1383,7 @@ const Schedule = () => {
                     timeSlots={timeSlots}
                     staff={staffData.진료 || []}
                     appointments={appointments}
+                    vacations={vacations}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}
@@ -1304,6 +1397,7 @@ const Schedule = () => {
                     timeSlots={timeSlots}
                     staff={staffData.물리치료 || []}
                     appointments={appointments}
+                    vacations={vacations}
                     onAppointmentCreate={handleAppointmentCreate}
                     onAppointmentUpdate={handleAppointmentUpdate}
                     onAppointmentDelete={handleAppointmentDelete}

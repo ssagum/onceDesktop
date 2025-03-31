@@ -263,8 +263,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
   // 현재 날짜
   const today = new Date();
-  const [startDate, setStartDate] = useState(format(today, "yyyy/MM/dd"));
-  const [endDate, setEndDate] = useState(format(today, "yyyy/MM/dd"));
+  const [startDate, setStartDate] = useState(format(today, "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
 
   // 사용자 휴가 정보
   const [userVacationInfo, setUserVacationInfo] = useState({
@@ -368,12 +368,12 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     return false;
   };
 
-  // 시작일과 종료일 사이의 모든 날짜를 생성하는 함수
+  // 날짜 범위 생성 함수 수정
   const generateDateRange = (start, end) => {
     if (!start || !end) return [];
 
-    const startDate = new Date(start.replace(/\//g, "-"));
-    const endDate = new Date(end.replace(/\//g, "-"));
+    const startDate = new Date(start);
+    const endDate = new Date(end);
 
     if (startDate > endDate) return [];
 
@@ -383,7 +383,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     while (currentDate <= endDate) {
       // 일요일(0)은 제외
       if (getDay(currentDate) !== 0) {
-        days.push(format(currentDate, "yyyy/MM/dd"));
+        days.push(format(currentDate, "yyyy-MM-dd"));
       }
       currentDate = addDays(currentDate, 1);
     }
@@ -393,7 +393,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
 
   // 병원 근무 시간 설정
   const getWorkHours = (dateStr) => {
-    const date = new Date(dateStr.replace(/\//g, "-"));
+    // 날짜 문자열을 그대로 사용하여 Date 객체 생성 (이미 yyyy-MM-dd 형식임)
+    const date = new Date(dateStr);
     const dayOfWeek = getDay(date); // 0: 일요일, 1: 월요일, ... 6: 토요일
 
     // 요일별 근무 시간
@@ -525,6 +526,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
       const newDayTypes = {};
 
       dateList.forEach((date) => {
+        // 날짜 형식 확인 (yyyy-MM-dd 형식으로 유지)
         let dayStartTime, dayEndTime;
 
         if (date === startDate && date === endDate) {
@@ -547,40 +549,40 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         }
 
         // 해당 날짜에 대한 반차 여부 감지
-        const dayTypeInfo = detectHalfDay(date, dayStartTime, dayEndTime);
+        const dayInfo = detectHalfDay(date, dayStartTime, dayEndTime);
 
-        // 휴가 또는 경조사 모드
+        // 휴가 또는 경조사 모드 (날짜 키를 yyyy-MM-dd 형식으로 유지)
         newDayTypes[date] = {
           startTime: dayStartTime,
           endTime: dayEndTime,
-          isHalfDay: dayTypeInfo.isHalfDay,
-          halfDayType: dayTypeInfo.halfDayType,
+          isHalfDay: dayInfo.isHalfDay,
+          halfDayType: dayInfo.halfDayType,
           workRatio:
-            vacationForm.vacationType === "경조사" ? 0 : dayTypeInfo.workRatio,
-          actualWorkMinutes: dayTypeInfo.actualWorkMinutes,
-          includesLunch: dayTypeInfo.includesLunch,
+            vacationForm.vacationType === "경조사" ? 0 : dayInfo.workRatio,
+          actualWorkMinutes: dayInfo.actualWorkMinutes,
+          includesLunch: dayInfo.includesLunch,
         };
       });
 
       setDayTypes(newDayTypes);
     } else if (vacationForm.vacationType === "반차") {
       // 반차 모드에서는 해당 날짜만 설정
-      const dayTypeInfo = detectHalfDay(
+      const dayInfo = detectHalfDay(
         startDate,
         vacationForm.startTime,
         vacationForm.endTime
       );
 
-      // 반차 모드에서는 시간에 따라 자동으로 반차 여부 감지
+      // 반차 모드에서는 시간에 따라 자동으로 반차 여부 감지 (날짜 키를 yyyy-MM-dd 형식으로 유지)
       setDayTypes({
         [startDate]: {
           startTime: vacationForm.startTime,
           endTime: vacationForm.endTime,
           isHalfDay: true,
-          halfDayType: dayTypeInfo.halfDayType,
+          halfDayType: dayInfo.halfDayType,
           workRatio: 0.5,
-          actualWorkMinutes: dayTypeInfo.actualWorkMinutes,
-          includesLunch: dayTypeInfo.includesLunch,
+          actualWorkMinutes: dayInfo.actualWorkMinutes,
+          includesLunch: dayInfo.includesLunch,
         },
       });
     }
@@ -730,28 +732,36 @@ export default function VacationModal({ isVisible, setIsVisible }) {
           const updatedDayTypes = { ...dayTypes };
 
           dateList.forEach((date) => {
-            if (date in updatedDayTypes) {
-              let dayStartTime = updatedDayTypes[date].startTime;
-              let dayEndTime = updatedDayTypes[date].endTime;
+            // 날짜가 yyyy-MM-dd 형식인지 확인
+            const formattedDate =
+              typeof date === "string" ? date : format(date, "yyyy-MM-dd");
+
+            if (formattedDate in updatedDayTypes) {
+              let dayStartTime = updatedDayTypes[formattedDate].startTime;
+              let dayEndTime = updatedDayTypes[formattedDate].endTime;
 
               // 시작일/종료일인 경우 시간 업데이트
-              if (date === startDate && name === "startTime") {
+              if (formattedDate === startDate && name === "startTime") {
                 dayStartTime = value;
-              } else if (date === endDate && name === "endTime") {
+              } else if (formattedDate === endDate && name === "endTime") {
                 dayEndTime = value;
               }
 
               // 해당 날짜에 대한 반차 여부 다시 계산
-              const dayTypeInfo = detectHalfDay(date, dayStartTime, dayEndTime);
-              updatedDayTypes[date] = {
-                ...updatedDayTypes[date],
+              const dayInfo = detectHalfDay(
+                formattedDate,
+                dayStartTime,
+                dayEndTime
+              );
+              updatedDayTypes[formattedDate] = {
+                ...updatedDayTypes[formattedDate],
                 startTime: dayStartTime,
                 endTime: dayEndTime,
-                isHalfDay: dayTypeInfo.isHalfDay,
-                halfDayType: dayTypeInfo.halfDayType,
-                workRatio: dayTypeInfo.workRatio,
-                actualWorkMinutes: dayTypeInfo.actualWorkMinutes,
-                includesLunch: dayTypeInfo.includesLunch,
+                isHalfDay: dayInfo.isHalfDay,
+                halfDayType: dayInfo.halfDayType,
+                workRatio: dayInfo.workRatio,
+                actualWorkMinutes: dayInfo.actualWorkMinutes,
+                includesLunch: dayInfo.includesLunch,
               };
             }
           });
@@ -844,21 +854,34 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         return;
       }
 
-      // 잔여 휴가 일수 확인 (경조사는 제외)
+      // 잔여 휴가 일수 확인 로직 수정 - 제외일수를 감안하여 실제 사용 일수만 비교
       if (vacationForm.vacationType !== "경조사") {
         const remainingDays = getRemainingVacationDays();
-        if (calculatedDays > remainingDays) {
+        const holidayCount = Number(vacationForm.holidayCount || 0);
+
+        // 사용 예정 휴가일에서 제외일수(공휴일 등)를 뺀 실제 사용일
+        const datesSelected = Object.keys(dayTypes).length; // 선택된 총 날짜 수
+        const actualVacationDays = calculatedDays; // 이미 제외일수를 감안한 값
+
+        console.log(
+          `휴가 계산: 총 선택 날짜 ${datesSelected}일, 제외일수 ${holidayCount}일, 실제 사용일 ${actualVacationDays}일, 잔여 휴가일 ${remainingDays}일`
+        );
+
+        // 실제 사용 휴가일이 0이하이면 (즉, 모든 날짜가 제외일수로 지정됨) 허용
+        // 그렇지 않으면 잔여 휴가일과 비교
+        if (actualVacationDays > 0 && actualVacationDays > remainingDays) {
           showToast(
-            `잔여 휴가일(${remainingDays}일)보다 많은 휴가를 신청할 수 없습니다.`,
+            `잔여 휴가일(${remainingDays}일)보다 많은 휴가를 신청할 수 없습니다.
+현재 신청한 휴가는 총 ${datesSelected}일이며, 이 중 ${holidayCount}일은 제외일수(공휴일 등)로 지정되어 실제 사용 휴가일은 ${actualVacationDays}일입니다.`,
             "error"
           );
           return;
         }
       }
 
-      // 날짜 형식 변환
-      const formattedStartDate = startDate.replace(/\//g, "-");
-      const formattedEndDate = endDate.replace(/\//g, "-");
+      // 날짜 형식 변환 - 이미 yyyy-MM-dd 형식이므로 변환 필요 없음
+      const formattedStartDate = startDate;
+      const formattedEndDate = endDate;
 
       // 파이어베이스에 휴가 신청 데이터 추가
       const vacationData = {
@@ -913,8 +936,8 @@ export default function VacationModal({ isVisible, setIsVisible }) {
       setIsVisible(false);
 
       // 폼 초기화
-      setStartDate(format(today, "yyyy/MM/dd"));
-      setEndDate(format(today, "yyyy/MM/dd"));
+      setStartDate(format(today, "yyyy-MM-dd"));
+      setEndDate(format(today, "yyyy-MM-dd"));
       setVacationForm({
         startTime: "09:00",
         endTime: "18:00",

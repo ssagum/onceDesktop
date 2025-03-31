@@ -706,6 +706,35 @@ const MemoInput = styled.div`
   margin-top: 8px;
 `;
 
+// 시간 문자열을 분으로 변환하는 유틸리티 함수 추가
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+// 종료 시간을 슬롯에 맞게 조정하는 함수
+const getEndTime = (timeStr) => {
+  // 원래 시간이 정시(00분)이 아니면 30분 또는 정시로 올림
+  const [hours, minutes] = timeStr.split(":").map(Number);
+
+  // 이미 정시면 그대로 반환
+  if (minutes === 0) {
+    return timeStr;
+  }
+
+  // 30분이면 다음 정시로 올림
+  if (minutes === 30) {
+    return `${hours + 1}:00`;
+  }
+
+  // 그 외 시간은 가장 가까운 30분 단위로 올림
+  if (minutes < 30) {
+    return `${hours}:30`;
+  } else {
+    return `${hours + 1}:00`;
+  }
+};
+
 const ScheduleGrid = ({
   dates,
   timeSlots = [],
@@ -843,14 +872,21 @@ const ScheduleGrid = ({
     return minutesToTime(minutes + 30);
   };
 
-  // 날짜 포맷 함수
+  // 날짜 포맷 함수 수정 - 기존 특수 형식은 유지
   const formatDate = (date, formatStr) => {
+    if (!date) return "";
+
     if (formatStr === "M/D") {
       return `${date.getMonth() + 1}/${date.getDate()}`;
     } else if (formatStr === "ddd") {
       return ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
     } else {
-      return format(date, formatStr);
+      try {
+        return format(date, formatStr || "yyyy-MM-dd");
+      } catch (error) {
+        console.error("날짜 형식 변환 오류:", error);
+        return "";
+      }
     }
   };
 
@@ -2642,12 +2678,17 @@ const ScheduleGrid = ({
 
   // 더미 휴가 데이터 생성 (실제로는 Firebase에서 가져옴)
   useEffect(() => {
-    // 실제 구현 예시: Firebase에서 승인된 휴가 정보를 가져옴
-    const fetchVacations = async () => {
+    // 언마운트 시 호출될 구독 해제 함수
+    let unsubscribeFn = null;
+
+    // 실제 Firestore에서 휴가 정보 가져오기
+    if (dates.length > 0 && staff.length > 0) {
       try {
         // 날짜 범위로 필터링할 시작일과 종료일 계산
-        const startDateStr = dates[0];
-        const endDateStr = dates[dates.length - 1];
+        const startDateStr = format(dates[0], "yyyy-MM-dd");
+        const endDateStr = format(dates[dates.length - 1], "yyyy-MM-dd");
+
+        console.log("휴가 조회 날짜 범위:", startDateStr, "~", endDateStr);
 
         // 승인된 휴가만 조회하는 쿼리
         const vacationsQuery = query(
@@ -2656,182 +2697,375 @@ const ScheduleGrid = ({
           orderBy("startDate", "asc")
         );
 
-        // 더미 데이터 사용 시에는 아래 코드를 주석 처리
-        /*
-        const snapshot = await getDocs(vacationsQuery);
-        const fetchedVacations = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            backgroundColor: "#FF8A65" // 휴가 표시 색상 (주황색)
-          }))
-          .filter(vacation => {
-            // 날짜 범위에 포함되는 휴가만 필터링
-            const vacationStart = vacation.startDate.replace(/-/g, "/");
-            const vacationEnd = vacation.endDate.replace(/-/g, "/");
-            
-            // 일정표 날짜 범위와 겹치는 휴가만 표시
-            return (
-              (vacationStart >= startDateStr && vacationStart <= endDateStr) ||
-              (vacationEnd >= startDateStr && vacationEnd <= endDateStr)
-            );
-          });
-        
-        setVacations(fetchedVacations);
-        */
+        // onSnapshot을 사용하여 실시간 업데이트 설정
+        unsubscribeFn = onSnapshot(vacationsQuery, (snapshot) => {
+          const fetchedVacations = snapshot.docs
+            .map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+              backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
+            }))
+            .filter((vacation) => {
+              // 날짜 범위에 포함되는 휴가만 필터링
+              // 날짜 형식에 맞게 변환 (모든 날짜는 yyyy-MM-dd 형식으로 통일)
+              const vacationStart =
+                typeof vacation.startDate === "string"
+                  ? vacation.startDate
+                  : format(
+                      vacation.startDate instanceof Date
+                        ? vacation.startDate
+                        : new Date(
+                            vacation.startDate?.seconds
+                              ? vacation.startDate.seconds * 1000
+                              : vacation.startDate
+                          ),
+                      "yyyy-MM-dd"
+                    );
+
+              const vacationEnd =
+                typeof vacation.endDate === "string"
+                  ? vacation.endDate
+                  : format(
+                      vacation.endDate instanceof Date
+                        ? vacation.endDate
+                        : new Date(
+                            vacation.endDate?.seconds
+                              ? vacation.endDate.seconds * 1000
+                              : vacation.endDate
+                          ),
+                      "yyyy-MM-dd"
+                    );
+
+              // 일자 범위에서 dayTypes 객체 키 확인 (yyyy/MM/dd 형식이 있을 수 있음)
+              if (vacation.dayTypes) {
+                const oldFormatKeys = Object.keys(vacation.dayTypes).filter(
+                  (key) => key.includes("/")
+                );
+
+                // yyyy/MM/dd 형식의 키가 있으면 콘솔에 로깅
+                if (oldFormatKeys.length > 0) {
+                  console.warn(
+                    "휴가 데이터에 yyyy/MM/dd 형식의 날짜 키가 포함되어 있습니다:",
+                    oldFormatKeys
+                  );
+                  console.log("vacation data:", vacation);
+                }
+              }
+
+              // 일정표 날짜 범위와 겹치는 휴가만 표시
+              const isInRange =
+                (vacationStart >= startDateStr &&
+                  vacationStart <= endDateStr) ||
+                (vacationEnd >= startDateStr && vacationEnd <= endDateStr) ||
+                (vacationStart <= startDateStr && vacationEnd >= endDateStr);
+
+              console.log(
+                `휴가 [${vacation.id}] 범위 확인:`,
+                vacationStart,
+                vacationEnd,
+                "일정표 범위:",
+                startDateStr,
+                endDateStr,
+                "포함 여부:",
+                isInRange
+              );
+
+              return isInRange;
+            });
+
+          console.log(
+            `총 ${snapshot.docs.length}개 휴가 중 ${fetchedVacations.length}개가 현재 표시 범위에 포함됨`
+          );
+          setVacations(fetchedVacations);
+        });
       } catch (error) {
         console.error("휴가 정보 조회 오류:", error);
         if (showToast) {
           showToast("휴가 정보를 불러오는 중 오류가 발생했습니다.", "error");
         }
       }
+    }
+
+    // 항상 정상적인 클린업 함수만 반환
+    return () => {
+      if (unsubscribeFn) {
+        unsubscribeFn();
+      }
     };
-
-    // 더미 데이터 사용 (실제 구현 시 fetchVacations() 호출)
-    const dummyVacations = [
-      {
-        id: "vac1",
-        staffId: staff[0]?.id || "staff1", // 첫 번째 의사
-        startDate: dates[0], // 첫째 날
-        endDate: dates[0],
-        startTime: "09:00",
-        endTime: "12:00",
-        status: "승인됨",
-        vacationType: "휴가",
-        reason: "개인 휴가",
-        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
-      },
-      {
-        id: "vac2",
-        staffId: staff[1]?.id || "staff2", // 두 번째 의사
-        startDate: dates[1], // 둘째 날
-        endDate: dates[1],
-        startTime: "14:00",
-        endTime: "18:00",
-        status: "승인됨",
-        vacationType: "반차",
-        reason: "개인 사정",
-        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
-      },
-      {
-        id: "vac3",
-        staffId: staff[2]?.id || "staff3", // 세 번째 의사
-        startDate: dates[0], // 첫째 날
-        endDate: dates[0],
-        startTime: "09:00",
-        endTime: "18:00",
-        status: "승인됨",
-        vacationType: "경조사",
-        reason: "가족 경조사",
-        backgroundColor: "#FF8A65", // 휴가 표시 색상 (주황색)
-      },
-    ];
-
-    setVacations(dummyVacations);
-
-    // fetchVacations(); // 실제 구현 시 주석 해제
   }, [dates, staff, showToast]);
 
   // 휴가 표시 렌더링 함수 개선
   const renderVacations = () => {
-    if (!vacations || vacations.length === 0) return null;
+    if (!vacations || vacations.length === 0) {
+      console.log("휴가 데이터가 없거나 비어 있습니다.");
+      return null;
+    }
 
-    return vacations.map((vacation) => {
-      if (vacation.status !== "승인됨") return null;
+    console.log(
+      `renderVacations 함수 호출됨 - ${vacations.length}개 휴가 데이터`
+    );
 
-      // 담당자 정보 확인
-      const staffIndex = staff.findIndex((s) => s.id === vacation.staffId);
-      if (staffIndex === -1) return null;
-      const staffMember = staff[staffIndex];
-
-      // 날짜 확인
-      const dateIndex = dates.findIndex((date) =>
-        isEqual(new Date(date), new Date(vacation.startDate))
-      );
-      if (dateIndex === -1) return null;
-
-      // 시간 인덱스 확인
-      const startTimeIndex = timeSlots.findIndex(
-        (slot) => slot === vacation.startTime
-      );
-      if (startTimeIndex === -1) return null;
-
-      const endTimeIndex = timeSlots.findIndex(
-        (slot) => slot === getEndTime(vacation.endTime)
-      );
-      if (endTimeIndex === -1) return null;
-
-      // 컬럼 인덱스 계산
-      const startCol = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
-      const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
-
-      // 참고사항이 있는지 확인
-      const hasNotes = vacation.reason && vacation.reason.trim().length > 0;
-
-      // 휴가 타입별 아이콘 설정
-      let vacationIcon;
-      if (vacation.vacationType === "반차") {
-        vacationIcon = "🕒"; // 반차 - 시계 아이콘
-      } else if (vacation.vacationType === "경조사") {
-        vacationIcon = "💐"; // 경조사 - 꽃 아이콘
-      } else {
-        vacationIcon = "🏖️"; // 일반 휴가 - 해변 아이콘
-      }
-
-      return (
-        <AppointmentBlock
-          key={`vacation-${vacation.id}`}
-          style={{
-            gridColumn: colIndex,
-            gridRow: `${startTimeIndex + 1} / span ${
-              endTimeIndex - startTimeIndex + 1
-            }`,
-            backgroundColor: "#E5E7EB", // 회색으로 변경
-            zIndex: 8, // 예약(10)보다 낮고 기본 셀(1)보다 높게
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-            border: "1px solid #D1D5DB",
-          }}
-          title={`${vacation.vacationType}: ${vacation.reason || "휴가"}`}
-          onClick={(e) => handleVacationClick(vacation, staffMember, e)}
-        >
-          {/* 참고사항 표시기 */}
-          {/* {hasNotes && (
-            <div
-              className="notes-indicator"
-              title="참고사항 있음"
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                width: 0,
-                height: 0,
-                borderWidth: "0 12px 12px 0",
-                borderStyle: "solid",
-                borderColor: "transparent #9CA3AF transparent transparent",
-              }}
-            />
-          )} */}
-
-          <div className="appointment-content">
-            <div className="title flex items-center">
-              <span className="mr-1">{vacationIcon}</span>
-              <span className="font-medium text-gray-800 truncate">
-                {vacation.vacationType}
-              </span>
-            </div>
-            <div className="time text-gray-600">
-              {vacation.startTime} - {vacation.endTime}
-            </div>
-            <div
-              className="staff-name text-sm mt-1 font-medium text-gray-700"
-              style={{ fontSize: "0.8em", marginTop: "2px" }}
-            >
-              {staffMember?.name || "의료진"} 휴가중
-            </div>
-          </div>
-        </AppointmentBlock>
+    // 휴가 데이터의 userId 또는 staffId를 출력
+    vacations.forEach((vacation) => {
+      const staffId = vacation.staffId || vacation.userId;
+      console.log(
+        `휴가(${vacation.id || "알 수 없음"}): 담당자 ID=${staffId}, 이름=${
+          vacation.userName || "알 수 없음"
+        }`
       );
     });
+
+    console.log("휴가 데이터 렌더링 시작:", vacations);
+
+    // 모든 휴가를 날짜별로 분리하여 처리할 배열
+    const allVacationElements = [];
+
+    vacations.forEach((vacation) => {
+      if (vacation.status !== "승인됨") {
+        console.log(`[${vacation.id}] 휴가 건너뜀: 승인되지 않음`);
+        return;
+      }
+
+      // 휴가 날짜 범위를 yyyy-MM-dd 형식으로 통일
+      const vacationStartDate =
+        typeof vacation.startDate === "string"
+          ? vacation.startDate
+          : format(
+              vacation.startDate instanceof Date
+                ? vacation.startDate
+                : new Date(
+                    vacation.startDate?.seconds
+                      ? vacation.startDate.seconds * 1000
+                      : vacation.startDate
+                  ),
+              "yyyy-MM-dd"
+            );
+
+      const vacationEndDate =
+        typeof vacation.endDate === "string"
+          ? vacation.endDate
+          : format(
+              vacation.endDate instanceof Date
+                ? vacation.endDate
+                : new Date(
+                    vacation.endDate?.seconds
+                      ? vacation.endDate.seconds * 1000
+                      : vacation.endDate
+                  ),
+              "yyyy-MM-dd"
+            );
+
+      console.log(
+        `[${vacation.id}] 휴가 기간:`,
+        vacationStartDate,
+        "~",
+        vacationEndDate
+      );
+
+      // 직원 매칭 로직 개선
+      let staffIndex = -1;
+      let staffMatchMethod = "";
+
+      // 1. staffId로 직접 매칭
+      if (vacation.staffId) {
+        staffIndex = staff.findIndex((s) => s.id === vacation.staffId);
+        if (staffIndex !== -1) staffMatchMethod = "staffId 직접 매칭";
+      }
+
+      // 2. userId로 매칭 시도
+      if (staffIndex === -1 && vacation.userId) {
+        staffIndex = staff.findIndex((s) => s.id === vacation.userId);
+        if (staffIndex !== -1) staffMatchMethod = "userId 직접 매칭";
+      }
+
+      // 3. userName과 staff.name 비교
+      if (staffIndex === -1 && vacation.userName) {
+        // 완전 일치 먼저 시도
+        staffIndex = staff.findIndex((s) => s.name === vacation.userName);
+        if (staffIndex !== -1) {
+          staffMatchMethod = "userName과 staff.name 완전 일치";
+        } else {
+          // 부분 일치 시도
+          staffIndex = staff.findIndex(
+            (s) =>
+              vacation.userName.includes(s.name) ||
+              s.name.includes(vacation.userName)
+          );
+          if (staffIndex !== -1)
+            staffMatchMethod = "userName과 staff.name 부분 일치";
+        }
+      }
+
+      // 4. 테스트용: staff의 첫 번째 항목 사용
+      if (staffIndex === -1 && staff.length > 0) {
+        staffIndex = 0;
+        staffMatchMethod = "매칭 실패, 첫 번째 staff 사용 (테스트용)";
+      }
+
+      if (staffIndex === -1) {
+        console.log(`[${vacation.id}] 휴가 건너뜀: 직원 매칭 실패`);
+        console.log(
+          "현재 staff 목록:",
+          staff.map((s) => `${s.id} (${s.name})`)
+        );
+        return;
+      }
+
+      console.log(
+        `[${vacation.id}] 직원 매칭 결과: ${staffMatchMethod}, 인덱스=${staffIndex}`
+      );
+
+      const staffMember = staff[staffIndex];
+
+      // 날짜 범위 계산
+      const startDateObj = new Date(vacationStartDate);
+      const endDateObj = new Date(vacationEndDate);
+
+      // 날짜 표시 범위에 있는 날짜만 처리
+      for (let d = 0; d < dates.length; d++) {
+        const currentDateStr = format(dates[d], "yyyy-MM-dd");
+
+        // 현재 그리드의 날짜가 휴가 기간에 포함되는지 확인
+        const isInVacationRange =
+          currentDateStr >= vacationStartDate &&
+          currentDateStr <= vacationEndDate;
+
+        if (!isInVacationRange) continue;
+
+        console.log(
+          `[${vacation.id}] 그리드 날짜 ${currentDateStr}에 휴가 표시`
+        );
+
+        // 해당 날짜에 맞는 시작/종료 시간 가져오기
+        let startTime, endTime;
+
+        // dayTypes에서 해당 날짜 정보 찾기
+        const dayInfo = vacation.dayTypes && vacation.dayTypes[currentDateStr];
+
+        if (dayInfo) {
+          // dayTypes에 정보가 있으면 사용
+          startTime = dayInfo.startTime;
+          endTime = dayInfo.endTime;
+        } else {
+          // 없으면 기본값 사용
+          startTime =
+            currentDateStr === vacationStartDate ? vacation.startTime : "09:00";
+          endTime =
+            currentDateStr === vacationEndDate ? vacation.endTime : "18:00";
+        }
+
+        console.log(
+          `[${vacation.id}] 날짜 ${currentDateStr}의 시간: ${startTime}-${endTime}`
+        );
+
+        // 시간 인덱스 확인
+        const startTimeIndex = timeSlots.findIndex(
+          (slot) => slot === startTime
+        );
+        if (startTimeIndex === -1) {
+          console.log(
+            `[${vacation.id}] 시작 시간(${startTime})에 해당하는 슬롯 없음`
+          );
+          continue;
+        }
+
+        // 종료 시간 처리 - 정확히 일치하는 슬롯이 없으면 가장 가까운 슬롯 찾기
+        let endTimeIndex = timeSlots.findIndex((slot) => slot === endTime);
+        if (endTimeIndex === -1) {
+          // getEndTime 사용하여 다시 시도
+          const adjustedEndTime = getEndTime(endTime);
+          endTimeIndex = timeSlots.findIndex(
+            (slot) => slot === adjustedEndTime
+          );
+
+          // 여전히 찾지 못하면 가장 가까운 시간 슬롯 찾기
+          if (endTimeIndex === -1) {
+            const endMinutes = timeToMinutes(endTime);
+            // 시간 슬롯을 순회하며 가장 가까운 슬롯 찾기
+            let closestDiff = Number.MAX_SAFE_INTEGER;
+            let closestIndex = -1;
+
+            timeSlots.forEach((slot, idx) => {
+              const slotMinutes = timeToMinutes(slot);
+              const diff = Math.abs(slotMinutes - endMinutes);
+              if (diff < closestDiff) {
+                closestDiff = diff;
+                closestIndex = idx;
+              }
+            });
+
+            endTimeIndex = closestIndex;
+            console.log(
+              `[${vacation.id}] 종료 시간(${endTime})과 가장 가까운 슬롯 인덱스: ${endTimeIndex}`
+            );
+          }
+        }
+
+        if (endTimeIndex === -1) {
+          console.log(
+            `[${vacation.id}] 종료 시간(${endTime})에 해당하는 슬롯 없음`
+          );
+          continue;
+        }
+
+        // 컬럼 인덱스 계산
+        const startCol = d * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
+        const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
+
+        // 휴가 타입별 아이콘 설정
+        let vacationIcon;
+        if (vacation.vacationType === "반차") {
+          vacationIcon = "🕒"; // 반차 - 시계 아이콘
+        } else if (vacation.vacationType === "경조사") {
+          vacationIcon = "💐"; // 경조사 - 꽃 아이콘
+        } else {
+          vacationIcon = "🏖️"; // 일반 휴가 - 해변 아이콘
+        }
+
+        // 시간 범위 지정 - 시작이 종료보다 크면 교체
+        const finalStartTimeIndex = Math.min(startTimeIndex, endTimeIndex);
+        const finalEndTimeIndex = Math.max(startTimeIndex, endTimeIndex);
+
+        allVacationElements.push(
+          <AppointmentBlock
+            key={`vacation-${vacation.id}-${currentDateStr}`}
+            style={{
+              gridColumn: colIndex,
+              gridRow: `${finalStartTimeIndex + 1} / span ${
+                finalEndTimeIndex - finalStartTimeIndex + 1
+              }`,
+              backgroundColor: "#E5E7EB", // 회색으로 변경
+              zIndex: 8, // 예약(10)보다 낮고 기본 셀(1)보다 높게
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+              border: "1px solid #D1D5DB",
+            }}
+            title={`${vacation.vacationType}: ${vacation.reason || "휴가"}`}
+            onClick={(e) => handleVacationClick(vacation, staffMember, e)}
+          >
+            <div className="appointment-content">
+              <div className="title flex items-center">
+                <span className="mr-1">{vacationIcon}</span>
+                <span className="font-medium text-gray-800 truncate">
+                  {vacation.vacationType}
+                </span>
+              </div>
+              <div className="time text-gray-600">
+                {startTime} - {endTime}
+              </div>
+              <div
+                className="staff-name text-sm mt-1 font-medium text-gray-700"
+                style={{ fontSize: "0.8em", marginTop: "2px" }}
+              >
+                {staffMember?.name || vacation.userName || "의료진"} 휴가중
+              </div>
+            </div>
+          </AppointmentBlock>
+        );
+      }
+    });
+
+    console.log(`${allVacationElements.length}개 휴가 요소 생성 완료`);
+    return allVacationElements;
   };
 
   // 휴가 클릭 핸들러 추가
