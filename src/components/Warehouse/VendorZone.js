@@ -134,6 +134,7 @@ const VendorZone = () => {
         columns={vendorColumns}
         columnWidths="grid-cols-6"
         data={searchTerm ? filteredVendors : vendors}
+        itemsPerPage={9}
         renderRow={(row, index) => (
           <VendorRow
             partner={row}

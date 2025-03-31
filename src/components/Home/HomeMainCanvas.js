@@ -60,7 +60,6 @@ import { getUnreadMessageCount } from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
 import { isHospitalOwner } from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
-import NaverReservationTrigger from "../Reservation/NaverReservationTrigger";
 import TextEditorModal from "../TextEditorModal";
 import { filterHiddenDocuments } from "../../utils/filterUtils";
 import NaverReservationViewer from "../Reservation/NaverReservationViewer";
@@ -862,7 +861,11 @@ export default function HomeMainCanvas() {
                     )}
                     <Square title={"채팅"} />
                   </div>
-                  <div>
+                  <div
+                    onClick={() =>
+                      showToast("발신 번호 등록 절차 후 지원됩니다. 😊", "info")
+                    }
+                  >
                     <Square title={"문자 발송"} />
                   </div>
                 </div>
