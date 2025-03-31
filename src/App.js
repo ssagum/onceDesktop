@@ -24,7 +24,6 @@ import { db } from "./firebase";
 import { notification } from "./assets/sound";
 // Toast Provider 추가
 import { ToastProvider } from "./contexts/ToastContext";
-import Management from "./pages/Managemnet";
 import { useUserLevel } from "./utils/UserLevelContext";
 import Parking from "./pages/Parking";
 import { initializeChatRooms } from "./components/Chat/ChatService";
@@ -43,16 +42,28 @@ const App = () => {
   const { userLevelData } = useUserLevel();
 
   useEffect(() => {
-    if (!userLevelData || !userLevelData.location) return;
+    if (
+      !userLevelData ||
+      (!userLevelData.location && !userLevelData.department)
+    )
+      return;
 
-    console.log("호출 리스너 설정됨, 위치:", userLevelData.location);
+    console.log(
+      "호출 리스너 설정됨, 위치:",
+      userLevelData.location,
+      "부서:",
+      userLevelData.department
+    );
 
-    // 현재 사용자의 location을 대상으로 하는 호출만 필터링
+    // 현재 사용자의 location이나 department를 대상으로 하는 호출 필터링
     const q = query(
       collection(db, "calls"),
-      where("receiverId", "==", userLevelData.location),
+      where("receiverId", "in", [
+        userLevelData.location,
+        userLevelData.department,
+      ]),
       orderBy("createdAt", "desc"),
-      limit(5)
+      limit(20)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -116,7 +127,29 @@ const App = () => {
             }
 
             if (window.electron && window.electron.sendNotification) {
-              const notificationMsg = `${data.senderId}: ${data.message}`;
+              // 호출 타입에 따른 메시지 포맷팅
+              const callType = data.type || "호출";
+              let typePrefix = "";
+
+              switch (callType) {
+                case "예약":
+                  typePrefix = "📅 ";
+                  break;
+                case "호출":
+                  typePrefix = "🔔 ";
+                  break;
+                case "채팅":
+                  typePrefix = "💬 ";
+                  break;
+                case "시스템":
+                  typePrefix = "🔧 ";
+                  break;
+                default:
+                  typePrefix = "🔔 ";
+                  break;
+              }
+
+              const notificationMsg = `${typePrefix}${data.senderId}: ${data.message}`;
               console.log("알림 메시지:", notificationMsg);
               try {
                 window.electron.sendNotification(notificationMsg);
@@ -164,7 +197,6 @@ const App = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/task" element={<Task />} />
           <Route path="/schedule" element={<Schedule />} />
-          <Route path="/management" element={<Management />} />
           <Route path="/parking" element={<Parking />} />
           <Route path="/requests" element={<Requests />} />
         </Routes>

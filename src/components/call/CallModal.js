@@ -259,6 +259,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
       receiverId,
       senderId: userLevelData.location,
       message: message || `${receiverId} 호출`,
+      type: "호출",
     });
 
     if (!receiverId) {
@@ -280,6 +281,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
         formattedTime,
         createdAt: Date.now(),
         createdAt2: serverTimestamp(),
+        type: "호출",
         [receiverId]: true,
         [userLevelData.location]: true,
       };
@@ -331,6 +333,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
         receiverId: targetReceiver,
         senderId: userLevelData.location,
         message: targetMessage,
+        type: "호출",
       });
 
       if (!targetReceiver) {
@@ -352,6 +355,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
           formattedTime,
           createdAt: Date.now(),
           createdAt2: serverTimestamp(),
+          type: "호출",
           [targetReceiver]: true,
           [userLevelData.location]: true,
         };
@@ -441,7 +445,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
                       <PresetTitle>
                         {isEmptyPreset(preset)
                           ? `빈 프리셋 ${index - 3 > 0 ? index - 3 : index + 1}`
-                          :`To. ${preset.receiver}`}
+                          : `To. ${preset.receiver}`}
                       </PresetTitle>
                       <PresetMessage>
                         {isEmptyPreset(preset)

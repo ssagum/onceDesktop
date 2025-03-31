@@ -239,7 +239,6 @@ const StaffDetailModal = ({
 
       setIsEditing(false);
     } catch (error) {
-      
       showToast("직원 정보 저장에 실패했습니다.", "error");
     }
   };
@@ -306,7 +305,7 @@ const StaffDetailModal = ({
                     className="w-full border rounded-md px-3 py-1.5"
                   >
                     <option value="">선택하세요</option>
-                    <option value="원장팀">원장팀</option>
+                    <option value="진료팀">진료팀</option>
                     <option value="간호팀">간호팀</option>
                     <option value="물리치료팀">물리치료팀</option>
                     <option value="원무팀">원무팀</option>
@@ -320,13 +319,17 @@ const StaffDetailModal = ({
               <div>
                 <p className="text-gray-600 text-sm">직책</p>
                 {isEditing ? (
-                  <input
-                    type="text"
+                  <select
                     name="role"
                     value={editedStaff.role || ""}
                     onChange={handleInputChange}
                     className="w-full border rounded-md px-3 py-1.5"
-                  />
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="팀원">팀원</option>
+                    <option value="팀장">팀장</option>
+                    <option value="과장">과장</option>
+                  </select>
                 ) : (
                   <p className="font-medium">{staff.role || "-"}</p>
                 )}
@@ -562,7 +565,7 @@ const StaffDetailModal = ({
                 닫기
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                className="px-4 py-2 bg-onceBlue text-white rounded-md"
                 onClick={() => setIsEditing(true)}
               >
                 편집
@@ -619,11 +622,8 @@ const StaffManagement = () => {
             물리치료: data.물리치료 || [],
           });
         } else {
-          
         }
-      } catch (error) {
-        
-      }
+      } catch (error) {}
     };
 
     fetchProviders();
@@ -659,7 +659,6 @@ const StaffManagement = () => {
       showToast("담당자 정보가 저장되었습니다.", "success");
       setIsEditingProviders(false);
     } catch (error) {
-      
       showToast("담당자 정보 저장에 실패했습니다.", "error");
     }
   };
@@ -750,7 +749,6 @@ const StaffManagement = () => {
 
       return () => unsubscribe();
     } catch (error) {
-      
       setIsLoading(false);
 
       // 에러 시 더미 데이터 사용

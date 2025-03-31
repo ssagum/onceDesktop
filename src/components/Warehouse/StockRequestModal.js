@@ -383,8 +383,21 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
     return consumableCategories.includes(category);
   };
 
-  // 비품 신청 처리
-  const handleSubmit = async () => {
+  // 모달이 처음 열릴 때 폼 초기화
+  useEffect(() => {
+    if (isVisible) {
+      resetForm();
+      // 현재 로그인한 사용자의 부서 정보 설정
+      setDepartment(userLevelData?.department || "");
+      // 현재 유저 정보로 writer 초기화
+      if (userLevelData?.id) {
+        setWriter([userLevelData]);
+      }
+    }
+  }, [isVisible, userLevelData]);
+
+  // 제출 관련 함수 수정
+  const handleSubmit = async (targetStatus) => {
     // 필수 필드 유효성 검사
     if (!itemName) {
       showToast("품명을 입력해주세요.", "error");
@@ -421,7 +434,7 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
         vat,
         createdAt: Date.now(),
         createdAt2: serverTimestamp(),
-        status: "대기중", // 초기 상태: 대기중
+        status: targetStatus, // 버튼에 따라 상태 설정
         requestedBy: userLevelData?.id || "",
         requestedByName: userLevelData?.name || "",
         requestType: "manual", // 수동 신청 표시
@@ -432,13 +445,28 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
       // stockRequest 컬렉션에 데이터 저장
       await addDoc(collection(db, "stockRequests"), stockRequestData);
 
-      showToast("비품신청이 완료되었습니다.", "success");
+      showToast(
+        `비품이 ${
+          targetStatus === "장바구니" ? "장바구니에 저장" : "대기중 상태로 신청"
+        }되었습니다.`,
+        "success"
+      );
       resetForm();
       setIsVisible(false);
     } catch (error) {
       console.error("비품신청 중 오류:", error);
       showToast("비품신청 중 오류가 발생했습니다.", "error");
     }
+  };
+
+  // 장바구니 저장 핸들러
+  const handleSaveToCart = () => {
+    handleSubmit("장바구니");
+  };
+
+  // 대기중 신청 핸들러
+  const handleRequestWaiting = () => {
+    handleSubmit("대기중");
   };
 
   // 폼 초기화
@@ -454,15 +482,6 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
     setSafeStock("");
     setVat(true);
   };
-
-  // 모달이 처음 열릴 때 폼 초기화
-  useEffect(() => {
-    if (isVisible) {
-      resetForm();
-      // 현재 로그인한 사용자의 부서 정보 설정
-      setDepartment(userLevelData?.department || "");
-    }
-  }, [isVisible, userLevelData]);
 
   return (
     <ModalTemplate
@@ -741,20 +760,53 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
           </FormSection>
         </ModalContent>
 
-        {/* 신청 버튼 */}
+        {/* 하단 버튼 영역 UI 수정 */}
         <ButtonZone>
-          <div className="flex flex-row gap-x-[20px] w-full">
-            <OnceOnOffButton
-              text={"비품신청"}
-              onClick={handleSubmit}
-              on={
-                itemName !== "" &&
-                category !== "" &&
-                quantity !== "" &&
-                writer.length > 0
-              }
-              alertMessage="필수 항목을 입력해주세요"
-            />
+          <div className="flex flex-col w-full">
+            {/* 버튼 영역 */}
+            <div className="flex flex-row gap-x-[20px] w-full">
+              <button
+                className={`flex-1 py-3 rounded-lg font-medium text-white transition-colors ${
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
+                onClick={
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? handleRequestWaiting
+                    : () => showToast("필수 항목을 입력해주세요", "warning")
+                }
+              >
+                대기중으로 신청
+              </button>
+
+              <button
+                className={`flex-1 py-3 rounded-lg font-medium text-white transition-colors ${
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? "bg-purple-500 hover:bg-purple-600 cursor-pointer"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
+                onClick={
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? handleSaveToCart
+                    : () => showToast("필수 항목을 입력해주세요", "warning")
+                }
+              >
+                장바구니에 저장
+              </button>
+            </div>
           </div>
         </ButtonZone>
       </div>

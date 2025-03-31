@@ -134,45 +134,95 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
   const [vacationCount, setVacationCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
+  const { userLevelData } = useUserLevel();
 
-  // 실제 구현에서는 데이터를 가져오는 로직이 필요합니다
+  // Firestore에서 실제 데이터를 가져오도록 수정
   useEffect(() => {
-    // 예시 데이터 - 실제로는 API나 Firestore에서 데이터를 가져와야 합니다
-    const formatDate = format(currentDate, "yyyy/MM/dd");
-    // 1. 휴가자 정보 가져오기
-    const fetchVacations = async () => {
-      try {
-        // 실제 구현 시 여기서 API 호출
-        setVacationCount(2); // 예시 값
-      } catch (error) {
-        console.error("휴가 정보 조회 오류:", error);
-      }
-    };
+    // 구독 해제할 함수들 배열
+    const unsubscribes = [];
 
-    // 2. 결제 필요 건수 가져오기
-    const fetchPendingApprovals = async () => {
-      try {
-        // 실제 구현 시 여기서 API 호출
-        setApprovalCount(5); // 예시 값
-      } catch (error) {
-        console.error("결제 필요 정보 조회 오류:", error);
-      }
-    };
+    // 오늘 날짜 범위 계산 (시작: 오늘 00:00:00, 종료: 오늘 23:59:59)
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).getTime();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).getTime();
 
-    // 3. 주문 필요 건수 가져오기
-    const fetchOrderItems = async () => {
-      try {
-        // 실제 구현 시 여기서 API 호출
-        setOrderCount(3); // 예시 값
-      } catch (error) {
-        console.error("주문 필요 정보 조회 오류:", error);
-      }
-    };
+    // 1. 휴가자 정보 가져오기 - 오늘 날짜에 해당하는 승인된 휴가
+    const vacationsRef = collection(db, "vacations");
+    const vacationsQuery = query(
+      vacationsRef,
+      where("status", "==", "승인됨"),
+      where("startDate", "<=", endOfDay),
+      where("endDate", ">=", startOfDay)
+    );
 
-    fetchVacations();
-    fetchPendingApprovals();
-    fetchOrderItems();
-  }, [currentDate]);
+    const vacationUnsubscribe = onSnapshot(vacationsQuery, (snapshot) => {
+      setVacationCount(snapshot.size);
+    });
+    unsubscribes.push(vacationUnsubscribe);
+
+    // 2. 결제 필요 건수 가져오기 - 대기 중인 요청들
+    const requestsRef = collection(db, "requests");
+    // 사용자 권한에 따라 필터링
+    let requestsQuery;
+
+    if (userLevelData?.role === "admin" || userLevelData?.role === "manager") {
+      // 관리자는 모든 대기중 요청 확인 가능
+      requestsQuery = query(requestsRef, where("status", "==", "대기중"));
+    } else if (userLevelData?.department) {
+      // 일반 사용자는 자신의 부서에 해당하는 요청만 확인
+      requestsQuery = query(
+        requestsRef,
+        where("status", "==", "대기중"),
+        where("senderDepartment", "==", userLevelData.department)
+      );
+    } else {
+      // 부서가 없는 경우 빈 쿼리
+      requestsQuery = query(
+        requestsRef,
+        where("status", "==", "대기중"),
+        where("senderPeople", "array-contains", userLevelData?.id || "")
+      );
+    }
+
+    const requestsUnsubscribe = onSnapshot(requestsQuery, (snapshot) => {
+      setApprovalCount(snapshot.size);
+    });
+    unsubscribes.push(requestsUnsubscribe);
+
+    // 3. 주문 필요 건수 가져오기 - 승인되었지만 아직 주문되지 않은 비품
+    const stockRequestsRef = collection(db, "stockRequests");
+    // 사용자 권한에 따라 필터링
+    let stockQuery;
+
+    if (userLevelData?.role === "admin" || userLevelData?.role === "manager") {
+      // 관리자는 모든 승인된 비품 요청 확인 가능
+      stockQuery = query(stockRequestsRef, where("status", "==", "승인됨"));
+    } else if (userLevelData?.department) {
+      // 일반 사용자는 자신의 부서에 해당하는 요청만 확인
+      stockQuery = query(
+        stockRequestsRef,
+        where("status", "==", "승인됨"),
+        where("department", "==", userLevelData.department)
+      );
+    } else {
+      // 부서가 없는 경우 빈 쿼리
+      stockQuery = query(
+        stockRequestsRef,
+        where("status", "==", "승인됨"),
+        where("requestedBy", "==", userLevelData?.id || "")
+      );
+    }
+
+    const stockUnsubscribe = onSnapshot(stockQuery, (snapshot) => {
+      setOrderCount(snapshot.size);
+    });
+    unsubscribes.push(stockUnsubscribe);
+
+    // 컴포넌트 언마운트 시 모든 구독 해제
+    return () => {
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [currentDate, userLevelData]);
 
   return (
     <div className="w-full mt-4">
@@ -834,7 +884,7 @@ export default function HomeMainCanvas() {
                   더보기
                 </button>
               </InsideHeaderZone>
-              <div className="w-full h-[200px] overflow-y-auto px-[20px]">
+              <div className="w-full h-[200px] overflow-y-auto px-[20px] scrollbar-hide">
                 <ReceivedCallList />
               </div>
             </RightTopZone>

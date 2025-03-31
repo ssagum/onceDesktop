@@ -1340,13 +1340,15 @@ const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
         className || "bg-gray-50"
       } ${
         isOver
-          ? "ring-2 ring-blue-400 bg-blue-50/20 shadow-md scale-[1.01] z-10 overflow-visible"
-          : "overflow-hidden"
-      } transition-all duration-150`}
+          ? "ring-2 ring-blue-400 bg-blue-50/20 shadow-md scale-[1.01] z-10"
+          : ""
+      } transition-all duration-150 overflow-hidden`}
       data-status={id}
       data-type="container"
       data-droppable="true"
+      style={{ maxHeight: "520px" }}
     >
+      {/* 상단 헤더 부분 */}
       <div
         className={`flex items-center justify-between mb-2 p-2 rounded-lg shadow-sm ${getHeaderBgColor(
           id
@@ -1361,7 +1363,13 @@ const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-1 min-h-[250px] max-h-[600px] rounded-md">
+      {/* 스크롤 영역 부분 - 스크롤바 숨김 스타일 적용 */}
+      <div
+        className="flex-1 overflow-y-auto p-1 min-h-[250px] h-[300px] rounded-md scrollbar-hide"
+        style={{
+          msOverflowStyle: "none",
+        }}
+      >
         <SortableContext
           items={items.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
@@ -1667,6 +1675,70 @@ const customCollisionDetection = (args) => {
   return pointerWithin(args);
 };
 
+// ConfirmModal 컴포넌트 추가
+const ConfirmModal = ({
+  isVisible,
+  setIsVisible,
+  title,
+  message,
+  onConfirm,
+}) => {
+  const handleConfirm = () => {
+    if (onConfirm) {
+      onConfirm();
+    }
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-[450px] p-6 animate-fade-in-up">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+          <button
+            onClick={() => setIsVisible(false)}
+            className="text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-6">{message}</p>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => setIsVisible(false)}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="bg-onceBlue text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const RequestStatusModal = ({
   isVisible,
   setIsVisible,
@@ -1693,8 +1765,8 @@ const RequestStatusModal = ({
   // 상태별 필터링
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // 더미 데이터 사용 여부
-  const [useDummyData, setUseDummyData] = useState(true);
+  // useDummyData 상태 제거하고 isGeneratingData만 유지
+  const [isGeneratingData, setIsGeneratingData] = useState(false);
 
   // 드래그 중인 항목
   const [activeId, setActiveId] = useState(null);
@@ -1712,6 +1784,14 @@ const RequestStatusModal = ({
     itemId: null,
     fromStatus: "",
     toStatus: "",
+  });
+
+  // 확인 모달 상태 추가
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalProps, setConfirmModalProps] = useState({
+    title: "",
+    message: "",
+    onConfirm: null,
   });
 
   // 개선된 센서 설정
@@ -1733,21 +1813,6 @@ const RequestStatusModal = ({
 
   // 데이터 불러오기
   useEffect(() => {
-    // 더미 데이터 사용시 기본 데이터 설정
-    if (useDummyData) {
-      // 부서 정보가 포함된 더미 데이터 생성
-      const updatedStocks = DUMMY_STOCK_REQUESTS.map((item) => ({
-        ...item,
-        department: item.department || "진료", // 기본값으로 진료 설정
-      }));
-
-      // 모든 더미 데이터 상태 업데이트
-      setStockRequests(updatedStocks);
-      setVacationRequests(DUMMY_VACATION_REQUESTS);
-      setGeneralRequests(DUMMY_REQUESTS);
-      return;
-    }
-
     if (!userLevelData?.id || !isVisible) return;
 
     // 모달이 열릴 때 일주일이 지난 항목들을 숨김 처리
@@ -1763,60 +1828,81 @@ const RequestStatusModal = ({
 
     hideOldItems();
 
-    // 휴가 신청 데이터 가져오기
-    const vacationQuery = query(
-      collection(db, "vacations"),
-      where("userId", "==", userLevelData.id),
-      orderBy("createdAt", "desc")
-    );
+    // 실제 데이터 로딩
+    const loadData = async () => {
+      try {
+        // 언마운트 시 구독 해제할 함수들
+        const unsubscribe = [];
 
-    const unsubscribeVacation = onSnapshot(vacationQuery, (snapshot) => {
-      const vacations = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().createdAt?.toDate?.() || new Date(),
-      }));
-      setVacationRequests(vacations);
-    });
+        // 휴가 신청 데이터 가져오기
+        const vacationQuery = query(
+          collection(db, "vacations"),
+          orderBy("createdAt", "desc")
+        );
 
-    // 비품 신청 데이터 가져오기
-    const stockQuery = query(
-      collection(db, "stockRequests"),
-      where("requestedBy", "==", userLevelData.id),
-      orderBy("createdAt2", "desc")
-    );
+        const vacationUnsub = onSnapshot(vacationQuery, (snapshot) => {
+          const vacations = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().createdAt?.toDate?.() || new Date(),
+          }));
+          setVacationRequests(vacations);
+        });
+        unsubscribe.push(vacationUnsub);
 
-    const unsubscribeStock = onSnapshot(stockQuery, (snapshot) => {
-      const stocks = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().createdAt || new Date().getTime(),
-      }));
-      setStockRequests(stocks);
-    });
+        // 비품 신청 데이터 가져오기
+        const stockQuery = query(
+          collection(db, "stockRequests"),
+          orderBy("createdAt2", "desc")
+        );
 
-    // 일반 요청 데이터 가져오기
-    const requestQuery = query(
-      collection(db, "requests"),
-      where("senderPeople", "array-contains", userLevelData.id),
-      orderBy("createdAt2", "desc")
-    );
+        const stockUnsub = onSnapshot(stockQuery, (snapshot) => {
+          const stocks = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().createdAt || new Date().getTime(),
+          }));
+          setStockRequests(stocks);
+          setStockItems(stocks); // stockItems 상태도 업데이트
+        });
+        unsubscribe.push(stockUnsub);
 
-    const unsubscribeRequest = onSnapshot(requestQuery, (snapshot) => {
-      const requests = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().createdAt || new Date().getTime(),
-      }));
-      setGeneralRequests(requests);
-    });
+        // 일반 요청 데이터 가져오기
+        const requestQuery = query(
+          collection(db, "requests"),
+          orderBy("createdAt2", "desc")
+        );
 
-    return () => {
-      unsubscribeVacation();
-      unsubscribeStock();
-      unsubscribeRequest();
+        const requestUnsub = onSnapshot(requestQuery, (snapshot) => {
+          const requests = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().createdAt || new Date().getTime(),
+          }));
+          setGeneralRequests(requests);
+        });
+        unsubscribe.push(requestUnsub);
+
+        // 컴포넌트 언마운트 시 구독 해제
+        return () => {
+          unsubscribe.forEach((unsub) => unsub());
+        };
+      } catch (error) {
+        console.error("데이터 로딩 오류:", error);
+        showToast("데이터를 불러오는 중 오류가 발생했습니다.", "error");
+      }
     };
-  }, [userLevelData?.id, isVisible, useDummyData, autoHideOldDocuments]);
+
+    // 데이터 로드 시작
+    const unsubscribeAll = loadData();
+
+    // 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      if (typeof unsubscribeAll === "function") {
+        unsubscribeAll();
+      }
+    };
+  }, [userLevelData?.id, isVisible, autoHideOldDocuments, showToast]);
 
   // 컴포넌트 마운트 시 초기 탭 설정
   useEffect(() => {
@@ -1972,16 +2058,53 @@ const RequestStatusModal = ({
 
   // 선택된 탭의 데이터 가져오기
   const getCurrentData = () => {
+    let data;
     switch (activeTab) {
       case "vacation":
-        return vacationRequests;
+        data = vacationRequests;
+        break;
       case "stock":
-        return stockRequests;
+        data = stockRequests;
+        break;
       case "request":
-        return generalRequests;
+        data = generalRequests;
+        break;
       default:
-        return [];
+        data = [];
     }
+
+    // 대표원장이나 과장이 아닌 경우 자기 부서 데이터만 필터링
+    if (
+      userLevelData?.role !== "admin" &&
+      userLevelData?.role !== "manager" &&
+      userLevelData?.department
+    ) {
+      // 각 탭별로 다른 필드를 기준으로 필터링
+      if (activeTab === "vacation") {
+        // 휴가의 경우 신청자 기준
+        return data.filter(
+          (item) =>
+            item.userName === userLevelData.name ||
+            item.userId === userLevelData.id
+        );
+      } else if (activeTab === "stock") {
+        // 비품은 부서 기준
+        return data.filter(
+          (item) => item.department === userLevelData.department
+        );
+      } else if (activeTab === "request") {
+        // 요청은 발신자 또는 수신자에 자신이 포함된 경우만
+        return data.filter(
+          (item) =>
+            (item.senderPeople &&
+              item.senderPeople.includes(userLevelData.name)) ||
+            (item.receiverPeople &&
+              item.receiverPeople.includes(userLevelData.name))
+        );
+      }
+    }
+
+    return data;
   };
 
   // 상태별로 데이터 분류
@@ -2167,74 +2290,19 @@ const RequestStatusModal = ({
       // 현재 아이템 정보 가져오기
       let currentCollection;
       let currentItem;
-      let updateFunction;
 
       switch (activeTab) {
         case "vacation":
           currentCollection = "vacations";
           currentItem = vacationRequests.find((item) => item.id === itemId);
-          updateFunction = (newStatus) => {
-            setVacationRequests((prev) =>
-              prev.map((item) => {
-                if (item.id === itemId) {
-                  let updatedStatus = newStatus;
-                  if (newStatus === "승인") updatedStatus = "승인됨";
-                  if (newStatus === "반려") updatedStatus = "반려됨";
-                  return {
-                    ...item,
-                    status: updatedStatus,
-                    approvalReason: reason,
-                    updatedAt: new Date(),
-                  };
-                }
-                return item;
-              })
-            );
-          };
           break;
         case "stock":
           currentCollection = "stockRequests";
           currentItem = stockRequests.find((item) => item.id === itemId);
-          updateFunction = (newStatus) => {
-            setStockRequests((prev) =>
-              prev.map((item) => {
-                if (item.id === itemId) {
-                  let updatedStatus = newStatus;
-                  if (newStatus === "승인") updatedStatus = "승인됨";
-                  if (newStatus === "반려") updatedStatus = "반려됨";
-                  return {
-                    ...item,
-                    status: updatedStatus,
-                    approvalReason: reason,
-                    updatedAt: new Date(),
-                  };
-                }
-                return item;
-              })
-            );
-          };
           break;
         case "request":
           currentCollection = "requests";
           currentItem = generalRequests.find((item) => item.id === itemId);
-          updateFunction = (newStatus) => {
-            setGeneralRequests((prev) =>
-              prev.map((item) => {
-                if (item.id === itemId) {
-                  let updatedStatus = newStatus;
-                  if (newStatus === "승인") updatedStatus = "승인됨";
-                  if (newStatus === "반려") updatedStatus = "반려됨";
-                  return {
-                    ...item,
-                    status: updatedStatus,
-                    approvalReason: reason,
-                    updatedAt: new Date(),
-                  };
-                }
-                return item;
-              })
-            );
-          };
           break;
         default:
           return;
@@ -2245,41 +2313,30 @@ const RequestStatusModal = ({
         return;
       }
 
-      // 변경된 내용 DB에 업데이트 (더미 데이터 사용 중에는 로컬 상태만 변경)
-      if (useDummyData) {
-        updateFunction(toStatus);
+      // Firestore 문서 업데이트
+      try {
+        let dbStatus = toStatus;
+        if (dbStatus === "승인") dbStatus = "승인됨";
+        if (dbStatus === "반려") dbStatus = "반려됨";
+
+        const docRef = doc(db, currentCollection, currentItem.id);
+        await updateDoc(docRef, {
+          status: dbStatus,
+          approvalReason: reason,
+          updatedAt: new Date(),
+          updatedBy: userLevelData?.id || "system",
+          updatedByName: userLevelData?.name || "System",
+        });
+
         showToast(
           `상태가 '${
             STATUS_DISPLAY_NAMES[toStatus] || toStatus
           }'(으)로 변경되었습니다.`,
           "success"
         );
-      } else {
-        try {
-          let dbStatus = toStatus;
-          if (dbStatus === "승인") dbStatus = "승인됨";
-          if (dbStatus === "반려") dbStatus = "반려됨";
-
-          const docRef = doc(db, currentCollection, currentItem.id);
-          await updateDoc(docRef, {
-            status: dbStatus,
-            approvalReason: reason,
-            updatedAt: new Date(),
-            updatedBy: userLevelData?.id || "system",
-            updatedByName: userLevelData?.name || "System",
-          });
-
-          updateFunction(toStatus);
-          showToast(
-            `상태가 '${
-              STATUS_DISPLAY_NAMES[toStatus] || toStatus
-            }'(으)로 변경되었습니다.`,
-            "success"
-          );
-        } catch (error) {
-          console.error("상태 업데이트 오류:", error);
-          showToast("상태 업데이트 중 오류가 발생했습니다.", "error");
-        }
+      } catch (error) {
+        console.error("상태 업데이트 오류:", error);
+        showToast("상태 업데이트 중 오류가 발생했습니다.", "error");
       }
     } catch (error) {
       console.error("상태 변경 처리 오류:", error);
@@ -2464,8 +2521,7 @@ const RequestStatusModal = ({
     };
 
     // 비품 신청 모달 열기
-    setStockRequestModalVisible(true);
-    setStockRequestInitialData(initialData);
+    setShowStockRequestModal(true);
   };
 
   // 비품 데이터 로드 부분
@@ -2550,6 +2606,207 @@ const RequestStatusModal = ({
     }
   }, [isVisible, stockItems.length]);
 
+  // 장바구니 항목을 일괄 대기중으로 변경하는 함수 수정
+  const handleMoveAllToWaiting = async () => {
+    if (activeTab !== "stock") return;
+
+    try {
+      const cartItems = stockRequests.filter(
+        (item) => item.status === "장바구니"
+      );
+
+      if (cartItems.length === 0) {
+        showToast("장바구니에 항목이 없습니다.", "warning");
+        return;
+      }
+
+      // 확인 모달 표시
+      setConfirmModalProps({
+        title: "장바구니 항목 이동",
+        message: `장바구니에 있는 ${cartItems.length}개의 항목을 대기중 상태로 이동하시겠습니까?`,
+        onConfirm: () => executeCartToWaiting(cartItems),
+      });
+      setShowConfirmModal(true);
+    } catch (error) {
+      console.error("장바구니 항목 확인 오류:", error);
+      showToast("처리 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  // 실제 장바구니 → 대기중 이동 처리 함수
+  const executeCartToWaiting = async (cartItems) => {
+    try {
+      // 실제 Firestore 업데이트
+      const updatePromises = cartItems.map((item) => {
+        const docRef = doc(db, "stockRequests", item.id);
+        return updateDoc(docRef, {
+          status: "대기중",
+          approvalReason: "장바구니에서 대기 상태로 이동함",
+          updatedAt: new Date(),
+          updatedBy: userLevelData?.id || "system",
+          updatedByName: userLevelData?.name || "System",
+        });
+      });
+
+      await Promise.all(updatePromises);
+      showToast(
+        `${cartItems.length}개 항목이 대기 상태로 이동되었습니다.`,
+        "success"
+      );
+    } catch (error) {
+      console.error("장바구니 항목 대기 상태 변경 오류:", error);
+      showToast("항목 상태 변경 중 오류가 발생했습니다.", "error");
+    }
+  };
+
+  // 실제 데이터 로딩 함수
+  const loadRealData = async () => {
+    // 휴가 신청 데이터 가져오기
+    const vacationQuery = query(
+      collection(db, "vacations"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribeVacation = onSnapshot(vacationQuery, (snapshot) => {
+      const vacations = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt?.toDate?.() || new Date(),
+      }));
+      setVacationRequests(vacations);
+    });
+
+    // 비품 신청 데이터 가져오기
+    const stockQuery = query(
+      collection(db, "stockRequests"),
+      orderBy("createdAt2", "desc")
+    );
+
+    const unsubscribeStock = onSnapshot(stockQuery, (snapshot) => {
+      const stocks = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt || new Date().getTime(),
+      }));
+      setStockRequests(stocks);
+    });
+
+    // 일반 요청 데이터 가져오기
+    const requestQuery = query(
+      collection(db, "requests"),
+      orderBy("createdAt2", "desc")
+    );
+
+    const unsubscribeRequest = onSnapshot(requestQuery, (snapshot) => {
+      const requests = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt || new Date().getTime(),
+      }));
+      setGeneralRequests(requests);
+    });
+
+    // 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      unsubscribeVacation();
+      unsubscribeStock();
+      unsubscribeRequest();
+    };
+  };
+
+  // 테스트 데이터 생성 함수
+  const generateTestData = async () => {
+    if (isGeneratingData) return;
+    setIsGeneratingData(true);
+
+    try {
+      showToast("테스트 데이터 생성 중...", "info");
+
+      // 휴가 테스트 데이터 생성
+      const vacationPromises = DUMMY_VACATION_REQUESTS.map(async (item) => {
+        const vacationData = {
+          ...item,
+          userId: userLevelData?.id || "testUser",
+          userName: userLevelData?.name || "테스트 사용자",
+          department: userLevelData?.department || "원무",
+          createdAt: serverTimestamp(),
+        };
+        return addDoc(collection(db, "vacations"), vacationData);
+      });
+
+      // 비품 테스트 데이터 생성
+      const stockPromises = DUMMY_STOCK_REQUESTS.map(async (item) => {
+        const stockData = {
+          ...item,
+          requestedBy: userLevelData?.id || "testUser",
+          requestedByName: userLevelData?.name || "테스트 사용자",
+          createdAt: Date.now(),
+          createdAt2: serverTimestamp(),
+        };
+        return addDoc(collection(db, "stockRequests"), stockData);
+      });
+
+      // 요청 테스트 데이터 생성
+      const requestPromises = DUMMY_REQUESTS.map(async (item) => {
+        const requestData = {
+          ...item,
+          senderPeople: [userLevelData?.id || "testUser"],
+          senderDepartment: userLevelData?.department || "원무",
+          createdAt: Date.now(),
+          createdAt2: serverTimestamp(),
+        };
+        return addDoc(collection(db, "requests"), requestData);
+      });
+
+      // 모든 데이터 생성 완료 대기
+      await Promise.all([
+        ...vacationPromises,
+        ...stockPromises,
+        ...requestPromises,
+      ]);
+
+      showToast("테스트 데이터가 성공적으로 생성되었습니다.", "success");
+
+      // 생성된 데이터 다시 불러오기
+      loadRealData();
+    } catch (error) {
+      console.error("테스트 데이터 생성 오류:", error);
+      showToast("테스트 데이터 생성 중 오류가 발생했습니다.", "error");
+    } finally {
+      setIsGeneratingData(false);
+    }
+  };
+
+  // 테스트 데이터 생성 버튼 UI 수정
+  <div className="flex flex-row w-full justify-between h-[50px] items-center mb-[10px]">
+    {isGeneratingData ? (
+      <span className="mr-5 text-xs text-blue-500">
+        테스트 데이터 생성 중...
+      </span>
+    ) : (
+      <button
+        onClick={() => {
+          setConfirmModalProps({
+            title: "테스트 데이터 생성",
+            message:
+              "Firebase에 테스트 데이터를 생성하시겠습니까? 이 작업은 실제 데이터베이스에 영향을 줍니다.",
+            onConfirm: generateTestData,
+          });
+          setShowConfirmModal(true);
+        }}
+        className="mr-5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+      >
+        테스트 데이터 생성
+      </button>
+    )}
+    <img
+      onClick={() => setIsVisible(false)}
+      className="w-[30px] cursor-pointer"
+      src={cancel}
+      alt="닫기"
+    />
+  </div>;
+
   return (
     <>
       {/* 애니메이션 스타일 적용 */}
@@ -2565,12 +2822,26 @@ const RequestStatusModal = ({
           <div className="flex flex-row w-full justify-between h-[50px] items-center mb-[10px]">
             <span className="text-[34px] font-bold">신청 현황</span>
             <div className="flex flex-row items-center">
-              <div
-                className="mr-5 text-xs cursor-pointer text-gray-500 hover:text-gray-700"
-                onClick={() => setUseDummyData(!useDummyData)}
-              >
-                {useDummyData ? "실제 데이터 사용" : "더미 데이터 사용"}
-              </div>
+              {isGeneratingData ? (
+                <span className="mr-5 text-xs text-blue-500">
+                  테스트 데이터 생성 중...
+                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    setConfirmModalProps({
+                      title: "테스트 데이터 생성",
+                      message:
+                        "Firebase에 테스트 데이터를 생성하시겠습니까? 이 작업은 실제 데이터베이스에 영향을 줍니다.",
+                      onConfirm: generateTestData,
+                    });
+                    setShowConfirmModal(true);
+                  }}
+                  className="mr-5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                >
+                  테스트 데이터 생성
+                </button>
+              )}
               <img
                 onClick={() => setIsVisible(false)}
                 className="w-[30px] cursor-pointer"
@@ -2647,19 +2918,29 @@ const RequestStatusModal = ({
                 </span>
               )}
             </div>
-            <button
-              className="px-4 py-2 bg-onceBlue text-white rounded-lg hover:bg-blue-600 transition-colors flex-shrink-0 text-lg"
-              onClick={() => handleNewRequest(activeTab)}
-            >
-              {activeTab === "vacation"
-                ? "휴가 신청"
-                : activeTab === "stock"
-                ? "비품 신청"
-                : "요청하기"}
-            </button>
+            <div className="flex flex-shrink-0 space-x-2">
+              {activeTab === "stock" && (
+                <button
+                  className="px-3 py-2 bg-onceBlue text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                  onClick={handleMoveAllToWaiting}
+                >
+                  장바구니 → 대기중
+                </button>
+              )}
+              <button
+                className="px-4 py-2 bg-onceBlue text-white rounded-lg hover:bg-blue-600 transition-colors text-lg"
+                onClick={() => handleNewRequest(activeTab)}
+              >
+                {activeTab === "vacation"
+                  ? "휴가 신청"
+                  : activeTab === "stock"
+                  ? "비품 신청"
+                  : "요청하기"}
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1">
             <DndContext
               sensors={sensors}
               onDragStart={handleDragStart}
@@ -2790,6 +3071,15 @@ const RequestStatusModal = ({
           viewOnly={true}
         />
       )}
+
+      {/* 확인 모달 추가 */}
+      <ConfirmModal
+        isVisible={showConfirmModal}
+        setIsVisible={setShowConfirmModal}
+        title={confirmModalProps.title}
+        message={confirmModalProps.message}
+        onConfirm={confirmModalProps.onConfirm}
+      />
     </>
   );
 };

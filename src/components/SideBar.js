@@ -197,14 +197,6 @@ export default function SideBar() {
               nowURL={nowURL === "/parking" ? "주차등록" : nowURL}
             />
           </Link>
-          {/* {isHospitalOwner(userLevelData) && (
-            <Link to="/management">
-              <RenderIndex
-                indexValue="병원현황"
-                nowURL={nowURL === "/management" ? "병원현황" : nowURL}
-              />
-            </Link>
-          )} */}
         </IndexZone>
         <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
           <span className="text-onceGray text-once18">
