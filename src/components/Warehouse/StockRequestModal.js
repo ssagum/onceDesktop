@@ -771,27 +771,6 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
                   category !== "" &&
                   quantity !== "" &&
                   writer.length > 0
-                    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer"
-                    : "bg-gray-300 cursor-not-allowed"
-                }`}
-                onClick={
-                  itemName !== "" &&
-                  category !== "" &&
-                  quantity !== "" &&
-                  writer.length > 0
-                    ? handleRequestWaiting
-                    : () => showToast("필수 항목을 입력해주세요", "warning")
-                }
-              >
-                대기중으로 신청
-              </button>
-
-              <button
-                className={`flex-1 py-3 rounded-lg font-medium text-white transition-colors ${
-                  itemName !== "" &&
-                  category !== "" &&
-                  quantity !== "" &&
-                  writer.length > 0
                     ? "bg-purple-500 hover:bg-purple-600 cursor-pointer"
                     : "bg-gray-300 cursor-not-allowed"
                 }`}
@@ -805,6 +784,27 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
                 }
               >
                 장바구니에 저장
+              </button>
+
+              <button
+                className={`flex-1 py-3 rounded-lg font-medium text-white transition-colors ${
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
+                onClick={
+                  itemName !== "" &&
+                  category !== "" &&
+                  quantity !== "" &&
+                  writer.length > 0
+                    ? handleRequestWaiting
+                    : () => showToast("필수 항목을 입력해주세요", "warning")
+                }
+              >
+                비품신청
               </button>
             </div>
           </div>

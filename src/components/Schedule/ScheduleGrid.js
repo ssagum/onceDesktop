@@ -735,6 +735,188 @@ const getEndTime = (timeStr) => {
   }
 };
 
+// 일정 관련 알림을 보내는 함수 추가
+const sendScheduleNotification = async (action, appointmentData) => {
+  try {
+    // 일정 유형에 따라 수신자 결정
+    const type = appointmentData.type || viewMode;
+    const receiverId = type === "물리치료" ? "물리치료팀" : "진료팀";
+
+    // 액션에 따른 메시지 생성
+    let message = "";
+    const staffName = appointmentData.staffName || "담당자";
+    const time = `${appointmentData.startTime}-${appointmentData.endTime}`;
+    const date = appointmentData.date;
+
+    switch (action) {
+      case "create":
+        message = `[예약 생성] ${date} ${time} | ${staffName} | ${
+          appointmentData.title || "새 예약"
+        }`;
+        break;
+      case "update":
+        message = `[예약 수정] ${date} ${time} | ${staffName} | ${
+          appointmentData.title || "예약 수정"
+        }`;
+        break;
+      case "delete":
+        message = `[예약 취소] ${date} ${time} | ${staffName} | ${
+          appointmentData.title || "예약 취소"
+        }`;
+        break;
+      default:
+        message = `[예약 변경] ${date} ${time} | ${staffName}`;
+    }
+
+    // 현재 시간 포맷팅
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const formattedTime = `${hours}:${minutes}`;
+
+    // 발신자 정보 - 현재는 "일정" 고정
+    const senderId = "일정";
+
+    // call 데이터 생성
+    const callData = {
+      message,
+      receiverId,
+      senderId,
+      formattedTime,
+      createdAt: Date.now(),
+      createdAt2: serverTimestamp(),
+      type: "예약",
+      [receiverId]: true,
+      [senderId]: true,
+    };
+
+    // Firebase에 call 저장
+    await addDoc(collection(db, "calls"), callData);
+    console.log(`${receiverId}에게 ${action} 알림 전송 완료`);
+  } catch (error) {
+    console.error("예약 알림 전송 오류:", error);
+  }
+};
+
+// processAppointmentSubmit 함수 수정 - 일정 생성/수정 시 알림 전송 추가
+const processAppointmentSubmit = async (formData) => {
+  // FormData 객체를 일반 JavaScript 객체로 변환
+  const formDataObj = {};
+  if (formData instanceof FormData) {
+    for (let [key, value] of formData.entries()) {
+      formDataObj[key] = value;
+    }
+  } else {
+    // 이미 객체인 경우 그대로 사용
+    Object.assign(formDataObj, formData);
+  }
+
+  // 필수 필드 검사
+  if (!formDataObj.date || !formDataObj.startTime || !formDataObj.endTime) {
+    showToast("필수 정보를 모두 입력해주세요.", "error");
+    return;
+  }
+
+  // 담당자 이름 설정: staffId가 있으면 해당 staff의 이름을 찾아서 설정
+  if (formDataObj.staffId && !formDataObj.staffName) {
+    const selectedStaff = staff.find((s) => s.id === formDataObj.staffId);
+    if (selectedStaff) {
+      formDataObj.staffName = selectedStaff.name;
+    }
+  }
+
+  let result = null;
+
+  if (isEditing && selectedAppointment) {
+    // 기존 일정 수정
+    const updatedAppointment = {
+      ...selectedAppointment,
+      ...formDataObj,
+      dateIndex: selectedAppointment.dateIndex,
+      updatedAt: new Date().toISOString(),
+    };
+
+    console.log("업데이트할 일정 데이터:", updatedAppointment);
+
+    // 상위 컴포넌트의 update 함수 호출
+    try {
+      result = await onAppointmentUpdate(updatedAppointment);
+
+      // 일정 수정 알림 전송
+      await sendScheduleNotification("update", updatedAppointment);
+    } catch (error) {
+      console.error("일정 업데이트 중 오류:", error);
+      showToast("일정 수정 중 오류가 발생했습니다.", "error");
+      return;
+    }
+  } else {
+    // 새 일정 생성
+    const newAppointment = {
+      ...formDataObj,
+      dateIndex: dates.findIndex(
+        (date) => format(date, "yyyy-MM-dd") === formDataObj.date
+      ),
+      createdAt: new Date().toISOString(),
+    };
+
+    // 상위 컴포넌트의 create 함수 호출
+    try {
+      result = await onAppointmentCreate(newAppointment);
+      showToast("일정이 추가되었습니다.", "success");
+
+      // 일정 생성 알림 전송
+      await sendScheduleNotification("create", newAppointment);
+    } catch (error) {
+      console.error("일정 추가 중 오류:", error);
+      showToast("일정 추가 중 오류가 발생했습니다.", "error");
+      return;
+    }
+  }
+
+  // 폼 초기화 및 상태 리셋
+  setFormData({
+    title: "",
+    date: "",
+    startTime: "",
+    endTime: "",
+    staffId: "",
+    staffName: "",
+    notes: "",
+    type: viewMode,
+  });
+  setShowForm(false);
+  setIsEditing(false);
+  setSelectedAppointment(null);
+
+  console.log("일정 작업 완료, 결과:", result);
+};
+
+// confirmDeleteAppointment 함수 수정 - 삭제 시 알림 전송 추가
+const confirmDeleteAppointment = async () => {
+  try {
+    if (!selectedAppointment) return;
+
+    // 상위 컴포넌트의 delete 함수 호출
+    if (onAppointmentDelete) {
+      await onAppointmentDelete(selectedAppointment.id);
+
+      // 일정 삭제 알림 전송
+      await sendScheduleNotification("delete", selectedAppointment);
+
+      showToast("일정이 삭제되었습니다.", "success");
+    }
+
+    // 모달 닫기 및 상태 초기화
+    setShowDeleteModal(false);
+    setShowForm(false);
+    setSelectedAppointment(null);
+    setIsEditing(false);
+  } catch (error) {
+    console.error("일정 삭제 중 오류 발생:", error);
+    showToast("일정 삭제 중 오류가 발생했습니다.", "error");
+  }
+};
+
 const ScheduleGrid = ({
   dates,
   timeSlots = [],
@@ -758,6 +940,8 @@ const ScheduleGrid = ({
     notes: "",
     duration: "30",
     type: "예약",
+    staffId: "", // 담당자 ID 추가
+    staffName: "", // 담당자 이름 추가
   });
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -1058,6 +1242,7 @@ const ScheduleGrid = ({
     setCurrentCell(null); // 현재 셀 초기화
   };
 
+  // handleMouseUp 함수 수정 - 담당자 정보는 유지하되 제목에는 포함시키지 않음
   const handleMouseUp = (e, dateIndex, staffIndex, timeIndex) => {
     // 선택 상태 종료
     setIsSelecting(false);
@@ -1090,19 +1275,24 @@ const ScheduleGrid = ({
       top = Math.max(10, viewportHeight - formHeight - 10);
     }
 
+    // 선택된 담당자 정보 가져오기
+    const selectedStaff = staff[staffIndex];
+    const staffName = selectedStaff ? selectedStaff.name : "";
+
     // 폼 위치 설정
     setFormPosition({ left, top });
 
-    // 빈 폼 데이터로 초기화
+    // 빈 폼 데이터로 초기화 - 담당자 정보는 설정하지만 제목에는 포함하지 않음
     setFormData({
-      title: "",
+      title: "", // 제목은 빈 문자열로 설정
       notes: "",
       duration: "30",
       type: "예약",
       startTime: effectiveTimeSlots[timeIndex],
       endTime: getEndTime(effectiveTimeSlots[timeIndex]),
       date: format(dates[dateIndex], "yyyy-MM-dd"),
-      staffId: staff[staffIndex].id,
+      staffId: selectedStaff ? selectedStaff.id : "",
+      staffName: staffName,
     });
 
     // 폼 표시
@@ -1122,6 +1312,7 @@ const ScheduleGrid = ({
         startTime: selectedAppointment.startTime,
         endTime: selectedAppointment.endTime,
         staffId: selectedAppointment.staffId,
+        staffName: selectedAppointment.staffName,
         notes: selectedAppointment.notes || "",
         type: selectedAppointment.type || viewMode,
       });
@@ -1229,6 +1420,14 @@ const ScheduleGrid = ({
       return;
     }
 
+    // 담당자 이름 설정: staffId가 있으면 해당 staff의 이름을 찾아서 설정
+    if (formDataObj.staffId && !formDataObj.staffName) {
+      const selectedStaff = staff.find((s) => s.id === formDataObj.staffId);
+      if (selectedStaff) {
+        formDataObj.staffName = selectedStaff.name;
+      }
+    }
+
     let result = null;
 
     if (isEditing && selectedAppointment) {
@@ -1245,6 +1444,9 @@ const ScheduleGrid = ({
       // 상위 컴포넌트의 update 함수 호출
       try {
         result = await onAppointmentUpdate(updatedAppointment);
+
+        // 일정 수정 알림 전송
+        await sendScheduleNotification("update", updatedAppointment);
       } catch (error) {
         console.error("일정 업데이트 중 오류:", error);
         showToast("일정 수정 중 오류가 발생했습니다.", "error");
@@ -1264,6 +1466,9 @@ const ScheduleGrid = ({
       try {
         result = await onAppointmentCreate(newAppointment);
         showToast("일정이 추가되었습니다.", "success");
+
+        // 일정 생성 알림 전송
+        await sendScheduleNotification("create", newAppointment);
       } catch (error) {
         console.error("일정 추가 중 오류:", error);
         showToast("일정 추가 중 오류가 발생했습니다.", "error");
@@ -1278,6 +1483,7 @@ const ScheduleGrid = ({
       startTime: "",
       endTime: "",
       staffId: "",
+      staffName: "",
       notes: "",
       type: viewMode,
     });
@@ -1333,23 +1539,24 @@ const ScheduleGrid = ({
     try {
       if (!selectedAppointment) return;
 
-      await onAppointmentDelete(selectedAppointment.id);
+      // 상위 컴포넌트의 delete 함수 호출
+      if (onAppointmentDelete) {
+        await onAppointmentDelete(selectedAppointment.id);
 
-      // 폼 닫기 및 상태 초기화
-      setShowForm(false);
-      setShowSelectionForm(false);
-      setIsEditing(false);
-      setSelectedAppointment(null);
+        // 일정 삭제 알림 전송
+        await sendScheduleNotification("delete", selectedAppointment);
 
-      // 모달 닫기
+        showToast("일정이 삭제되었습니다.", "success");
+      }
+
+      // 모달 닫기 및 상태 초기화
       setShowDeleteModal(false);
-
-      showToast("일정이 삭제되었습니다.", "success");
+      setShowForm(false);
+      setSelectedAppointment(null);
+      setIsEditing(false);
     } catch (error) {
       console.error("일정 삭제 중 오류 발생:", error);
       showToast("일정 삭제 중 오류가 발생했습니다.", "error");
-      // 모달 닫기
-      setShowDeleteModal(false);
     }
   };
 
@@ -1425,117 +1632,52 @@ const ScheduleGrid = ({
     };
   }, [showForm, showVacationDetail]); // showForm과 showVacationDetail 상태가 변경될 때마다 이펙트 재실행
 
-  // 일정 생성 함수 수정 - 더 세밀한 시간 단위 지원
+  // 일정 생성 함수 수정 - staffId 외에 staffName도 추가
   const createAppointment = async (data) => {
     try {
-      // 휴가 충돌 검사 추가 - 결과만 받아옴
-      const conflictResult = checkVacationConflict(
-        data.dateIndex,
-        staff.findIndex((s) => s.id === data.staffId),
-        timeSlots.findIndex((slot) => slot === data.startTime),
-        timeSlots.findIndex((slot) => slot === getEndTime(data.endTime))
-      );
+      // 필요한 예약 데이터 정리
+      const appointment = {
+        title: data.title || "새 예약",
+        date:
+          typeof data.date === "string"
+            ? data.date
+            : format(data.date, "yyyy-MM-dd"),
+        startTime: data.startTime,
+        endTime: data.endTime,
+        staffId: data.staffId,
+        staffName: data.staffName, // 담당자 이름 추가
+        notes: data.notes || "",
+        type: data.type || viewMode,
+        status: "예약완료",
+        createdAt: new Date(),
+      };
 
-      // 휴가 충돌 시 확인 모달 표시
-      if (conflictResult.hasConflict) {
-        const vacation = conflictResult.vacation;
-        const vacationType = vacation?.vacationType || "휴가";
+      // closeForm() 호출 대신 직접 폼 닫기 및 상태 초기화
+      setShowForm(false);
+      setFormData({
+        title: "",
+        notes: "",
+        duration: "30",
+        type: "예약",
+        staffId: "",
+        staffName: "",
+      });
+      setSelection(null);
+      setCurrentCell(null);
 
-        // 기존 window.confirm 대신 모달 표시를 위한 데이터 설정
-        setVacationConflictData({
-          vacation,
-          vacationType,
-          data: data,
-          isCreating: true,
-        });
+      // 부모 컴포넌트의 콜백 호출
+      if (onAppointmentCreate) {
+        const newAppointment = await onAppointmentCreate(appointment);
 
-        // 모달 표시
-        setShowVacationConflictModal(true);
-        return false; // 여기서 함수 종료, 모달에서 선택 후 처리 진행
+        // 예약 생성 알림 전송 - 여기에 추가
+        await sendScheduleNotification("create", newAppointment || appointment);
       }
-
-      // 시간대 계산 로직 및 기존 처리 과정
-      return await processAppointmentCreate(data);
     } catch (error) {
-      console.error("일정 생성 오류:", error);
-      showToast("일정을 저장하는 중 오류가 발생했습니다.", "error");
-      return false;
-    }
-  };
-
-  // 약속 생성 처리를 위한 분리된 함수
-  const processAppointmentCreate = async (data) => {
-    // 시간대 계산 로직
-    const startTime =
-      data.startTime ||
-      (data.startTimeIndex ? effectiveTimeSlots[data.startTimeIndex] : null);
-    const endTime =
-      data.endTime ||
-      (data.endTimeIndex
-        ? getEndTime(effectiveTimeSlots[data.endTimeIndex])
-        : null);
-
-    if (!startTime || !endTime) {
-      showToast("시작 시간과 종료 시간을 설정해주세요.", "error");
-      return false;
-    }
-
-    // 시간 검증 - 종료 시간이 시작 시간보다 나중인지
-    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
-      showToast("종료 시간은 시작 시간보다 나중이어야 합니다.", "error");
-      return false;
-    }
-
-    // 담당자 정보 가져오기
-    const selectedStaff = staff.find((s) => s.id === data.staffId);
-
-    // 새 일정 데이터 생성
-    const newAppointment = {
-      title: data.title || "",
-      staffId: data.staffId,
-      staffName: selectedStaff ? selectedStaff.name : "알 수 없음",
-      date: format(data.date, "yyyy-MM-dd"),
-      startTime,
-      endTime,
-      notes: data.notes || "",
-      // 명시적으로 viewMode에 따라 type 설정
-      type: viewMode === "물리치료" ? "물리치료" : "진료",
-      dateIndex: data.dateIndex,
-      staffColor: selectedStaff ? selectedStaff.color : "#999",
-    };
-
-    console.log("ScheduleGrid - 새 일정 생성:", newAppointment);
-
-    // 상위 컴포넌트 콜백 호출 - 여기서 Firebase 저장 처리
-    let savedAppointment = null;
-    if (onAppointmentCreate) {
-      // 생성된 예약 정보 (id 포함) 받아오기
-      savedAppointment = await onAppointmentCreate(newAppointment);
-
-      // 로컬 상태 업데이트 - 반환된 객체가 있는 경우만
-      if (savedAppointment && savedAppointment.id) {
-        console.log("로컬 상태 업데이트:", savedAppointment);
-        // 로컬 상태에 새 일정 추가
-        setLocalAppointments((prevAppointments) => [
-          ...prevAppointments,
-          savedAppointment,
-        ]);
-
-        // Toast 메시지 표시 (props로 전달받은 경우)
-        if (showToast) {
-          showToast(
-            `${savedAppointment.title || "새 일정"}이(가) 등록되었습니다.`,
-            "success"
-          );
-        }
+      console.error("예약 생성 중 오류 발생:", error);
+      if (showToast) {
+        showToast("예약 생성 중 오류가 발생했습니다.", "error");
       }
     }
-
-    // 폼 닫기 및 상태 초기화
-    setShowForm(false);
-    setSelection(null); // 선택 영역 초기화
-    setCurrentCell(null); // 선택된 셀 초기화
-    return true;
   };
 
   // 드래그 영역 계산
@@ -3259,6 +3401,51 @@ const ScheduleGrid = ({
               disabled={!isEditing && selectedAppointment}
             />
           </FormField>
+
+          {/* 담당자 선택 드롭다운 추가 */}
+          <FormField>
+            <label>담당자</label>
+            <select
+              value={
+                isEditing
+                  ? formData.staffId
+                  : selectedAppointment
+                  ? selectedAppointment.staffId
+                  : formData.staffId
+              }
+              onChange={(e) => {
+                const selectedStaffId = e.target.value;
+                const selectedStaffMember = staff.find(
+                  (s) => s.id === selectedStaffId
+                );
+                setFormData({
+                  ...formData,
+                  staffId: selectedStaffId,
+                  staffName: selectedStaffMember
+                    ? selectedStaffMember.name
+                    : "",
+                });
+              }}
+              disabled={!isEditing && selectedAppointment}
+              className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                fontSize: "14px",
+                backgroundColor: "#f8fafc",
+              }}
+            >
+              <option value="">담당자를 선택하세요</option>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
           <TimeFieldContainer>
             <div className="time-input-container">
               <label>시작 시간</label>
@@ -3348,6 +3535,8 @@ const ScheduleGrid = ({
                   notes: "",
                   duration: "30",
                   type: "예약",
+                  staffId: "",
+                  staffName: "",
                 });
                 setSelection(null); // 선택 영역 초기화
                 setCurrentCell(null); // 선택된 셀 초기화
@@ -3390,7 +3579,8 @@ const ScheduleGrid = ({
                       notes: formData.notes,
                       type: formData.type,
                       dateIndex: dateIndex,
-                      staffId: staff[staffIndex].id,
+                      staffId: formData.staffId || staff[staffIndex].id,
+                      staffName: formData.staffName || staff[staffIndex].name,
                       date: dates[dateIndex],
                       startTime: startTime,
                       endTime: endTime,

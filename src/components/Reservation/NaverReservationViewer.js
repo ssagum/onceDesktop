@@ -17,13 +17,33 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { useToast } from "../../contexts/ToastContext";
 
 // 키프레임 애니메이션 정의
 const SpinAnimation = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+`;
+
+const fadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
+const slideUp = keyframes`
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
 `;
 
 const SpinningIcon = styled(IoRefreshOutline)`
@@ -37,11 +57,13 @@ const ModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  backdrop-filter: blur(2px);
+  animation: ${fadeIn} 0.2s ease-out;
 `;
 
 const ModalContainer = styled.div`
@@ -52,39 +74,57 @@ const ModalContainer = styled.div`
   max-width: 1200px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+  animation: ${slideUp} 0.3s ease-out;
 `;
 
 const ModalHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 20px 24px;
   border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
 `;
 
 const ModalTitle = styled.h2`
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: #2d3748;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background-color: #4299e1;
+    border-radius: 2px;
+    margin-right: 12px;
+    vertical-align: middle;
+  }
 `;
 
 const CloseButton = styled.button`
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 28px;
   cursor: pointer;
   color: #4a5568;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  padding: 6px;
   border-radius: 50%;
+  transition: all 0.2s;
 
   &:hover {
     background-color: #f7fafc;
-    color: #2d3748;
+    color: #e53e3e;
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 `;
 
@@ -92,6 +132,7 @@ const WebViewContainer = styled.div`
   flex: 1;
   overflow: hidden;
   position: relative;
+  background-color: #f8fafc;
 `;
 
 const ControlPanel = styled.div`
@@ -101,56 +142,25 @@ const ControlPanel = styled.div`
   justify-content: space-between;
   align-items: center;
   background-color: #f8fafc;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 `;
 
-const ExtractedDataContainer = styled.div`
-  position: absolute;
-  bottom: 80px;
-  right: 24px;
-  width: 380px;
-  max-height: 500px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  padding: 16px;
-  z-index: 100;
-  overflow-y: auto;
-  border: 1px solid #e2e8f0;
-`;
-
-const DataItem = styled.div`
-  margin-bottom: 12px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
-const DataLabel = styled.div`
-  font-size: 13px;
-  color: #4a5568;
-  margin-bottom: 4px;
-`;
-
-const DataValue = styled.div`
-  font-size: 14px;
-  color: #2d3748;
-  font-weight: 500;
-  padding: 8px;
-  background-color: #f7fafc;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 12px;
+  align-items: center;
 `;
 
 const ActionButton = styled.button`
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
   transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
   &.primary {
     background-color: #4299e1;
@@ -159,6 +169,12 @@ const ActionButton = styled.button`
 
     &:hover {
       background-color: #3182ce;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 
@@ -169,6 +185,44 @@ const ActionButton = styled.button`
 
     &:hover {
       background-color: #f7fafc;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &.success {
+    background-color: #48bb78;
+    color: white;
+    border: none;
+
+    &:hover {
+      background-color: #38a169;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &.danger {
+    background-color: #f56565;
+    color: white;
+    border: none;
+
+    &:hover {
+      background-color: #e53e3e;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 `;
@@ -176,6 +230,126 @@ const ActionButton = styled.button`
 const ReservationStatus = styled.div`
   font-size: 14px;
   color: #4a5568;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+
+  &::before {
+    content: "💡";
+    margin-right: 8px;
+    font-size: 16px;
+  }
+`;
+
+const ExtractedDataContainer = styled.div`
+  position: absolute;
+  bottom: 80px;
+  right: 24px;
+  width: 380px;
+  max-height: 550px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  z-index: 100;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  animation: fadeInRight 0.3s ease-out;
+
+  @keyframes fadeInRight {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
+`;
+
+// 담당자 드롭다운 스타일 추가
+const StaffDropdown = styled.select`
+  width: 100%;
+  padding: 10px 12px;
+  background-color: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #2d3748;
+  font-weight: 500;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232d3748' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #cbd5e0;
+    background-color: #edf2f7;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #4299e1;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+  }
+`;
+
+const StaffOption = styled.option`
+  padding: 12px;
+  font-size: 14px;
+`;
+
+const DataItem = styled.div`
+  margin-bottom: 16px;
+  transition: all 0.2s;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const DataLabel = styled.div`
+  font-size: 14px;
+  color: #4a5568;
+  margin-bottom: 6px;
+  font-weight: 600;
+`;
+
+const DataValue = styled.div`
+  font-size: 15px;
+  color: #2d3748;
+  font-weight: 500;
+  padding: 10px 12px;
+  background-color: #f7fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: #edf2f7;
+  }
 `;
 
 // 예약 목록 컨테이너
@@ -183,33 +357,96 @@ const ReservationList = styled.div`
   position: absolute;
   top: 10px;
   left: 10px;
-  width: 500px;
-  max-height: 400px;
+  width: 520px;
+  max-height: calc(100% - 20px);
   background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 20px;
   z-index: 100;
   border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
+`;
+
+// 예약 목록 스크롤 영역
+const ReservationListScroll = styled.div`
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  margin-top: 16px;
+  padding-right: 6px;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
 `;
 
 // 예약 항목
 const ReservationItem = styled.div`
-  padding: 12px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background-color: #f0f9ff;
-    border-color: #93c5fd;
+    background-color: ${(props) => (props.isCancelled ? "#f1f5f9" : "#f0f9ff")};
+    border-color: ${(props) => (props.isCancelled ? "#cbd5e0" : "#93c5fd")};
+    transform: ${(props) => (props.isCancelled ? "none" : "translateY(-2px)")};
+    box-shadow: ${(props) =>
+      props.isCancelled
+        ? "0 1px 3px rgba(0, 0, 0, 0.05)"
+        : "0 4px 6px rgba(0, 0, 0, 0.05)"};
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 
   &.selected {
     background-color: #dbeafe;
     border-color: #60a5fa;
+    box-shadow: 0 0 0 2px #3b82f6;
+  }
+
+  &.cancelled {
+    opacity: 0.7;
+    background-color: #f8fafc;
+    cursor: default;
   }
 
   &:last-child {
@@ -221,11 +458,11 @@ const ReservationHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 `;
 
 const ReservationName = styled.div`
-  font-weight: 600;
+  font-weight: 700;
   font-size: 16px;
   color: #2d3748;
 `;
@@ -233,33 +470,50 @@ const ReservationName = styled.div`
 const ReservationDate = styled.div`
   font-size: 14px;
   color: #4a5568;
+  font-weight: 500;
 `;
 
 const ReservationDetail = styled.div`
-  font-size: 13px;
+  font-size: 14px;
   color: #4a5568;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   display: flex;
 `;
 
 const DetailLabel = styled.span`
   min-width: 70px;
   color: #64748b;
+  font-weight: 600;
 `;
 
 const DetailValue = styled.span`
   flex: 1;
+  color: #1a202c;
 `;
 
 const StatusTag = styled.span`
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   margin-right: 8px;
   background-color: #3b82f6;
   color: white;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: white;
+    margin-right: 6px;
+  }
 `;
 
 // 비교 결과 패널
@@ -313,11 +567,6 @@ const StatusBadge = styled.span`
       : "#166534"};
 `;
 
-const ActionButtons = styled.div`
-  display: flex;
-  gap: 8px;
-`;
-
 const SyncItemList = styled.div`
   display: flex;
   flex-direction: column;
@@ -357,6 +606,36 @@ const SyncButtonGroup = styled.div`
   gap: 8px;
 `;
 
+// 리스트 헤더 컴포넌트 재정의
+const ListHeader = styled.div`
+  display: grid;
+  grid-template-columns: 24px 120px 180px 1fr 120px;
+  gap: 8px;
+  padding: 0 8px 8px 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+`;
+
+const HeaderItem = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  text-align: ${(props) => props.align || "left"};
+`;
+
+// 하단 태그 스타일 추가
+const ItemTag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+`;
+
 const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
@@ -369,6 +648,16 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   const [comparisonResults, setComparisonResults] = useState([]);
   const [showComparisonPanel, setShowComparisonPanel] = useState(false);
   const webviewRef = useRef(null);
+  const { showToast } = useToast();
+  // 담당자 관련 상태 수정 - 기본값을 박상현으로 설정
+  const [staffList, setStaffList] = useState([
+    { id: "박상현", name: "박상현" },
+    { id: "진료팀", name: "진료팀" },
+  ]);
+  const [selectedStaff, setSelectedStaff] = useState({
+    id: "박상현",
+    name: "박상현",
+  });
 
   // 네이버 예약 URL
   const naverReservationUrl =
@@ -381,6 +670,80 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       setShowReservationList(false);
       setReservations([]);
       setSelectedReservation(null);
+    }
+  }, [isVisible]);
+
+  // 컴포넌트 마운트 시 진료팀 목록 불러오기 수정
+  useEffect(() => {
+    // 모달이 열릴 때만 데이터 로드
+    if (isVisible) {
+      const fetchStaffList = async () => {
+        try {
+          // Firestore에서 직원 목록 가져오기 (users 컬렉션 사용)
+          const usersRef = collection(db, "users");
+          const q = query(usersRef, where("active", "!=", false));
+          const querySnapshot = await getDocs(q);
+
+          const staffData = [];
+
+          querySnapshot.forEach((doc) => {
+            const userData = doc.data();
+            // 진료팀 구성원만 필터링 (또는 원하는 필터 조건 설정)
+            if (
+              userData.department === "진료" ||
+              userData.department === "진료팀"
+            ) {
+              staffData.push({
+                id: userData.name || doc.id,
+                name: userData.name || doc.id,
+                department: userData.department,
+              });
+            }
+          });
+
+          // 기본 담당자 목록 구성
+          let uniqueStaff = [];
+
+          // 박상현 의사가 목록에 있는지 확인
+          const hasDefaultDoctor = staffData.some(
+            (staff) => staff.name === "박상현"
+          );
+
+          // 박상현 의사가 없으면 첫 번째 항목으로 추가
+          if (!hasDefaultDoctor) {
+            uniqueStaff.push({ id: "박상현", name: "박상현" });
+          }
+
+          // 나머지 스태프 추가
+          uniqueStaff = [...uniqueStaff, ...staffData];
+
+          // 진료팀 옵션 추가
+          if (!uniqueStaff.find((staff) => staff.id === "진료팀")) {
+            uniqueStaff.push({ id: "진료팀", name: "진료팀" });
+          }
+
+          setStaffList(uniqueStaff);
+
+          // 기본값으로 박상현 설정
+          if (!selectedStaff || selectedStaff.id !== "박상현") {
+            const defaultDoctor =
+              uniqueStaff.find((staff) => staff.name === "박상현") ||
+              uniqueStaff[0];
+            setSelectedStaff(defaultDoctor);
+          }
+        } catch (error) {
+          console.error("직원 목록 로드 오류:", error);
+          // 오류 시 기본 목록 유지
+          const defaultStaff = [
+            { id: "박상현", name: "박상현" },
+            { id: "진료팀", name: "진료팀" },
+          ];
+          setStaffList(defaultStaff);
+          setSelectedStaff(defaultStaff[0]);
+        }
+      };
+
+      fetchStaffList();
     }
   }, [isVisible]);
 
@@ -412,17 +775,78 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   // 예약 날짜 형식 변환 (25. 3. 27.(목) 오전 9:00 -> 2025-03-27)
   const formatReservationDate = (dateStr) => {
     try {
-      if (dateStr === "-") return "";
+      if (!dateStr || dateStr === "-") {
+        // 날짜 문자열이 없거나 "-"인 경우 현재 날짜와 시간을 기본값으로 사용
+        const now = new Date();
+        return {
+          date: format(now, "yyyy-MM-dd"),
+          time: format(now, "HH:mm"),
+          fullDate: now,
+          displayDate: dateStr || "-",
+          isDefault: true,
+        };
+      }
 
-      // 날짜 형식 파싱 (예: "25. 3. 27.(목) 오전 9:00")
-      const regex = /(\d+)\.\s*(\d+)\.\s*(\d+)\..*?([오전|오후])\s*(\d+):(\d+)/;
-      const matches = dateStr.match(regex);
+      // 다양한 네이버 예약 날짜 패턴에 대응할 수 있는 정규식
+      // 예: "25. 3. 27.(목) 오전 9:00", "2025-03-27 오전 9:00", "25.3.27 오전 9시" 등
+      const regex1 =
+        /(\d+)\.\s*(\d+)\.\s*(\d+)\..*?([오전|오후])\s*(\d+):(\d+)/;
+      const regex2 =
+        /(\d+)\.\s*(\d+)\.\s*(\d+).*?([오전|오후])\s*(\d+)[시:](\d+)?/;
+      const regex3 =
+        /(\d{4})-(\d{2})-(\d{2}).*?([오전|오후])\s*(\d+)[시:](\d+)?/;
 
-      if (!matches) return dateStr;
+      let matches =
+        dateStr.match(regex1) || dateStr.match(regex2) || dateStr.match(regex3);
 
-      let [_, year, month, day, ampm, hour, minute] = matches;
+      if (!matches) {
+        console.warn("표준 날짜 형식 파싱 실패, 대체 방법 시도:", dateStr);
 
-      // 2025년 형식으로 변환
+        // 날짜만 있는 경우를 위한 단순 정규식 (예: "25.3.27", "2025-03-27")
+        const dateOnlyRegex1 = /(\d+)\.(\d+)\.(\d+)/;
+        const dateOnlyRegex2 = /(\d{4})-(\d{2})-(\d{2})/;
+
+        const dateOnlyMatches =
+          dateStr.match(dateOnlyRegex1) || dateStr.match(dateOnlyRegex2);
+
+        if (dateOnlyMatches) {
+          let [_, year, month, day] = dateOnlyMatches;
+
+          // 2자리 연도를 4자리로 변환
+          year = year.length === 2 ? `20${year}` : year;
+
+          // 시간이 없으므로 기본값으로 9:00 사용
+          const dateObj = new Date(
+            parseInt(year),
+            parseInt(month) - 1,
+            parseInt(day),
+            9,
+            0
+          );
+
+          return {
+            date: format(dateObj, "yyyy-MM-dd"),
+            time: "09:00",
+            fullDate: dateObj,
+            displayDate: dateStr,
+            isPartialParsed: true,
+          };
+        }
+
+        // 여전히 파싱 실패한 경우 현재 날짜 반환
+        const now = new Date();
+        return {
+          date: format(now, "yyyy-MM-dd"),
+          time: format(now, "HH:mm"),
+          fullDate: now,
+          displayDate: dateStr,
+          isDefault: true,
+        };
+      }
+
+      let [_, year, month, day, ampm, hour, minute = "0"] = matches;
+
+      // 2자리 연도를 4자리로 변환
       year = year.length === 2 ? `20${year}` : year;
 
       // 시간 변환 (오후인 경우 12 더하기)
@@ -449,7 +873,15 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       };
     } catch (error) {
       console.error("날짜 변환 오류:", error, dateStr);
-      return { date: "", time: "", fullDate: null, displayDate: dateStr };
+      // 오류 발생 시 현재 날짜와 시간을 기본값으로 사용
+      const now = new Date();
+      return {
+        date: format(now, "yyyy-MM-dd"),
+        time: format(now, "HH:mm"),
+        fullDate: now,
+        displayDate: dateStr || "-",
+        isDefault: true,
+      };
     }
   };
 
@@ -501,44 +933,221 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       if (webviewRef.current && window.electron) {
         const webview = webviewRef.current;
 
-        // 단순화된 추출 스크립트
+        // 네이버 예약 데이터 추출 스크립트
         const extractScript = `
           (function() {
             try {
+              // 화면 배율 조정 시도 코드 제거 (사용자 요청)
+              
               // 예약 테이블 확인
               const table = document.querySelector('.BookingListView__booking-list-table__sUuPX');
               
               if (!table) {
-                return { error: '예약 테이블을 찾을 수 없습니다' };
+                return { error: '예약 테이블을 찾을 수 없습니다. 네이버 예약 페이지에 로그인되어 있는지 확인해주세요.' };
               }
               
-              // 표시된 예약 항목 확인
-              const reservationItems = Array.from(document.querySelectorAll('.BookingListView__contents-user__xNWR6'));
+              // 디버깅용 정보 출력
+              console.log("예약 테이블 찾음:", table);
+              
+              // 표시된 예약 항목 확인 - 다양한 클래스명 시도
+              let reservationItems = Array.from(document.querySelectorAll('.BookingListView__contents-user__xNWR6'));
+              
+              // 첫 번째 선택자로 찾지 못한 경우 대체 선택자 시도
+              if (reservationItems.length === 0) {
+                reservationItems = Array.from(document.querySelectorAll('[class*="contents-user"]'));
+              }
+              
+              // 그래도 못 찾으면 테이블의 행 자체를 가져오기
+              if (reservationItems.length === 0) {
+                reservationItems = Array.from(table.querySelectorAll('tr'));
+              }
               
               if (reservationItems.length === 0) {
-                return { error: '예약 항목을 찾을 수 없습니다' };
+                return { error: '예약 항목을 찾을 수 없습니다. 네이버 예약이 있는지 확인해주세요.' };
               }
               
-              // 기본 데이터만 추출
+              console.log("예약 항목 수:", reservationItems.length);
+              
+              // 모든 예약 데이터 추출 (전체 정보)
               const reservations = reservationItems.map(item => {
                 try {
                   // 상태
-                  const status = item.querySelector('.BookingListView__state__89OjA span')?.textContent.trim() || '';
+                  const status = item.querySelector('.BookingListView__state__89OjA span, [class*="state"] span')?.textContent.trim() || '';
+                  
+                  // 상태 정보가 없는 경우 추가 방법으로 시도
+                  let finalStatus = status;
+                  
+                  // 상태 정보가 비어있거나 예상과 다른 경우 대체 방법 시도
+                  if (!finalStatus || !['확정', '취소', '대기'].includes(finalStatus)) {
+                    // 방법 1: 다른 클래스 이름으로 시도
+                    const statusElems = item.querySelectorAll('[class*="state"]');
+                    for (const elem of statusElems) {
+                      const text = elem.textContent.trim();
+                      if (text && ['확정', '취소', '대기'].includes(text)) {
+                        finalStatus = text;
+                        break;
+                      }
+                    }
+                    
+                    // 방법 2: 취소일 필드가 있으면 취소 상태로 간주
+                    if (!finalStatus || !['확정', '취소', '대기'].includes(finalStatus)) {
+                      const cancelDateElem = item.querySelector('[class*="order-cancel-date"]');
+                      if (cancelDateElem && cancelDateElem.textContent.trim() !== '-') {
+                        finalStatus = '취소';
+                      }
+                    }
+                    
+                    // 방법 3: CSS 스타일 분석 - 취소된 예약은 보통 회색 또는 특정 스타일로 표시됨
+                    if (!finalStatus || !['확정', '취소', '대기'].includes(finalStatus)) {
+                      // 회색 백그라운드나 특정 스타일을 가진 요소 확인
+                      const cancelStyle = window.getComputedStyle(item);
+                      if (cancelStyle.opacity < 1 || cancelStyle.color.includes('gray') || 
+                          cancelStyle.backgroundColor.includes('gray')) {
+                        finalStatus = '취소';
+                      }
+                    }
+                    
+                    // 방법 4: "취소" 텍스트가 포함된 요소 찾기
+                    if (!finalStatus || !['확정', '취소', '대기'].includes(finalStatus)) {
+                      if (item.textContent.includes('취소됨') || 
+                          item.textContent.includes('취소 완료') ||
+                          item.textContent.includes('예약취소')) {
+                        finalStatus = '취소';
+                      }
+                    }
+                  }
+                  
+                  // 그래도 상태를 결정할 수 없으면 기본값으로 '확정' 사용
+                  if (!finalStatus || !['확정', '취소', '대기'].includes(finalStatus)) {
+                    finalStatus = '확정';
+                    console.log('상태 결정 불가: 기본값(확정) 적용');
+                  }
+                  
+                  console.log('추출된 상태값:', { original: status, final: finalStatus });
                   
                   // 이름
-                  const name = item.querySelector('.BookingListView__name-ellipsis__snplV')?.textContent.trim() || '';
+                  const name = item.querySelector('.BookingListView__name-ellipsis__snplV, [class*="name-ellipsis"]')?.textContent.trim() || '';
                   
                   // 전화번호
-                  const phone = item.querySelector('.BookingListView__phone__i04wO span')?.textContent.trim() || '';
+                  const phone = item.querySelector('.BookingListView__phone__i04wO span, [class*="phone"] span')?.textContent.trim() || '';
                   
                   // 예약번호
-                  const bookingNumber = item.querySelector('.BookingListView__book-number__33dBa')?.textContent.trim() || '';
+                  const bookingNumber = item.querySelector('.BookingListView__book-number__33dBa, [class*="book-number"]')?.textContent.trim().split('변경')[0] || '';
+                  
+                  // 이용일시 - 다양한 방법으로 추출 시도
+                  let useDate = '';
+                  
+                  // 1. 정확한 클래스명으로 시도
+                  const useDateElem = item.querySelector('.BookingListView__book-date__F7BCG');
+                  if (useDateElem) {
+                    useDate = useDateElem.textContent.trim();
+                  } 
+                  // 2. 부분 클래스명으로 시도
+                  else {
+                    const dateCell = item.querySelector('[class*="book-date"]');
+                    if (dateCell) {
+                      useDate = dateCell.textContent.trim();
+                    }
+                  }
+                  
+                  // 3. 컨텐츠 영역에서 시도
+                  if (!useDate) {
+                    const contentBooking = item.querySelector('.BookingListView__contents-booking__1ffMf, [class*="contents-booking"]');
+                    if (contentBooking) {
+                      const dateCell = contentBooking.querySelector('div[class*="book-date"]');
+                      if (dateCell) {
+                        useDate = dateCell.textContent.trim();
+                      }
+                    }
+                  }
+                  
+                  // 4. 태그 속성으로 시도
+                  if (!useDate) {
+                    const dateCells = Array.from(item.querySelectorAll('div'));
+                    for (const cell of dateCells) {
+                      if (cell.textContent.includes('오전') || cell.textContent.includes('오후')) {
+                        useDate = cell.textContent.trim();
+                        break;
+                      }
+                    }
+                  }
+                  
+                  // 메뉴(상품)
+                  const product = item.querySelector('.BookingListView__host__a\\+wPh, [class*="host"]')?.textContent.trim() || '';
+                  
+                  // 방문자
+                  const visitorElem = item.querySelector('.BookingListView__sub-text__njwgc, [class*="sub-text"]');
+                  const visitor = visitorElem ? visitorElem.textContent.trim().replace('방문자: ', '') : '';
+                  
+                  // 요청사항 - 다양한 방법으로 추출 시도
+                  let comment = '-';
+                  
+                  // 1. 정확한 클래스명으로 시도 (이스케이프 처리)
+                  const commentElem = item.querySelector('.BookingListView__comment__\\-1Fck');
+                  if (commentElem) {
+                    comment = commentElem.textContent.trim() || '-';
+                  } 
+                  // 2. 부분 클래스명으로 시도
+                  else {
+                    const commentCell = item.querySelector('[class*="comment"]');
+                    if (commentCell) {
+                      comment = commentCell.textContent.trim() || '-';
+                    }
+                  }
+                  
+                  // 3. 컨텐츠 영역에서 시도
+                  if (comment === '-') {
+                    const contentBooking = item.querySelector('.BookingListView__contents-booking__1ffMf, [class*="contents-booking"]');
+                    if (contentBooking) {
+                      const commentCell = contentBooking.querySelector('div[class*="comment"]');
+                      if (commentCell) {
+                        comment = commentCell.textContent.trim() || '-';
+                      }
+                    }
+                  }
+                  
+                  // 4. "요청사항" 텍스트가 포함된 요소 찾기
+                  if (comment === '-') {
+                    const labels = Array.from(item.querySelectorAll('div'));
+                    for (let i = 0; i < labels.length; i++) {
+                      if (labels[i].textContent.includes('요청사항') && i + 1 < labels.length) {
+                        comment = labels[i + 1].textContent.trim() || '-';
+                        break;
+                      }
+                    }
+                  }
+                  
+                  // 예약일
+                  const orderDate = item.querySelector('.BookingListView__order-date__ebBq\\+ span, [class*="order-date"] span, [class*="order-date"]')?.textContent.trim() || '';
+                  
+                  // 확정일
+                  const confirmDate = item.querySelector('.BookingListView__order-success-date__XEFuE, [class*="order-success-date"]')?.textContent.trim() || '-';
+                  
+                  // 취소일
+                  const cancelDate = item.querySelector('.BookingListView__order-cancel-date__\\-kOfn, [class*="order-cancel-date"]')?.textContent.trim() || '-';
+                  
+                  // 가격
+                  const price = item.querySelector('.BookingListView__total-price__Y2qoz, [class*="total-price"]')?.textContent.trim() || '0원';
+                  
+                  console.log("추출된 항목:", {
+                    name, useDate, comment, bookingNumber
+                  });
                   
                   return {
-                    status,
+                    status: finalStatus,
                     name,
+                    isProxy: item.querySelector('.BookingListView__label__BzZL5, [class*="label"]') ? '대리예약' : '',
+                    visitor,
                     phone,
-                    bookingNumber
+                    bookingNumber,
+                    useDate,
+                    product,
+                    menu: '',
+                    comment,
+                    price,
+                    orderDate,
+                    confirmDate,
+                    cancelDate
                   };
                 } catch (err) {
                   console.error('항목 추출 오류:', err);
@@ -558,200 +1167,48 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           })();
         `;
 
-        try {
-          // 스크립트 실행
-          const result = await webview.executeJavaScript(extractScript);
+        // 스크립트 실행
+        const result = await webview.executeJavaScript(extractScript);
 
-          if (result.error) {
-            console.error("추출 오류:", result.error);
-            throw new Error(result.error);
-          }
-
-          if (
-            result.success &&
-            result.reservations &&
-            result.reservations.length > 0
-          ) {
-            console.log(`${result.count}개의 예약을 추출했습니다.`);
-
-            // 실제 웹페이지에서 추출한 기본 정보에 샘플 데이터의 상세 정보를 조합
-            const enhancedData = result.reservations.map((item) => {
-              // 기본 구조
-              return {
-                status: item.status,
-                name: item.name,
-                isProxy: "",
-                visitor: "",
-                phone: item.phone,
-                bookingNumber: item.bookingNumber,
-                useDate: "25. 3. 31.(월) 오전 9:00", // 샘플 데이터
-                product: "초진 (첫 진료) 예약", // 샘플 데이터
-                menu: "",
-                comment: "-",
-                price: "0원",
-                orderDate: "25. 3. 31.(월) 오전 8:00", // 샘플 데이터
-                confirmDate: "25. 3. 31.(월) 오전 8:00", // 샘플 데이터
-                cancelDate: "-",
-              };
-            });
-
-            setReservations(enhancedData);
-            // Firestore 데이터 조회 후 비교
-            fetchFirestoreReservations(enhancedData);
-            setIsExtracting(false);
-            return;
-          } else {
-            throw new Error("예약 정보를 찾을 수 없습니다");
-          }
-        } catch (scriptError) {
-          console.error("스크립트 실행 오류:", scriptError);
-          throw new Error("스크립트 실행 중 오류 발생");
+        if (result.error) {
+          setIsExtracting(false);
+          showToast(`데이터 추출 오류: ${result.error}`, "error");
+          return;
         }
-      }
 
-      // 웹뷰가 없거나 스크립트 실행 오류 시 샘플 데이터 사용
-      throw new Error("샘플 데이터를 사용합니다");
-    } catch (error) {
-      console.log("샘플 데이터를 사용합니다:", error.message);
-
-      // 샘플 데이터 사용
-      setTimeout(() => {
-        const sampleData = [
-          {
-            status: "취소",
-            name: "임정은",
-            isProxy: "",
-            visitor: "",
-            phone: "010-8747-4940",
-            bookingNumber: "893949744",
-            useDate: "25. 3. 31.(월) 오전 9:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 30.(일) 오전 11:58",
-            confirmDate: "25. 3. 30.(일) 오전 11:58",
-            cancelDate: "25. 3. 30.(일) 오후 9:17",
-          },
-          {
-            status: "확정",
-            name: "신지숙",
-            isProxy: "",
-            visitor: "",
-            phone: "010-8667-9358",
-            bookingNumber: "894380288",
-            useDate: "25. 3. 31.(월) 오전 9:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오전 6:47",
-            confirmDate: "25. 3. 31.(월) 오전 6:47",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "김은새",
-            isProxy: "",
-            visitor: "",
-            phone: "010-4596-7841",
-            bookingNumber: "894414101",
-            useDate: "25. 3. 31.(월) 오전 9:30",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오전 8:27",
-            confirmDate: "25. 3. 31.(월) 오전 8:27",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "전진우",
-            isProxy: "",
-            visitor: "",
-            phone: "010-7511-7146",
-            bookingNumber: "894375721",
-            useDate: "25. 3. 31.(월) 오후 12:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "왼쪽발 통풍치료",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오전 5:55",
-            confirmDate: "25. 3. 31.(월) 오전 5:55",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "김수현",
-            isProxy: "",
-            visitor: "",
-            phone: "010-3958-9105",
-            bookingNumber: "894643483",
-            useDate: "25. 3. 31.(월) 오후 2:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오후 1:07",
-            confirmDate: "25. 3. 31.(월) 오후 1:07",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "정광혁",
-            isProxy: "",
-            visitor: "",
-            phone: "010-7674-0787",
-            bookingNumber: "894738943",
-            useDate: "25. 3. 31.(월) 오후 3:30",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오후 2:58",
-            confirmDate: "25. 3. 31.(월) 오후 2:58",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "박해성",
-            isProxy: "",
-            visitor: "",
-            phone: "010-5780-9338",
-            bookingNumber: "894769131",
-            useDate: "25. 3. 31.(월) 오후 4:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "-",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오후 3:34",
-            confirmDate: "25. 3. 31.(월) 오후 3:34",
-            cancelDate: "-",
-          },
-          {
-            status: "확정",
-            name: "김영재",
-            isProxy: "",
-            visitor: "",
-            phone: "010-5349-2440",
-            bookingNumber: "894801109",
-            useDate: "25. 3. 31.(월) 오후 5:00",
-            product: "초진 (첫 진료) 예약",
-            menu: "",
-            comment: "엄지손가락 부터 팔목까지 통증",
-            price: "0원",
-            orderDate: "25. 3. 31.(월) 오후 4:11",
-            confirmDate: "25. 3. 31.(월) 오후 4:11",
-            cancelDate: "-",
-          },
-        ];
-
-        setReservations(sampleData);
-        // 샘플 데이터도 Firestore와 비교하기
-        fetchFirestoreReservations(sampleData);
+        if (
+          result.success &&
+          result.reservations &&
+          result.reservations.length > 0
+        ) {
+          console.log(`${result.count}개의 예약을 추출했습니다.`);
+          setReservations(result.reservations);
+          // Firestore 데이터 조회 후 비교
+          fetchFirestoreReservations(result.reservations);
+          setIsExtracting(false);
+        } else {
+          setIsExtracting(false);
+          showToast(
+            "예약 정보를 찾을 수 없습니다. 네이버 예약 페이지에 로그인되어 있는지 확인해주세요.",
+            "warning"
+          );
+        }
+      } else {
         setIsExtracting(false);
-      }, 1000);
+        showToast(
+          "웹뷰를 사용할 수 없습니다. 데스크탑 앱에서 실행해주세요.",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("데이터 추출 오류:", error);
+      setIsExtracting(false);
+      showToast(
+        `데이터 추출 오류: ${
+          error.message || "알 수 없는 오류가 발생했습니다."
+        }`,
+        "error"
+      );
     }
   };
 
@@ -798,6 +1255,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           ...naverReservation,
           syncStatus: "CANCELLED",
           syncLabel: "⚫ 취소됨",
+          isCancelled: true,
         };
       }
 
@@ -807,6 +1265,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           ...naverReservation,
           syncStatus: "NEW",
           syncLabel: "🔴 미등록",
+          isCancelled: false,
         };
       }
 
@@ -830,6 +1289,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
             details: isDetailChanged,
           },
           existingData: existingReservation,
+          isCancelled: false,
         };
       }
 
@@ -838,135 +1298,269 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
         ...naverReservation,
         syncStatus: "SYNCED",
         syncLabel: "🟢 이미 등록됨",
+        isCancelled: false,
       };
     });
 
+    // 원래 네이버 예약 순서 유지 (취소된 예약 포함, 정렬하지 않음)
     setComparisonResults(results);
     setShowReservationList(true);
   };
 
-  // 예약 항목 선택 핸들러
+  // 예약 항목 선택 핸들러 수정
   const handleSelectReservation = (reservation) => {
     setSelectedReservation(reservation);
 
-    // 선택한 예약 정보를 구조화된 데이터로 변환
-    const dateInfo = formatReservationDate(reservation.useDate);
-
-    const extractedInfo = {
-      customerName: reservation.visitor || reservation.name,
-      phone: reservation.phone,
-      appointmentDate: dateInfo.date,
-      appointmentTime: dateInfo.time,
-      service: reservation.product,
-      doctor: "",
-      notes: reservation.comment !== "-" ? reservation.comment : "",
-      bookingNumber: reservation.bookingNumber,
-      status: reservation.status,
-      rawData: reservation,
-    };
-
-    setExtractedData(extractedInfo);
-    setShowDataPanel(true);
-  };
-
-  // 데이터 확인 및 예약 시스템으로 전송
-  const handleConfirmData = () => {
-    if (extractedData && onDataExtract) {
-      onDataExtract(extractedData);
-    }
-    setIsVisible(false);
-  };
-
-  // 동기화 버튼 관련 함수들
-  const handleSyncAll = async () => {
-    const newItems = comparisonResults.filter((r) => r.syncStatus === "NEW");
-    const changedItems = comparisonResults.filter(
-      (r) => r.syncStatus === "CHANGED"
-    );
-
-    // 신규 + 변경 예약 모두 동기화
-    const itemsToSync = [...newItems, ...changedItems];
-
-    if (itemsToSync.length === 0) {
-      alert("동기화할 예약이 없습니다.");
-      return;
-    }
-
-    await syncItems(itemsToSync);
-  };
-
-  const handleSyncNew = async () => {
-    const newItems = comparisonResults.filter((r) => r.syncStatus === "NEW");
-
-    if (newItems.length === 0) {
-      alert("신규 예약이 없습니다.");
-      return;
-    }
-
-    await syncItems(newItems);
-  };
-
-  const handleSyncChanged = async () => {
-    const changedItems = comparisonResults.filter(
-      (r) => r.syncStatus === "CHANGED"
-    );
-
-    if (changedItems.length === 0) {
-      alert("변경된 예약이 없습니다.");
-      return;
-    }
-
-    await syncItems(changedItems);
-  };
-
-  const handleSyncItem = async (item) => {
-    await syncItems([item]);
-  };
-
-  const syncItems = async (items) => {
-    if (!items || items.length === 0) return;
-
     try {
-      // 각 항목을 Firestore에 저장
-      for (const item of items) {
-        const dateInfo = formatReservationDate(item.useDate);
+      // 선택한 예약 정보를 구조화된 데이터로 변환
+      const dateInfo = formatReservationDate(reservation.useDate);
 
-        const reservationData = {
-          customerName: item.visitor || item.name,
-          phone: item.phone,
-          appointmentDate: dateInfo.date,
-          appointmentTime: dateInfo.time,
-          service: item.product,
-          notes: item.comment !== "-" ? item.comment : "",
-          bookingNumber: item.bookingNumber,
-          status: item.status === "취소" ? "canceled" : "confirmed",
-          source: "naver",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        // 기존 데이터가 있으면 업데이트, 없으면 신규 추가
-        if (item.syncStatus === "CHANGED" && item.existingData?.id) {
-          // 업데이트
-          await updateDoc(doc(db, "reservations", item.existingData.id), {
-            ...reservationData,
-            updatedAt: new Date(),
-          });
-        } else {
-          // 신규 추가
-          await addDoc(collection(db, "reservations"), reservationData);
-        }
+      // 날짜 정보가 기본값(현재 날짜/시간)으로 설정된 경우 경고 표시
+      if (dateInfo.isDefault) {
+        console.warn(
+          "날짜 정보 해석에 어려움이 있어 현재 날짜/시간을 사용합니다:",
+          reservation.useDate
+        );
+        showToast(
+          "날짜 형식을 파싱할 수 없어 현재 날짜와 시간을 사용합니다.",
+          "warning"
+        );
+      } else if (dateInfo.isPartialParsed) {
+        showToast("시간 정보가 없어 오전 9시로 설정합니다.", "info");
       }
 
-      // 동기화 후 데이터 다시 조회하여 UI 갱신
-      await fetchFirestoreReservations(reservations);
+      // 시작 시간에서 종료 시간 계산 (기본 30분)
+      const [hours, minutes] = dateInfo.time.split(":").map(Number);
+      let endHours = hours;
+      let endMinutes = minutes + 30;
 
-      // 성공 메시지
-      alert(`${items.length}건의 예약이 성공적으로 동기화되었습니다.`);
+      if (endMinutes >= 60) {
+        endHours += 1;
+        endMinutes -= 60;
+      }
+
+      const endTime = `${String(endHours).padStart(2, "0")}:${String(
+        endMinutes
+      ).padStart(2, "0")}`;
+
+      // reservation에 이미 담당자 정보가 있으면 사용, 없으면 현재 선택된 담당자 사용
+      const staffInfo = reservation.selectedStaff || selectedStaff;
+
+      // ScheduleGrid 예약 형식에 맞게 데이터 구성
+      const extractedInfo = {
+        date: dateInfo.date,
+        startTime: dateInfo.time,
+        endTime: endTime,
+        title: reservation.visitor || reservation.name,
+        type: "진료",
+        notes: reservation.comment !== "-" ? reservation.comment : "",
+        staffId: staffInfo.id,
+        staffName: staffInfo.name,
+
+        // 참조용 추가 필드
+        customerName: reservation.visitor || reservation.name,
+        phone: reservation.phone,
+        appointmentDate: dateInfo.date,
+        appointmentTime: dateInfo.time,
+        service: reservation.product,
+        bookingNumber: reservation.bookingNumber,
+        status: reservation.status === "취소" ? "canceled" : "confirmed",
+      };
+
+      setExtractedData(extractedInfo);
+      setShowDataPanel(true);
     } catch (error) {
-      console.error("동기화 오류:", error);
-      alert("동기화 중 오류가 발생했습니다.");
+      console.error("예약 선택 중 오류 발생:", error);
+      showToast(
+        "예약 정보 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+        "error"
+      );
     }
+  };
+
+  // 담당자 변경 핸들러
+  const handleStaffChange = (e) => {
+    const staffId = e.target.value;
+    const staff = staffList.find((s) => s.id === staffId) || {
+      id: staffId,
+      name: staffId,
+    };
+    setSelectedStaff(staff);
+
+    // 추출된 데이터 업데이트
+    if (extractedData) {
+      const formattedStaffId = staff.id.startsWith("doctor_")
+        ? staff.id
+        : "doctor_0";
+
+      setExtractedData({
+        ...extractedData,
+        staffId: formattedStaffId,
+        staffName: staff.name,
+      });
+    }
+  };
+
+  // 담당자 변경 핸들러 수정 - 특정 예약 항목의 담당자 변경
+  const handleItemStaffChange = (reservation, staffId) => {
+    // 선택한 담당자 정보 가져오기
+    const staff = staffList.find((s) => s.id === staffId) || {
+      id: staffId,
+      name: staffId,
+    };
+
+    // 예약 객체에 담당자 정보 저장
+    const updatedReservation = {
+      ...reservation,
+      selectedStaff: staff,
+    };
+
+    // 상태 업데이트 - reservation 목록에서 해당 항목 업데이트
+    setComparisonResults((prevResults) =>
+      prevResults.map((item) =>
+        item.bookingNumber === reservation.bookingNumber
+          ? updatedReservation
+          : item
+      )
+    );
+
+    // 현재 선택된 예약인 경우 extractedData도 업데이트
+    if (
+      selectedReservation?.bookingNumber === reservation.bookingNumber &&
+      extractedData
+    ) {
+      setExtractedData({
+        ...extractedData,
+        staffId: staff.id,
+        staffName: staff.name,
+      });
+    }
+  };
+
+  // 선택된 예약들을 한 번에 예약 시스템에 등록하는 함수
+  const handleBulkRegister = () => {
+    // 단일 예약 선택일 경우
+    if (selectedReservation && extractedData) {
+      try {
+        // ScheduleGrid 형식에 맞게 데이터 변환
+        const appointmentData = {
+          date: extractedData.date,
+          startTime: extractedData.startTime,
+          endTime: extractedData.endTime,
+          title: extractedData.title,
+          staffId: extractedData.staffId,
+          staffName: extractedData.staffName,
+          notes: `[네이버예약] ${extractedData.notes || ""} (연락처: ${
+            extractedData.phone || ""
+          }, 서비스: ${extractedData.service || ""})`.trim(),
+          type: "진료",
+          dateIndex: 0, // 날짜 인덱스는 일정표에서 계산됨
+          bookingNumber: extractedData.bookingNumber || "",
+        };
+
+        if (onDataExtract) {
+          onDataExtract(appointmentData);
+          showToast("예약이 등록되었습니다.", "success");
+          setIsVisible(false);
+          return;
+        }
+      } catch (error) {
+        console.error("예약 등록 중 오류:", error);
+        showToast("예약 등록에 실패했습니다.", "error");
+        return;
+      }
+    }
+
+    // 선택된 예약 항목들 가져오기
+    const selectedItems = comparisonResults.filter((res) => res.isSelected);
+
+    if (selectedItems.length === 0) {
+      showToast("등록할 예약을 선택해주세요.", "warning");
+      return;
+    }
+
+    // 등록 성공 및 실패 카운트
+    let successCount = 0;
+    let failCount = 0;
+
+    // 각 예약 항목을 처리
+    selectedItems.forEach((reservation) => {
+      try {
+        const dateInfo = formatReservationDate(reservation.useDate);
+
+        // 시작 시간에서 종료 시간 계산 (기본 30분)
+        const [hours, minutes] = dateInfo.time.split(":").map(Number);
+        let endHours = hours;
+        let endMinutes = minutes + 30;
+
+        if (endMinutes >= 60) {
+          endHours += 1;
+          endMinutes -= 60;
+        }
+
+        const endTime = `${String(endHours).padStart(2, "0")}:${String(
+          endMinutes
+        ).padStart(2, "0")}`;
+
+        const staffInfo = reservation.selectedStaff || selectedStaff;
+
+        // ScheduleGrid 형식에 맞게 데이터 변환
+        const appointmentData = {
+          date: dateInfo.date,
+          startTime: dateInfo.time,
+          endTime: endTime,
+          title: reservation.visitor || reservation.name,
+          staffId: staffInfo.id,
+          staffName: staffInfo.name,
+          notes: `[네이버예약] ${
+            reservation.comment !== "-" ? reservation.comment : ""
+          } (연락처: ${reservation.phone || ""}, 서비스: ${
+            reservation.product || ""
+          })`.trim(),
+          type: "진료",
+          dateIndex: 0, // 날짜 인덱스는 일정표에서 계산됨
+          bookingNumber: reservation.bookingNumber || "",
+        };
+
+        // 콜백을 통해 예약 등록
+        if (onDataExtract) {
+          onDataExtract(appointmentData);
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error("예약 등록 중 오류:", error);
+        failCount++;
+      }
+    });
+
+    if (successCount > 0) {
+      showToast(`${successCount}건의 예약이 등록되었습니다.`, "success");
+      setIsVisible(false);
+    } else if (failCount > 0) {
+      showToast(`예약 등록에 실패했습니다.`, "error");
+    }
+  };
+
+  // 예약 항목 선택/선택 해제 토글 핸들러
+  const toggleItemSelection = (reservation) => {
+    setComparisonResults((prevResults) =>
+      prevResults.map((item) =>
+        item.bookingNumber === reservation.bookingNumber
+          ? { ...item, isSelected: !item.isSelected }
+          : item
+      )
+    );
+  };
+
+  // 모든 예약 항목 선택/선택 해제 핸들러
+  const toggleSelectAll = () => {
+    const hasUnselected = comparisonResults.some((res) => !res.isSelected);
+
+    setComparisonResults((prevResults) =>
+      prevResults.map((item) => ({ ...item, isSelected: hasUnselected }))
+    );
   };
 
   if (!isVisible) return null;
@@ -1045,6 +1639,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
             </div>
           )}
 
+          {/* 예약 목록 UI 개선 */}
           {showReservationList && comparisonResults.length > 0 && (
             <ReservationList>
               <div
@@ -1057,283 +1652,479 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
               >
                 <h3
                   style={{
-                    fontSize: "16px",
+                    fontSize: "18px",
                     fontWeight: "600",
                     color: "#2d3748",
                   }}
                 >
-                  추출된 예약 ({comparisonResults.length}건)
+                  네이버 예약 목록 ({comparisonResults.length}건
+                  {comparisonResults.filter((res) => res.status === "취소")
+                    .length > 0 &&
+                    `, 취소 ${
+                      comparisonResults.filter((res) => res.status === "취소")
+                        .length
+                    }건 포함`}
+                  )
                 </h3>
-                <div style={{ display: "flex", gap: "8px" }}>
+                <div>
                   <ActionButton
                     className="secondary"
                     onClick={() => setShowReservationList(false)}
-                    style={{ padding: "4px 8px" }}
+                    style={{ padding: "6px 10px" }}
                   >
                     닫기
                   </ActionButton>
                 </div>
               </div>
 
-              <StatusCount style={{ marginBottom: "16px" }}>
-                <StatusBadge type="NEW">
-                  🔴 미등록:{" "}
-                  {
-                    comparisonResults.filter((r) => r.syncStatus === "NEW")
-                      .length
-                  }
-                  건
-                </StatusBadge>
-                <StatusBadge type="CHANGED">
-                  🔶 변경됨:{" "}
-                  {
-                    comparisonResults.filter((r) => r.syncStatus === "CHANGED")
-                      .length
-                  }
-                  건
-                </StatusBadge>
-                <StatusBadge type="SYNCED">
-                  🟢 등록됨:{" "}
-                  {
-                    comparisonResults.filter((r) => r.syncStatus === "SYNCED")
-                      .length
-                  }
-                  건
-                </StatusBadge>
-                <StatusBadge type="CANCELLED">
-                  ⚫ 취소됨:{" "}
-                  {
-                    comparisonResults.filter(
-                      (r) => r.syncStatus === "CANCELLED"
-                    ).length
-                  }
-                  건
-                </StatusBadge>
-              </StatusCount>
-
-              <ActionButtons style={{ marginBottom: "16px" }}>
-                {comparisonResults.filter(
-                  (r) => r.syncStatus === "NEW" || r.syncStatus === "CHANGED"
-                ).length > 0 && (
-                  <ActionButton className="primary" onClick={handleSyncAll}>
-                    모두 동기화
-                  </ActionButton>
-                )}
-                {comparisonResults.filter((r) => r.syncStatus === "NEW")
-                  .length > 0 && (
-                  <ActionButton className="secondary" onClick={handleSyncNew}>
-                    신규만 동기화
-                  </ActionButton>
-                )}
-                {comparisonResults.filter((r) => r.syncStatus === "CHANGED")
-                  .length > 0 && (
-                  <ActionButton
-                    className="secondary"
-                    onClick={handleSyncChanged}
+              <div
+                style={{
+                  marginBottom: "16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    id="select-all"
+                    onChange={toggleSelectAll}
+                    checked={comparisonResults
+                      .filter((res) => res.status !== "취소")
+                      .every((res) => res.isSelected)}
+                    style={{ marginRight: "8px" }}
+                  />
+                  <label
+                    htmlFor="select-all"
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      color: "#4a5568",
+                    }}
                   >
-                    변경만 동기화
-                  </ActionButton>
-                )}
-              </ActionButtons>
+                    전체 선택 (취소 제외)
+                  </label>
+                </div>
+                <ActionButton
+                  className="primary"
+                  onClick={handleBulkRegister}
+                  style={{ padding: "8px 16px" }}
+                >
+                  선택한 예약 등록하기
+                </ActionButton>
+              </div>
 
-              <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                {comparisonResults
-                  .sort((a, b) => {
-                    // 상태 우선순위: NEW > CHANGED > CANCELLED > SYNCED
-                    const priority = {
-                      NEW: 0,
-                      CHANGED: 1,
-                      CANCELLED: 2,
-                      SYNCED: 3,
-                    };
-                    return priority[a.syncStatus] - priority[b.syncStatus];
-                  })
-                  .map((reservation, index) => (
-                    <ReservationItem
-                      key={index}
-                      className={
-                        selectedReservation === reservation ? "selected" : ""
-                      }
-                      onClick={() => handleSelectReservation(reservation)}
+              <ReservationListScroll>
+                {comparisonResults.map((reservation) => (
+                  <ReservationItem
+                    key={reservation.bookingNumber}
+                    className={
+                      selectedReservation?.bookingNumber ===
+                      reservation.bookingNumber
+                        ? "selected"
+                        : ""
+                    }
+                    onClick={() => handleSelectReservation(reservation)}
+                    isCancelled={reservation.isCancelled}
+                  >
+                    {/* 상단 영역: 체크박스, 상태 태그, 예약번호 */}
+                    <div
                       style={{
-                        borderColor:
-                          reservation.syncStatus === "NEW"
-                            ? "#fecaca"
-                            : reservation.syncStatus === "CHANGED"
-                            ? "#fde68a"
-                            : reservation.syncStatus === "CANCELLED"
-                            ? "#e5e7eb"
-                            : "#bbf7d0",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "10px",
                       }}
                     >
-                      <ReservationHeader>
-                        <div style={{ display: "flex", alignItems: "center" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        {/* 체크박스 */}
+                        {reservation.status !== "취소" ? (
+                          <input
+                            type="checkbox"
+                            checked={reservation.isSelected || false}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleItemSelection(reservation);
+                            }}
+                          />
+                        ) : (
                           <StatusTag
                             style={{
-                              backgroundColor:
-                                reservation.syncStatus === "NEW"
-                                  ? "#ef4444"
-                                  : reservation.syncStatus === "CHANGED"
-                                  ? "#f59e0b"
-                                  : reservation.syncStatus === "CANCELLED"
-                                  ? "#374151"
-                                  : "#22c55e",
+                              backgroundColor: "#718096",
+                              width: "16px",
+                              height: "16px",
+                              padding: "0",
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
                             }}
-                          >
-                            {reservation.syncLabel || reservation.status}
-                          </StatusTag>
-                          <ReservationName>
-                            {reservation.name}
-                            {reservation.isProxy && (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  marginLeft: "6px",
-                                  color: "#6b7280",
-                                  fontWeight: "normal",
-                                }}
-                              >
-                                ({reservation.isProxy})
-                              </span>
-                            )}
-                          </ReservationName>
-                        </div>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          {(reservation.syncStatus === "NEW" ||
-                            reservation.syncStatus === "CHANGED") && (
-                            <ActionButton
-                              className="primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSyncItem(reservation);
-                              }}
-                              style={{ padding: "4px 8px", fontSize: "12px" }}
-                            >
-                              동기화
-                            </ActionButton>
-                          )}
-                          <ReservationDate>
-                            {reservation.useDate}
-                          </ReservationDate>
-                        </div>
-                      </ReservationHeader>
+                          ></StatusTag>
+                        )}
 
-                      {reservation.visitor && (
-                        <ReservationDetail>
-                          <DetailLabel>방문자:</DetailLabel>
-                          <DetailValue>{reservation.visitor}</DetailValue>
-                        </ReservationDetail>
-                      )}
+                        {/* 상태 태그 */}
+                        <StatusTag
+                          style={{
+                            backgroundColor:
+                              reservation.status === "취소"
+                                ? "#718096"
+                                : reservation.syncStatus === "NEW"
+                                ? "#f56565"
+                                : reservation.syncStatus === "CHANGED"
+                                ? "#f6ad55"
+                                : "#3b82f6",
+                            padding: "3px 8px",
+                            fontSize: "12px",
+                            display: "inline-block",
+                          }}
+                        >
+                          {reservation.status === "취소"
+                            ? "취소됨"
+                            : reservation.syncStatus === "NEW"
+                            ? "미등록"
+                            : reservation.syncStatus === "CHANGED"
+                            ? "변경됨"
+                            : "등록됨"}
+                        </StatusTag>
+                      </div>
 
-                      <ReservationDetail>
-                        <DetailLabel>연락처:</DetailLabel>
-                        <DetailValue>{reservation.phone}</DetailValue>
-                      </ReservationDetail>
+                      {/* 예약번호 */}
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color:
+                            reservation.status === "취소"
+                              ? "#94a3b8"
+                              : "#718096",
+                          fontWeight: "500",
+                        }}
+                      >
+                        #{reservation.bookingNumber || "번호없음"}
+                      </div>
+                    </div>
 
-                      <ReservationDetail>
-                        <DetailLabel>예약번호:</DetailLabel>
-                        <DetailValue>{reservation.bookingNumber}</DetailValue>
-                      </ReservationDetail>
-
-                      <ReservationDetail>
-                        <DetailLabel>상품:</DetailLabel>
-                        <DetailValue>{reservation.product}</DetailValue>
-                      </ReservationDetail>
-
-                      {reservation.comment && reservation.comment !== "-" && (
-                        <ReservationDetail>
-                          <DetailLabel>요청사항:</DetailLabel>
-                          <DetailValue>{reservation.comment}</DetailValue>
-                        </ReservationDetail>
-                      )}
-
-                      {reservation.syncStatus === "CHANGED" &&
-                        reservation.changes && (
-                          <div
+                    {/* 예약자 정보 영역 */}
+                    <div
+                      style={{
+                        marginBottom: "12px",
+                        padding: "8px",
+                        backgroundColor:
+                          reservation.status === "취소" ? "#f8fafc" : "#f0f9ff",
+                        borderRadius: "6px",
+                        border: `1px solid ${
+                          reservation.status === "취소" ? "#e2e8f0" : "#bfdbfe"
+                        }`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: "600",
+                          fontSize: "15px",
+                          marginBottom: "6px",
+                          color:
+                            reservation.status === "취소"
+                              ? "#718096"
+                              : "#2d3748",
+                        }}
+                      >
+                        {reservation.visitor || reservation.name}
+                        {reservation.isProxy && (
+                          <span
                             style={{
-                              marginTop: "8px",
-                              fontSize: "13px",
-                              color: "#b45309",
-                              padding: "8px",
-                              backgroundColor: "#fffbeb",
+                              fontSize: "12px",
+                              color: "#8b5cf6",
+                              fontWeight: "normal",
+                              marginLeft: "5px",
+                              backgroundColor: "#f3e8ff",
+                              padding: "2px 6px",
                               borderRadius: "4px",
                             }}
                           >
-                            <div
-                              style={{ fontWeight: "600", marginBottom: "4px" }}
-                            >
-                              변경된 정보:
-                            </div>
-                            {reservation.changes.time && (
-                              <div>• 예약 시간이 변경되었습니다</div>
-                            )}
-                            {reservation.changes.details && (
-                              <div>• 요청사항이 변경되었습니다</div>
-                            )}
-                          </div>
+                            대리예약
+                          </span>
                         )}
-                    </ReservationItem>
-                  ))}
-              </div>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          color:
+                            reservation.status === "취소"
+                              ? "#94a3b8"
+                              : "#4a5568",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ marginRight: "8px" }}>📞</span>
+                        {reservation.phone || "연락처 없음"}
+                      </div>
+                    </div>
+
+                    {/* 이용일시 및 상품 */}
+                    <div
+                      style={{
+                        marginBottom: "12px",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        backgroundColor:
+                          reservation.status === "취소" ? "#f8fafc" : "#f0f9ff",
+                        border: `1px solid ${
+                          reservation.status === "취소" ? "#e2e8f0" : "#bfdbfe"
+                        }`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          display: "flex",
+                          alignItems: "center",
+                          marginBottom: "6px",
+                          color:
+                            reservation.status === "취소"
+                              ? "#718096"
+                              : "#2d3748",
+                        }}
+                      >
+                        <span style={{ marginRight: "8px" }}>🕒</span>
+                        <span style={{ fontWeight: "bold" }}>
+                          {reservation.useDate || "일시 정보 없음"}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          display: "flex",
+                          alignItems: "center",
+                          color:
+                            reservation.status === "취소"
+                              ? "#718096"
+                              : "#2d3748",
+                        }}
+                      >
+                        <span style={{ marginRight: "8px" }}>🏥</span>
+                        <span style={{ fontWeight: "500" }}>
+                          {reservation.product || "-"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 요청사항이 '-'가 아닐 때만 표시 */}
+                    {reservation.comment && reservation.comment !== "-" && (
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          marginBottom: "12px",
+                          padding: "10px 12px",
+                          borderRadius: "6px",
+                          border: `1px solid ${
+                            reservation.status === "취소"
+                              ? "#e2e8f0"
+                              : "#93c5fd"
+                          }`,
+                          borderLeft: `4px solid ${
+                            reservation.status === "취소"
+                              ? "#94a3b8"
+                              : "#3b82f6"
+                          }`,
+                          backgroundColor:
+                            reservation.status === "취소"
+                              ? "#f8fafc"
+                              : "#f0f9ff",
+                          color:
+                            reservation.status === "취소"
+                              ? "#718096"
+                              : "#2d3748",
+                        }}
+                      >
+                        <div style={{ marginBottom: "6px", fontWeight: "600" }}>
+                          📝 요청사항
+                        </div>
+                        {reservation.comment}
+                      </div>
+                    )}
+
+                    {/* 담당자 선택 또는 취소된 예약 표시 */}
+                    <div>
+                      {reservation.status === "취소" ? (
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            backgroundColor: "#f1f5f9",
+                            color: "#64748b",
+                            borderRadius: "6px",
+                            fontWeight: "500",
+                            border: "1px dashed #cbd5e1",
+                          }}
+                        >
+                          ❌ 취소된 예약입니다
+                        </div>
+                      ) : (
+                        <div>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              marginBottom: "6px",
+                              fontWeight: "600",
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span style={{ marginRight: "5px" }}>👨‍⚕️</span>
+                            담당자 선택
+                          </div>
+                          <select
+                            value={
+                              reservation.selectedStaff?.id || selectedStaff.id
+                            }
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleItemStaffChange(
+                                reservation,
+                                e.target.value
+                              );
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              borderRadius: "6px",
+                              border: "1px solid #e2e8f0",
+                              backgroundColor: "#f7fafc",
+                              cursor: "pointer",
+                              fontSize: "14px",
+                              fontWeight: "500",
+                              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <option value="">-- 담당자 선택 --</option>
+                            {staffList.map((staff) => (
+                              <option key={staff.id} value={staff.id}>
+                                {staff.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </ReservationItem>
+                ))}
+              </ReservationListScroll>
             </ReservationList>
           )}
 
           {showDataPanel && extractedData && (
             <ExtractedDataContainer>
-              <h3
+              <div
                 style={{
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  marginBottom: "16px",
-                  color: "#2d3748",
+                  marginBottom: "20px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                추출된 예약 정보
-              </h3>
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    color: "#2d3748",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: "10px",
+                      height: "10px",
+                      background: "#4299e1",
+                      borderRadius: "50%",
+                      marginRight: "8px",
+                    }}
+                  ></span>
+                  추출된 예약 정보
+                </h3>
+                <ActionButton
+                  className="secondary"
+                  onClick={() => setShowDataPanel(false)}
+                  style={{ padding: "6px 10px", fontSize: "13px" }}
+                >
+                  <IoCloseOutline size={16} />
+                </ActionButton>
+              </div>
 
               <DataItem>
-                <DataLabel>환자명</DataLabel>
-                <DataValue>{extractedData.customerName}</DataValue>
+                <DataLabel>예약번호</DataLabel>
+                <DataValue>
+                  #{extractedData.bookingNumber || "번호없음"}
+                </DataValue>
+              </DataItem>
+
+              <DataItem>
+                <DataLabel>예약자</DataLabel>
+                <DataValue>{extractedData.title}</DataValue>
               </DataItem>
 
               <DataItem>
                 <DataLabel>연락처</DataLabel>
-                <DataValue>{extractedData.phone}</DataValue>
+                <DataValue>{extractedData.phone || "연락처 없음"}</DataValue>
               </DataItem>
 
               <DataItem>
-                <DataLabel>예약일</DataLabel>
-                <DataValue>{extractedData.appointmentDate}</DataValue>
+                <DataLabel>이용일시</DataLabel>
+                <DataValue>
+                  {extractedData.date} {extractedData.startTime} ~{" "}
+                  {extractedData.endTime}
+                </DataValue>
               </DataItem>
 
               <DataItem>
-                <DataLabel>예약시간</DataLabel>
-                <DataValue>{extractedData.appointmentTime}</DataValue>
+                <DataLabel>상품</DataLabel>
+                <DataValue>{extractedData.service || "없음"}</DataValue>
               </DataItem>
 
               <DataItem>
-                <DataLabel>서비스</DataLabel>
-                <DataValue>{extractedData.service}</DataValue>
+                <DataLabel>요청사항</DataLabel>
+                <DataValue>{extractedData.notes || "없음"}</DataValue>
               </DataItem>
-
-              {extractedData.notes && (
-                <DataItem>
-                  <DataLabel>메모</DataLabel>
-                  <DataValue>{extractedData.notes}</DataValue>
-                </DataItem>
-              )}
 
               <DataItem>
-                <DataLabel>예약번호</DataLabel>
-                <DataValue>{extractedData.bookingNumber}</DataValue>
+                <DataLabel>담당자</DataLabel>
+                <StaffDropdown
+                  value={selectedStaff.id}
+                  onChange={handleStaffChange}
+                >
+                  {staffList.map((staff) => (
+                    <StaffOption key={staff.id} value={staff.id}>
+                      {staff.name}
+                    </StaffOption>
+                  ))}
+                </StaffDropdown>
               </DataItem>
 
-              <div
+              <DataItem>
+                <DataLabel>등록노트</DataLabel>
+                <DataValue
+                  style={{ backgroundColor: "#f0f9ff", color: "#2b6cb0" }}
+                >
+                  {`[네이버예약] ${extractedData.notes || ""} (연락처: ${
+                    extractedData.phone || ""
+                  }, 서비스: ${extractedData.service || ""})`.trim()}
+                </DataValue>
+              </DataItem>
+
+              <ButtonGroup
                 style={{
-                  marginTop: "16px",
+                  marginTop: "20px",
                   display: "flex",
                   justifyContent: "flex-end",
-                  gap: "8px",
                 }}
               >
                 <ActionButton
@@ -1342,50 +2133,66 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
                 >
                   취소
                 </ActionButton>
-                <ActionButton className="primary" onClick={handleConfirmData}>
+                <ActionButton className="primary" onClick={handleBulkRegister}>
+                  <IoCheckmarkCircleOutline
+                    size={18}
+                    style={{ marginRight: "4px" }}
+                  />
                   예약 등록하기
                 </ActionButton>
-              </div>
+              </ButtonGroup>
             </ExtractedDataContainer>
           )}
         </WebViewContainer>
 
         <ControlPanel>
           <ReservationStatus>
-            {useDirectWebview
-              ? "네이버 예약 페이지에서 확인하려는 예약을 선택하세요."
-              : "외부 브라우저에서 확인한 예약 정보를 추출하려면 아래 버튼을 클릭하세요."}
-          </ReservationStatus>
-
-          <div style={{ display: "flex", gap: "12px" }}>
-            {showReservationList ? (
-              <ActionButton
-                className="primary"
-                onClick={() => setShowReservationList(true)}
-              >
-                <IoCheckmarkCircleOutline />
-                예약 목록 보기
-              </ActionButton>
+            {isExtracting ? (
+              <>
+                <SpinningIcon style={{ marginRight: "8px" }} /> 예약 데이터 추출
+                중...
+              </>
             ) : (
+              <>
+                {reservations.length > 0
+                  ? `${reservations.length}건의 예약 정보가 로드되었습니다`
+                  : "실제 네이버 예약 정보를 불러오려면 '예약 추출하기' 버튼을 클릭하세요"}
+              </>
+            )}
+          </ReservationStatus>
+          <ButtonGroup>
+            {reservations.length > 0 && (
               <ActionButton
-                className="primary"
-                onClick={handleExtractData}
-                disabled={isExtracting}
+                className="secondary"
+                onClick={() => setShowReservationList(!showReservationList)}
               >
-                {isExtracting ? (
+                {showReservationList ? (
                   <>
-                    <SpinningIcon />
-                    데이터 분석 중...
+                    <IoCloseOutline /> 목록 닫기
                   </>
                 ) : (
                   <>
-                    <IoDownloadOutline />
-                    예약 정보 가져오기
+                    <IoOpenOutline /> 목록 보기
                   </>
                 )}
               </ActionButton>
             )}
-          </div>
+            <ActionButton
+              className="primary"
+              onClick={handleExtractData}
+              title="실제 로그인된 네이버 예약 페이지에서만 데이터를 추출합니다"
+            >
+              {isExtracting ? (
+                <>
+                  <SpinningIcon /> 추출 중...
+                </>
+              ) : (
+                <>
+                  <IoDownloadOutline /> 예약 추출하기
+                </>
+              )}
+            </ActionButton>
+          </ButtonGroup>
         </ControlPanel>
       </ModalContainer>
     </ModalOverlay>

@@ -278,7 +278,7 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-600">결제 필요</p>
+            <p className="text-sm font-medium text-gray-600">결재 필요</p>
             <p className="text-base font-bold text-yellow-600">
               {approvalCount}건
             </p>

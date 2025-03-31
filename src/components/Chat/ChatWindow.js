@@ -17,6 +17,8 @@ import {
 } from "./ChatService";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import { IoPaperPlaneSharp } from "react-icons/io5";
+import { db } from "../../firebase.js";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const Container = styled.div`
   display: flex;
@@ -1455,9 +1457,34 @@ const ChatWindow = () => {
   // 컴포넌트 언마운트 시 구독 정리
   useEffect(() => {
     return () => {
+      // 구독 해제
       if (messageUnsubscribe) {
+        console.log("채팅 메시지 구독 해제");
         messageUnsubscribe();
+        setMessageUnsubscribe(null);
       }
+    };
+  }, [messageUnsubscribe]);
+
+  // 라우팅 변경 감지(홈으로 이동 등)를 위한 추가 정리 함수
+  useEffect(() => {
+    const cleanupResources = () => {
+      console.log("리소스 정리 실행");
+      if (messageUnsubscribe) {
+        console.log("채팅 메시지 구독 해제 (navigation)");
+        messageUnsubscribe();
+        setMessageUnsubscribe(null);
+        setMessages([]); // 메시지 상태 초기화
+      }
+    };
+
+    window.addEventListener("beforeunload", cleanupResources);
+    window.addEventListener("popstate", cleanupResources);
+
+    return () => {
+      window.removeEventListener("beforeunload", cleanupResources);
+      window.removeEventListener("popstate", cleanupResources);
+      cleanupResources(); // 컴포넌트 언마운트 시에도 강제 정리
     };
   }, [messageUnsubscribe]);
 
@@ -1923,6 +1950,80 @@ const ChatWindow = () => {
         name: selectedSender.name,
         deviceId: deviceId,
       });
+
+      // 멘션 감지 및 호출 알림 생성
+      const mentionRegex = /@(\S+)/g;
+      const mentions = textToSend.match(mentionRegex);
+
+      if (mentions && mentions.length > 0) {
+        // 중복 제거한 멘션 목록
+        const uniqueMentions = [...new Set(mentions)];
+
+        for (const mention of uniqueMentions) {
+          // 멘션된 사용자 이름 추출 (@제거)
+          const mentionedName = mention.slice(1);
+
+          // '@전체' 멘션은 제외 - 기능 숨김
+          if (mentionedName === "전체") {
+            console.log("전체 멘션은 현재 비활성화되어 있습니다.");
+            continue;
+          }
+
+          // 멘션된 사용자 찾기
+          const mentionedUser = mentionableUsers.find(
+            (user) =>
+              user.name === mentionedName ||
+              user.displayName === mentionedName ||
+              user.displayText?.includes(mentionedName)
+          );
+
+          if (mentionedUser && mentionedUser.department) {
+            const userDepartment = mentionedUser.department;
+            console.log(
+              `멘션된 사용자: ${mentionedName}, 부서: ${userDepartment}`
+            );
+
+            // 부서 이름 표준화 - 팀 접미사 추가
+            let departmentName = userDepartment;
+            if (!departmentName.includes("팀")) {
+              departmentName = `${departmentName}팀`;
+            }
+
+            // 현재 시간 포맷팅
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, "0");
+            const minutes = String(now.getMinutes()).padStart(2, "0");
+            const formattedTime = `${hours}:${minutes}`;
+
+            // 호출 알림 데이터 구성
+            const callData = {
+              message: `${selectedRoom.name}에서 ${selectedSender.name}님이 ${mentionedName}(${departmentName})님을 언급했습니다.`,
+              receiverId: departmentName, // 부서를 receiverId로 설정
+              senderId: selectedSender.name,
+              formattedTime,
+              createdAt: Date.now(),
+              createdAt2: serverTimestamp(),
+              type: "chat",
+              department: departmentName,
+              senderInfo: selectedSender.name,
+            };
+
+            // Firestore에 호출 알림 저장
+            try {
+              const docRef = await addDoc(collection(db, "calls"), callData);
+              console.log(
+                `${mentionedName}(${departmentName}) 멘션 호출 생성 완료 - 문서 ID: ${docRef.id}`
+              );
+            } catch (error) {
+              console.error("멘션 호출 생성 오류:", error);
+            }
+          } else {
+            console.log(
+              `멘션된 사용자를 찾을 수 없거나 부서 정보가 없습니다: ${mentionedName}`
+            );
+          }
+        }
+      }
 
       // 답장 상태 초기화
       setReplyToMessage(null);

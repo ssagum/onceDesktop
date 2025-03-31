@@ -1297,7 +1297,7 @@ const Schedule = () => {
                 </ToggleOption>
               </ToggleContainer>
 
-              {/* 네이버 예약 버튼 컴포넌트로 교체 */}
+              {/*
               <NaverReservationTrigger
                 onDataExtract={handleExtractedData}
                 buttonStyle={{
@@ -1305,7 +1305,7 @@ const Schedule = () => {
                   padding: "8px 16px",
                   fontSize: "14px",
                 }}
-              />
+              /> */}
             </div>
 
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
