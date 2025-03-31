@@ -1216,6 +1216,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   const fetchFirestoreReservations = async (naverReservations) => {
     try {
       // Firestore에서 예약 데이터 조회
+      console.log("Firebase에서 기존 예약 데이터 조회 시작");
       const reservationsRef = collection(db, "reservations");
       const q = query(reservationsRef, where("isHidden", "!=", true));
       const querySnapshot = await getDocs(q);
@@ -1223,6 +1224,11 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       const firestoreData = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        console.log(
+          `Firebase 예약 데이터 로드: ID=${doc.id}, 번호=${
+            data.bookingNumber || "번호없음"
+          }`
+        );
         firestoreData.push({
           ...data,
           id: doc.id,
@@ -1231,6 +1237,9 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       });
 
       setFirestoreReservations(firestoreData);
+      console.log(
+        `Firebase에서 총 ${firestoreData.length}개의 예약 데이터 로드 완료`
+      );
 
       // 데이터 로드 후 자동으로 비교 및 분류 실행
       compareAndCategorize(naverReservations, firestoreData);
@@ -1244,11 +1253,6 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   // 네이버 예약과 Firestore 데이터 비교 및 분류
   const compareAndCategorize = (naverReservations, firestoreData) => {
     const results = naverReservations.map((naverReservation) => {
-      // 예약번호로 매칭 (기본 키)
-      const existingReservation = firestoreData.find(
-        (r) => r.bookingNumber === naverReservation.bookingNumber
-      );
-
       // 취소된 예약 먼저 처리
       if (naverReservation.status === "취소") {
         return {
@@ -1259,46 +1263,44 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
         };
       }
 
-      // 신규 예약 처리
+      // 예약 ID 생성
+      const customerName = naverReservation.visitor || naverReservation.name;
+      const bookingId = generateBookingId(
+        customerName,
+        naverReservation.bookingNumber
+      );
+
+      // 예약번호 기반 매칭 또는 ID 기반 매칭
+      const existingReservationByNumber = firestoreData.find(
+        (r) => r.bookingNumber === naverReservation.bookingNumber
+      );
+
+      const existingReservationById = firestoreData.find(
+        (r) => r.documentId === bookingId
+      );
+
+      // ID 또는 예약번호로 매칭된 항목이 없으면 신규 예약
+      const existingReservation =
+        existingReservationById || existingReservationByNumber;
+
       if (!existingReservation) {
         return {
           ...naverReservation,
           syncStatus: "NEW",
           syncLabel: "🔴 미등록",
           isCancelled: false,
+          documentId: bookingId, // 생성된 ID 저장
         };
       }
 
-      // 변경사항 감지
-      const naverDate = formatReservationDate(naverReservation.useDate);
-      const isTimeChanged =
-        naverDate.date !== existingReservation.date ||
-        naverDate.time !== existingReservation.time;
-
-      const isDetailChanged =
-        (naverReservation.comment !== "-" ? naverReservation.comment : "") !==
-        (existingReservation.notes || "");
-
-      if (isTimeChanged || isDetailChanged) {
-        return {
-          ...naverReservation,
-          syncStatus: "CHANGED",
-          syncLabel: "🔶 변경사항 있음",
-          changes: {
-            time: isTimeChanged,
-            details: isDetailChanged,
-          },
-          existingData: existingReservation,
-          isCancelled: false,
-        };
-      }
-
-      // 일치하는 예약
+      // 예약이 이미 Firebase에 존재하면 무조건 등록됨 상태로 표시
+      // 내용이 변경되었는지 여부는 더 이상 확인하지 않음
       return {
         ...naverReservation,
         syncStatus: "SYNCED",
         syncLabel: "🟢 이미 등록됨",
         isCancelled: false,
+        documentId: bookingId, // 생성된 ID 저장
       };
     });
 
@@ -1440,7 +1442,37 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
     }
   };
 
-  // 선택된 예약들을 한 번에 예약 시스템에 등록하는 함수
+  // 예약 등록 후 목록 갱신 함수 추가
+  const refreshReservationList = async () => {
+    try {
+      console.log("예약 목록 새로고침 시작");
+
+      // 기존 네이버 예약 정보 유지하면서 Firebase 데이터만 다시 가져오기
+      const reservationsRef = collection(db, "reservations");
+      const q = query(reservationsRef, where("isHidden", "!=", true));
+      const querySnapshot = await getDocs(q);
+
+      const firestoreData = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        firestoreData.push({
+          ...data,
+          id: doc.id,
+          bookingNumber: data.bookingNumber || "",
+        });
+      });
+
+      console.log(
+        `Firebase에서 총 ${firestoreData.length}개의 예약 데이터 새로 로드 완료`
+      );
+
+      // 기존 네이버 예약 데이터와 새로 로드한 Firebase 데이터로 비교 및 상태 업데이트
+      compareAndCategorize(reservations, firestoreData);
+    } catch (error) {
+      console.error("예약 목록 새로고침 중 오류:", error);
+    }
+  };
+
   const handleBulkRegister = async () => {
     // 단일 예약 선택일 경우
     if (selectedReservation && extractedData) {
@@ -1459,6 +1491,12 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           }
         }
 
+        // 예약 ID 생성 (페이지 전체에서 고유하게 식별 가능한 값)
+        const bookingId = generateBookingId(
+          extractedData.title,
+          extractedData.bookingNumber
+        );
+
         // ScheduleGrid 형식에 맞게 데이터 변환
         const appointmentData = {
           date: extractedData.date,
@@ -1475,37 +1513,80 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           bookingNumber: extractedData.bookingNumber || "",
           status: extractedData.status || "confirmed",
           createdAt: new Date().toISOString(),
-          isHidden: false, // ScheduleGrid에 필요한 필드
+          isHidden: false, // ScheduleGrid에 필드
+          documentId: bookingId, // 문서 ID를 필드로도 저장
         };
 
         // 콜백 방식으로 데이터 전달
         if (onDataExtract) {
+          console.log("콜백 방식으로 예약 데이터 전달:", appointmentData);
           onDataExtract(appointmentData);
 
           // 단일 예약 등록 알림 전송
           sendReservationNotification("단일", appointmentData);
 
           showToast("예약이 등록되었습니다.", "success");
-          setIsVisible(false);
+
+          // 예약 등록 후 목록 닫기
+          setShowReservationList(false);
+
           return;
         } else {
-          // 콜백이 없으면 Firebase에 직접 저장
-          const docRef = await addDoc(
-            collection(db, "reservations"),
-            appointmentData
-          );
-          console.log(`예약이 Firebase에 저장되었습니다. ID: ${docRef.id}`);
+          try {
+            console.log(`저장 시도: ID=${bookingId}, 데이터=`, appointmentData);
 
-          // 단일 예약 등록 알림 전송
-          sendReservationNotification("단일", appointmentData);
+            // Firebase에 직접 저장
+            const reservationsRef = collection(db, "reservations");
 
-          showToast("예약이 데이터베이스에 저장되었습니다.", "success");
-          setShowDataPanel(false);
+            // 방법 1: setDoc 사용 (ID를 명시적으로 지정)
+            const docRef = doc(reservationsRef, bookingId);
+            await setDoc(docRef, {
+              ...appointmentData,
+              updatedAt: serverTimestamp(), // 타임스탬프 추가
+            });
+
+            console.log(`예약이 Firebase에 저장되었습니다. ID: ${bookingId}`);
+
+            // 단일 예약 등록 알림 전송
+            sendReservationNotification("단일", appointmentData);
+
+            showToast("예약이 데이터베이스에 저장되었습니다.", "success");
+            setShowDataPanel(false);
+
+            // 예약 등록 후 목록 닫기
+            setShowReservationList(false);
+          } catch (saveError) {
+            console.error("예약 저장 중 세부 오류:", saveError);
+
+            // 방법 1 실패시 방법 2: addDoc 사용 (ID를 자동 생성)
+            try {
+              console.log("대체 저장 방법 시도 (addDoc)...");
+              const reservationsRef = collection(db, "reservations");
+              const docRef = await addDoc(reservationsRef, {
+                ...appointmentData,
+                updatedAt: serverTimestamp(),
+              });
+              console.log(
+                `대체 방법으로 저장 성공. 자동 생성된 ID: ${docRef.id}`
+              );
+              showToast("예약이 저장되었습니다. (대체 방법 사용)", "success");
+              setShowDataPanel(false);
+
+              // 예약 등록 후 목록 닫기
+              setShowReservationList(false);
+            } catch (fallbackError) {
+              console.error("대체 저장 방법도 실패:", fallbackError);
+              throw fallbackError; // 원래 오류 처리로 전달
+            }
+          }
         }
         return;
       } catch (error) {
         console.error("예약 등록 중 오류:", error);
-        showToast("예약 등록에 실패했습니다.", "error");
+        showToast(
+          `예약 등록에 실패했습니다: ${error.message || "알 수 없는 오류"}`,
+          "error"
+        );
         return;
       }
     }
@@ -1570,12 +1651,21 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           }
         }
 
+        // 방문자 또는 이름 가져오기
+        const customerName = reservation.visitor || reservation.name;
+
+        // 예약 ID 생성
+        const bookingId = generateBookingId(
+          customerName,
+          reservation.bookingNumber
+        );
+
         // ScheduleGrid 형식에 맞게 데이터 준비
         const appointmentData = {
           date: dateInfo.date,
           startTime: dateInfo.time,
           endTime: endTime,
-          title: reservation.visitor || reservation.name,
+          title: customerName,
           staffId: scheduleGridStaffId,
           staffName: staffInfo.name,
           notes: `[네이버예약] ${
@@ -1589,6 +1679,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           status: "confirmed",
           createdAt: new Date().toISOString(),
           isHidden: false, // ScheduleGrid에 필요한 필드
+          documentId: bookingId, // 문서 ID를 필드로도 저장
         };
 
         processedReservations.push(appointmentData);
@@ -1600,35 +1691,66 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
         sendReservationNotification("일괄", null, processedReservations.length);
 
         if (onDataExtract) {
-          // 첫 번째 예약만 콜백으로 전달
-          onDataExtract(processedReservations[0]);
+          // 모든 예약을 배열로 전달하도록 수정
+          console.log(
+            `${processedReservations.length}개의 예약을 콜백으로 전달합니다.`
+          );
 
-          if (processedReservations.length > 1) {
-            console.log(
-              `나머지 ${
-                processedReservations.length - 1
-              }개의 예약은 개별적으로 추가해야 합니다.`
-            );
-          }
+          // 배열로 래핑하여 전달 (콜백이 배열을 처리할 수 있도록)
+          onDataExtract({
+            isMultiple: true,
+            reservations: processedReservations,
+            count: processedReservations.length,
+          });
 
           showToast(
             `${processedReservations.length}개의 예약이 등록되었습니다.`,
             "success"
           );
-          setIsVisible(false);
+
+          // 예약 등록 후 목록 닫기
+          setShowReservationList(false);
         } else {
           // 콜백이 없으면 Firebase에 직접 저장 (모든 예약)
           setIsExtracting(true);
           let successCount = 0;
           let failCount = 0;
 
+          // 이제 reservationsRef를 한 번만 가져옴
+          const reservationsRef = collection(db, "reservations");
+
           for (const data of processedReservations) {
             try {
-              const docRef = await addDoc(collection(db, "reservations"), data);
               console.log(
-                `예약 ${successCount + 1}번 저장 완료. ID: ${docRef.id}`
+                `일괄 저장 시도: ID=${data.documentId}, 예약=${data.title}`
               );
-              successCount++;
+
+              // 방법 1: setDoc으로 시도
+              try {
+                const docRef = doc(reservationsRef, data.documentId);
+                await setDoc(docRef, {
+                  ...data,
+                  updatedAt: serverTimestamp(),
+                });
+                console.log(`예약 저장 성공 (setDoc): ${data.documentId}`);
+                successCount++;
+              } catch (setDocError) {
+                console.error(`setDoc 실패: ${data.documentId}`, setDocError);
+
+                // 방법 2: addDoc으로 시도
+                try {
+                  console.log(`대체 방법 시도 (addDoc): ${data.title}`);
+                  const addDocRef = await addDoc(reservationsRef, {
+                    ...data,
+                    updatedAt: serverTimestamp(),
+                  });
+                  console.log(`대체 방법으로 저장 성공: ${addDocRef.id}`);
+                  successCount++;
+                } catch (addDocError) {
+                  console.error("모든 저장 방법 실패:", addDocError);
+                  failCount++;
+                }
+              }
             } catch (err) {
               console.error(`예약 저장 중 오류:`, err);
               failCount++;
@@ -1641,6 +1763,14 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
             resultMessage += ` ${failCount}개 저장 실패.`;
           }
           showToast(resultMessage, successCount > 0 ? "success" : "warning");
+
+          // 성공한 경우, 예약 목록 닫기
+          if (successCount > 0) {
+            showToast(resultMessage, successCount > 0 ? "success" : "warning");
+            setShowReservationList(false);
+          } else {
+            showToast(resultMessage, "warning");
+          }
         }
       } else {
         showToast("등록할 수 있는 예약이 없습니다.", "warning");
@@ -1648,8 +1778,39 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
     } catch (error) {
       setIsExtracting(false);
       console.error("예약 일괄 등록 중 오류:", error);
-      showToast("예약 등록에 실패했습니다.", "error");
+      showToast(
+        `예약 등록에 실패했습니다: ${error.message || "알 수 없는 오류"}`,
+        "error"
+      );
     }
+  };
+
+  // 예약 ID 생성 함수 - title_bookingNumber 형식 (유효한 문서 ID로 정제)
+  const generateBookingId = (title, bookingNumber) => {
+    if (!bookingNumber) {
+      // 예약번호가 없으면 타임스탬프 추가
+      bookingNumber = Date.now().toString();
+    }
+
+    // 고유 ID 생성 (특수문자 제거 및 공백을 언더스코어로 변환)
+    let cleanTitle = (title || "예약")
+      .replace(/[^\w\s가-힣]/g, "") // 특수문자 제거 (한글, 영문, 숫자, 공백만 허용)
+      .replace(/\s+/g, "_"); // 공백을 언더스코어로 변환
+
+    // ID 길이 제한 (너무 길면 자르기)
+    if (cleanTitle.length > 20) {
+      cleanTitle = cleanTitle.substring(0, 20);
+    }
+
+    // 한글이 포함된 경우에도 그대로 사용
+    // 이전에는 영숫자만 추출하고 없으면 "reservation"으로 대체했지만,
+    // 이제는 한글을 포함한 제목을 그대로 사용합니다
+    // 한글이 들어간 제목이 비어있는 경우만 기본값 사용
+    if (cleanTitle.length === 0) {
+      cleanTitle = "고객";
+    }
+
+    return `${cleanTitle}_${bookingNumber}`;
   };
 
   // 예약 등록 알림 전송 함수
@@ -1711,6 +1872,14 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
 
   // 예약 항목 선택/선택 해제 토글 핸들러
   const toggleItemSelection = (reservation) => {
+    // 등록됨(SYNCED)과 취소됨(CANCELLED) 상태의 예약은 선택할 수 없음
+    if (
+      reservation.syncStatus === "CANCELLED" ||
+      reservation.syncStatus === "SYNCED"
+    ) {
+      return; // 아무 작업도 하지 않고 함수 종료
+    }
+
     setComparisonResults((prevResults) =>
       prevResults.map((item) =>
         item.bookingNumber === reservation.bookingNumber
@@ -1722,10 +1891,31 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
 
   // 모든 예약 항목 선택/선택 해제 핸들러
   const toggleSelectAll = () => {
-    const hasUnselected = comparisonResults.some((res) => !res.isSelected);
+    // 선택 가능한 예약만 필터링 (취소됨과 등록됨 상태의 예약 제외)
+    const selectableItems = comparisonResults.filter(
+      (res) =>
+        res.syncStatus !== "CANCELLED" &&
+        res.syncStatus !== "SYNCED" &&
+        res.status !== "취소"
+    );
 
+    // 선택 가능한 항목 중 선택되지 않은 항목이 있는지 확인
+    const hasUnselectedItems = selectableItems.some((res) => !res.isSelected);
+
+    // 결과 업데이트 - 취소됨과 등록됨 상태가 아닌 항목만 선택/해제
     setComparisonResults((prevResults) =>
-      prevResults.map((item) => ({ ...item, isSelected: hasUnselected }))
+      prevResults.map((item) => {
+        // 취소됨과 등록됨 상태는 항상 선택 해제 유지
+        if (
+          item.syncStatus === "CANCELLED" ||
+          item.syncStatus === "SYNCED" ||
+          item.status === "취소"
+        ) {
+          return { ...item, isSelected: false };
+        }
+        // 나머지 항목은 전체 선택/해제 상태에 따라 설정
+        return { ...item, isSelected: hasUnselectedItems };
+      })
     );
   };
 
@@ -1856,8 +2046,14 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
                     type="checkbox"
                     id="select-all"
                     onChange={toggleSelectAll}
+                    // "취소됨"과 "등록됨" 상태가 아닌 항목 중에서 모두 선택되어 있는지 확인
                     checked={comparisonResults
-                      .filter((res) => res.status !== "취소")
+                      .filter(
+                        (res) =>
+                          res.syncStatus !== "CANCELLED" &&
+                          res.syncStatus !== "SYNCED" &&
+                          res.status !== "취소"
+                      )
                       .every((res) => res.isSelected)}
                     style={{ marginRight: "8px" }}
                   />
@@ -1869,7 +2065,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
                       color: "#4a5568",
                     }}
                   >
-                    전체 선택 (취소 제외)
+                    전체 선택 (미등록된 예약만)
                   </label>
                 </div>
                 <ActionButton
@@ -1893,6 +2089,23 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
                     }
                     onClick={() => handleSelectReservation(reservation)}
                     isCancelled={reservation.isCancelled}
+                    style={{
+                      // 이미 등록된(SYNCED) 예약과 취소된(CANCELLED) 예약은 시각적으로 다르게 표시
+                      opacity:
+                        reservation.syncStatus === "SYNCED" ||
+                        reservation.syncStatus === "CANCELLED"
+                          ? 0.7
+                          : 1,
+                      cursor: "pointer",
+                      backgroundColor:
+                        reservation.syncStatus === "SYNCED"
+                          ? "#e6f7ff" // 등록됨 상태는 연한 파란색 배경
+                          : reservation.syncStatus === "CANCELLED"
+                          ? "#f5f5f5" // 취소됨 상태는 연한 회색 배경
+                          : reservation.isSelected
+                          ? "#e6f7ff" // 선택된 상태는 연한 파란색
+                          : "white",
+                    }}
                   >
                     {/* 상단 영역: 체크박스, 상태 태그, 예약번호 */}
                     <div
@@ -1910,8 +2123,9 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
                           gap: "10px",
                         }}
                       >
-                        {/* 체크박스 */}
-                        {reservation.status !== "취소" ? (
+                        {/* 체크박스 - 취소된 예약이나 이미 등록된 예약은 체크박스 비활성화 */}
+                        {reservation.status !== "취소" &&
+                        reservation.syncStatus !== "SYNCED" ? (
                           <input
                             type="checkbox"
                             checked={reservation.isSelected || false}
@@ -2321,7 +2535,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
             ) : (
               <>
                 {reservations.length > 0
-                  ? `${reservations.length}건의 예약 정보가 로드되었습니다`
+                  ? `예약 정보 ${reservations.length}건이 로드되었습니다. 스크롤이 반영되지 않아 일부 예약 정보가 누락되었을 수 있습니다.`
                   : "실제 네이버 예약 정보를 불러오려면 '예약 추출하기' 버튼을 클릭하세요"}
               </>
             )}

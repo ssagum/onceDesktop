@@ -33,6 +33,9 @@ import {
   onSnapshot,
   where,
   addDoc,
+  doc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import ReceivedCallList from "../call/ReceivedCallList";
@@ -771,15 +774,158 @@ export default function HomeMainCanvas() {
     if (!data) return;
 
     try {
-      // 데이터 처리 로직 - 필요에 따라 예약 시스템에 추가하거나 다른 처리를 할 수 있음
-      showToast("네이버 예약 정보가 성공적으로 추출되었습니다.", "success");
+      // 데이터가 isMultiple 속성을 가진 배열 형태인지 확인
+      if (data.isMultiple && Array.isArray(data.reservations)) {
+        console.log(`${data.count}개의 네이버 예약 일괄 저장 시작`);
 
-      // 예약 페이지로 이동하는 옵션 제공
-      const shouldNavigate = window.confirm(
-        "예약 정보를 확인했습니다. 예약 페이지로 이동하시겠습니까?"
-      );
-      if (shouldNavigate) {
-        navigate("/schedule");
+        // 모든 예약을 비동기로 저장
+        const saveAllReservations = async () => {
+          const reservationsRef = collection(db, "reservations");
+          let successCount = 0;
+          let failCount = 0;
+
+          // 모든 예약에 대해 반복 처리
+          for (const reservation of data.reservations) {
+            try {
+              // 이미 생성된 documentId를 사용합니다
+              const documentId =
+                reservation.documentId ||
+                `${reservation.title.replace(/\s+/g, "_")}_${
+                  reservation.bookingNumber || Date.now()
+                }`.substring(0, 120); // ID 길이 제한
+
+              // 특수문자만 제거하고 한글, 영문, 숫자는 그대로 유지
+              const cleanId = documentId
+                .replace(/[^\w\s가-힣]/g, "")
+                .replace(/\s+/g, "_");
+              const finalId =
+                cleanId.length > 0 ? cleanId : `고객_${Date.now()}`;
+
+              // 저장할 데이터 준비 (documentId 포함)
+              const reservationData = {
+                ...reservation,
+                documentId: finalId,
+                updatedAt: serverTimestamp(),
+                createdAt: reservation.createdAt || new Date().toISOString(),
+                isHidden: false,
+              };
+
+              // 저장 시도
+              const docRef = doc(reservationsRef, finalId);
+              await setDoc(docRef, reservationData, { merge: true });
+
+              console.log(`예약 저장 성공: ${finalId}`);
+              successCount++;
+            } catch (error) {
+              console.error(`예약 저장 실패: ${reservation.title}`, error);
+              failCount++;
+
+              // 실패한 경우 자동 ID 사용하여 재시도
+              try {
+                await addDoc(reservationsRef, {
+                  ...reservation,
+                  updatedAt: serverTimestamp(),
+                  createdAt: reservation.createdAt || new Date().toISOString(),
+                  isHidden: false,
+                });
+                console.log(
+                  `대체 방식으로 예약 저장 성공: ${reservation.title}`
+                );
+                successCount++;
+              } catch (retryError) {
+                console.error(
+                  `대체 저장 방식도 실패: ${reservation.title}`,
+                  retryError
+                );
+              }
+            }
+          }
+
+          // 결과 메시지 표시
+          if (successCount > 0) {
+            showToast(
+              `${successCount}개의 예약이 저장되었습니다${
+                failCount > 0 ? ` (${failCount}개 실패)` : ""
+              }`,
+              successCount > 0 ? "success" : "warning"
+            );
+          } else {
+            showToast("예약 저장에 실패했습니다.", "error");
+          }
+        };
+
+        // 실행
+        saveAllReservations();
+      } else {
+        // 단일 예약 데이터 처리
+        console.log("단일 네이버 예약 데이터 저장 시작:", data);
+
+        // 비동기 함수 정의
+        const saveSingleReservation = async () => {
+          try {
+            // 이미 생성된 documentId를 사용하거나 생성
+            const documentId =
+              data.documentId ||
+              `${data.title.replace(/\s+/g, "_")}_${
+                data.bookingNumber || Date.now()
+              }`;
+
+            // 특수문자만 제거하고 한글, 영문, 숫자는 그대로 유지
+            const cleanId = documentId
+              .replace(/[^\w\s가-힣]/g, "")
+              .replace(/\s+/g, "_");
+            const finalId = cleanId.length > 0 ? cleanId : `고객_${Date.now()}`;
+
+            // 저장할 데이터 준비 (documentId 포함)
+            const reservationData = {
+              ...data,
+              documentId: finalId,
+              updatedAt: serverTimestamp(),
+              createdAt: data.createdAt || new Date().toISOString(),
+              isHidden: false,
+            };
+
+            // reservations 컬렉션 참조
+            const reservationsRef = collection(db, "reservations");
+
+            // 고유 ID로 문서 참조 생성
+            const docRef = doc(reservationsRef, finalId);
+
+            // 데이터 저장 (merge: true로 기존 데이터와 병합)
+            await setDoc(docRef, reservationData, { merge: true });
+
+            console.log(`예약이 성공적으로 저장됨 (ID: ${finalId})`);
+            showToast(
+              "네이버 예약이 데이터베이스에 저장되었습니다.",
+              "success"
+            );
+          } catch (saveError) {
+            console.error("예약 저장 중 오류:", saveError);
+
+            // 첫 번째 방법 실패 시 두 번째 방법 시도: addDoc 사용
+            try {
+              const reservationsRef = collection(db, "reservations");
+              const autoDocRef = await addDoc(reservationsRef, {
+                ...data,
+                updatedAt: serverTimestamp(),
+                createdAt: data.createdAt || new Date().toISOString(),
+                isHidden: false,
+              });
+
+              console.log(`예약이 자동 ID로 저장됨 (ID: ${autoDocRef.id})`);
+              showToast(
+                "네이버 예약이 데이터베이스에 저장되었습니다.",
+                "success"
+              );
+            } catch (fallbackError) {
+              console.error("대체 저장 방법도 실패:", fallbackError);
+              showToast("예약 저장에 실패했습니다.", "error");
+            }
+          }
+        };
+
+        // 함수 실행
+        saveSingleReservation();
       }
     } catch (error) {
       console.error("네이버 예약 데이터 처리 중 오류:", error);
