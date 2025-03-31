@@ -10,8 +10,10 @@ import {
   bulb,
   chatting,
   form,
+  naver,
   planeNote,
   plus,
+  sms,
   task,
   timer,
 } from "../../assets";
@@ -58,9 +60,10 @@ import { getUnreadMessageCount } from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
 import { isHospitalOwner } from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
-import NaverReservationViewer from "../Reservation/NaverReservationViewer";
+import NaverReservationTrigger from "../Reservation/NaverReservationTrigger";
 import TextEditorModal from "../TextEditorModal";
 import { filterHiddenDocuments } from "../../utils/filterUtils";
+import NaverReservationViewer from "../Reservation/NaverReservationViewer";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -80,6 +83,12 @@ const Square = ({ title, unreadCount = 0 }) => {
         </div>
       )}
       <div className="w-[40px] h-[50px]">
+        {title === "네이버 예약" && (
+          <img src={naver} alt="Logo" className="w-[36px]" />
+        )}
+        {title === "문자 발송" && (
+          <img src={sms} alt="Logo" className="w-[40px]" />
+        )}
         {title === "공지등록" && (
           <img src={plus} alt="Logo" className="w-[40px]" />
         )}
@@ -284,8 +293,8 @@ export default function HomeMainCanvas() {
   const [requestStatusModalTab, setRequestStatusModalTab] =
     useState("vacation");
   const [managementModalVisible, setManagementModalVisible] = useState(false);
-  const [naverReservationVisible, setNaverReservationVisible] = useState(false);
   const [showNoticeEditor, setShowNoticeEditor] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -836,7 +845,7 @@ export default function HomeMainCanvas() {
                   <div onClick={() => setCallIsVisible(true)}>
                     <Square title={"호출"} />
                   </div>
-                  <div>
+                  <div onClick={() => setIsModalVisible(true)}>
                     <Square title={"네이버 예약"} />
                   </div>
                 </div>
@@ -959,13 +968,6 @@ export default function HomeMainCanvas() {
         setIsVisible={setManagementModalVisible}
       />
 
-      {/* 네이버 예약 모달 */}
-      <NaverReservationViewer
-        isVisible={naverReservationVisible}
-        setIsVisible={setNaverReservationVisible}
-        onDataExtract={handleExtractedData}
-      />
-
       {/* 공지등록 에디터 모달 */}
       <TextEditorModal
         show={showNoticeEditor}
@@ -974,6 +976,13 @@ export default function HomeMainCanvas() {
         setContent={() => {}}
         handleSave={handleCreateNotice}
         isEditing={false}
+      />
+
+      {/* 네이버 예약 모달 추가 */}
+      <NaverReservationViewer
+        isVisible={isModalVisible}
+        setIsVisible={setIsModalVisible}
+        onDataExtract={handleExtractedData}
       />
     </div>
   );

@@ -49,7 +49,11 @@ function DateViewModal({
             department: selectedFolderId, // selectedFolderId를 department로 전달
             ignoreSchedule: false, // schedule(요일, 주기) 고려함
           });
-          return { date: date.toISOString(), tasks: tasksForDate };
+
+          // isHidden이 true인 Task들은 필터링
+          const visibleTasks = tasksForDate.filter((task) => !task.isHidden);
+
+          return { date: date.toISOString(), tasks: visibleTasks };
         });
 
         const results = await Promise.all(loadPromises);

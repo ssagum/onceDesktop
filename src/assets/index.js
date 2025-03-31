@@ -16,7 +16,12 @@ import cancel from "./cancel.svg";
 import chevronBackward from "./chevronBackward.svg";
 import chevronForward from "./chevronForward.svg";
 import chatting from "./chatting.svg";
+import sms from "./sms.svg";
+import naver from "./naver.svg";
+
 export {
+  sms,
+  naver,
   chatting,
   chevronBackward,
   chevronForward,

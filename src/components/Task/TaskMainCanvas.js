@@ -583,6 +583,7 @@ export function ToDoDragComponent({
           onClose={handleCloseDateModal}
           column={column}
           tasks={tasks}
+          selectedFolderId={column.id}
         />
       )}
     </div>
@@ -702,9 +703,9 @@ function TaskRow({ task, onClick }) {
   return {
     onClick: handleClick,
     priority: (
-      <div className="flex items-center justify-center">
+      <div className="text-center text-lg">
         <span
-          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
             priorityBadgeColors[task.priority] ||
             "bg-gray-100 text-gray-800 border-gray-200"
           }`}
@@ -714,37 +715,39 @@ function TaskRow({ task, onClick }) {
       </div>
     ),
     title: (
-      <div className="font-medium text-gray-900 truncate">{task.title}</div>
+      <div className="text-left font-medium text-gray-900 truncate hover:text-blue-600 transition-colors text-lg">
+        {task.title}
+      </div>
     ),
     assignee: (
-      <div className="flex items-center justify-center">
-        <div className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-sm truncate">
+      <div className="text-center text-lg">
+        <span className="inline-block px-2 py-1 rounded bg-gray-100 text-gray-800 text-sm truncate">
           {task.assignee || "미배정"}
-        </div>
+        </span>
       </div>
     ),
     category: (
-      <div className="flex items-center justify-center">
-        <div className="text-gray-600 text-sm truncate">
+      <div className="text-center text-lg">
+        <span className="text-gray-600 text-sm truncate ml-4">
           {task.category || "1회성"}
-        </div>
+        </span>
       </div>
     ),
     status: (
-      <div className="flex items-center justify-center">
-        <div
-          className={`inline-flex items-center px-2.5 py-1.5 rounded text-sm font-medium ${statusColors[taskStatus]}`}
+      <div className="text-center text-lg">
+        <span
+          className={`inline-block px-2.5 py-1.5 rounded text-sm font-medium ${statusColors[taskStatus]}`}
           title={tooltipText}
         >
           {taskStatus}
-        </div>
+        </span>
       </div>
     ),
     writer: (
-      <div className="flex items-center justify-center">
-        <div className="text-gray-600 text-sm truncate">
+      <div className="text-center text-lg">
+        <span className="text-gray-600 text-sm truncate">
           {task.writer || "-"}
-        </div>
+        </span>
       </div>
     ),
   };
@@ -771,6 +774,7 @@ function TaskBoardView({
 
   // 필터링 및 정렬된 데이터 가져오기
   const getFilteredData = () => {
+    // 이미 isHidden=true가 필터링된 tasks를 받음
     let filteredTasks = [...tasks];
 
     // 카테고리 필터
@@ -822,20 +826,22 @@ function TaskBoardView({
     { label: "작성자", key: "writer" },
   ];
 
-  // JcyTable에 맞게 renderRow 함수를 다시 추가
+  // 새로운 renderRow 함수 - ManagementModal 스타일 적용
   const renderRow = (task) => {
+    // TaskRow 컴포넌트에서 데이터 가져오기
     const rowData = TaskRow({ task, onClick: onTaskClick });
+
     return (
       <div
-        className="grid grid-cols-[0.8fr_2.5fr_1fr_0.8fr_1fr_0.8fr] border-b border-gray-200 hover:bg-gray-50 py-3"
+        className="grid grid-cols-[1fr_2fr_1fr_1fr_1fr_1fr] py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100 text-lg"
         onClick={rowData.onClick}
       >
-        <div className="px-3">{rowData.priority}</div>
-        <div className="px-3">{rowData.title}</div>
-        <div className="px-3">{rowData.assignee}</div>
-        <div className="px-3">{rowData.category}</div>
-        <div className="px-3">{rowData.status}</div>
-        <div className="px-3">{rowData.writer}</div>
+        <div className="text-right pr-4">{rowData.priority}</div>
+        <div className="text-left pl-4">{rowData.title}</div>
+        <div className="text-right pr-4">{rowData.assignee}</div>
+        <div className="text-right pr-6">{rowData.category}</div>
+        <div className="text-center">{rowData.status}</div>
+        <div className="text-left pl-4">{rowData.writer}</div>
       </div>
     );
   };
@@ -857,7 +863,7 @@ function TaskBoardView({
         <JcyTable
           columns={columns}
           data={filteredData}
-          columnWidths="grid-cols-[0.8fr_2.5fr_1fr_0.8fr_1fr_0.8fr]" // 제목 컬럼 넓게, 나머지 좁게
+          columnWidths="grid-cols-[1fr_2fr_1fr_1fr_1fr_1fr]" // 제목 길이 줄임 (3fr → 2fr)
           itemsPerPage={10}
           renderRow={renderRow}
           emptyRowHeight="60px"
@@ -868,6 +874,9 @@ function TaskBoardView({
           onPageChange={handlePageChange}
           showPagination={true}
           centerAlignHeaders={true}
+          rowClassName={(index) =>
+            index % 2 === 0 ? "bg-gray-50" : "bg-white"
+          }
         />
       </div>
     </div>
@@ -1112,11 +1121,14 @@ function TaskMainCanvas() {
           ...doc.data(),
         }));
 
+        // isHidden이 true인 태스크는 필터링
+        const visibleTasks = fetchedTasks.filter((task) => !task.isHidden);
+
         // 업무 목록 업데이트
-        setTasks(fetchedTasks);
+        setTasks(visibleTasks);
 
         // 컬럼별로 업무 분류
-        updateColumns(fetchedTasks);
+        updateColumns(visibleTasks);
       },
       (error) => {
         console.error("Error fetching tasks:", error);
@@ -1140,6 +1152,9 @@ function TaskMainCanvas() {
       // null, undefined 체크 추가
       if (!task) return;
 
+      // isHidden이 true인 태스크는 건너뜀
+      if (task.isHidden) return;
+
       const assignee = task.assignee || "미배정";
 
       // 해당 assignee에 맞는 컬럼이 있는지 확인
@@ -1157,17 +1172,6 @@ function TaskMainCanvas() {
       taskCounts[key] = updatedColumns[key].taskIds.length;
     });
     setColumns(updatedColumns);
-
-    /* 자동 전환 기능 비활성화 - 사용자가 직접 선택한 폴더는 유지
-    // 현재 선택된 폴더의 작업 수가 0이고, 다른 폴더에 작업이 있으면 자동으로 미배정으로 전환
-    if (
-      selectedFolderId !== "미배정" &&
-      updatedColumns[selectedFolderId]?.taskIds.length === 0 &&
-      Object.values(taskCounts).some((count) => count > 0)
-    ) {
-      setSelectedFolderId("미배정");
-    }
-    */
   };
 
   // 업무 담당자 변경 핸들러 - 개선됨
@@ -1198,6 +1202,9 @@ function TaskMainCanvas() {
 
       // 업데이트된 업무 목록에 맞게 taskIds 업데이트
       updatedTasks.forEach((task) => {
+        // isHidden이 true인 태스크는 건너뜀
+        if (task.isHidden) return;
+
         const taskAssignee = task.assignee || "미배정";
 
         // 해당 assignee 컬럼이 있는지 확인
@@ -1215,7 +1222,9 @@ function TaskMainCanvas() {
       });
 
       // 존재하지 않는 업무 ID는 제거
-      const validTaskIds = updatedTasks.map((task) => task.id);
+      const validTaskIds = updatedTasks
+        .filter((task) => !task.isHidden)
+        .map((task) => task.id);
       Object.keys(updatedColumns).forEach((key) => {
         updatedColumns[key].taskIds = updatedColumns[key].taskIds.filter((id) =>
           validTaskIds.includes(id)
@@ -1930,7 +1939,7 @@ function TaskMainCanvas() {
       ) : (
         /* 게시판 모드 컴포넌트 */
         <TaskBoardView
-          tasks={filteredTasks} // 이미 필터링된 작업 목록을 전달
+          tasks={tasks} // 게시판 모드에서는 모든 tasks를 전달 (폴더별 필터링 없이)
           onViewHistory={handleViewTaskHistory}
           onTaskClick={handleTaskClick}
           selectedFolderId={selectedFolderId} // selectedFolderId를 전달

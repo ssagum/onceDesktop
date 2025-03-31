@@ -1043,15 +1043,6 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           </ReservationStatus>
 
           <div style={{ display: "flex", gap: "12px" }}>
-            <ActionButton
-              className="secondary"
-              onClick={() => setUseDirectWebview(!useDirectWebview)}
-            >
-              {useDirectWebview
-                ? "외부 브라우저 모드로 전환"
-                : "내장 뷰어 모드로 전환"}
-            </ActionButton>
-
             {showReservationList ? (
               <ActionButton
                 className="primary"

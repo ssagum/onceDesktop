@@ -29,10 +29,15 @@ export const getAllTasks = async () => {
   try {
     const q = query(tasksCollectionRef(), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
+
+    // 모든 task를 가져와 클라이언트에서 필터링
+    const allTasks = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // isHidden이 true인 업무는 필터링하여 제외
+    return allTasks.filter((task) => !task.isHidden);
   } catch (error) {
     console.error("Error fetching tasks:", error);
     return [];
@@ -50,10 +55,14 @@ export const getTasksByAssignee = async (assignee) => {
       orderBy("createdAt", "desc")
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+
+    // isHidden이 true인 업무는 필터링하여 제외
+    return querySnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((task) => !task.isHidden);
   } catch (error) {
     console.error("Error fetching tasks by assignee:", error);
     return [];
@@ -78,10 +87,14 @@ export const getTasksByDate = async (date) => {
       orderBy("startDate", "asc")
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+
+    // isHidden이 true인 업무는 필터링하여 제외
+    return querySnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((task) => !task.isHidden);
   } catch (error) {
     console.error("Error fetching tasks by date:", error);
     return [];
@@ -729,11 +742,11 @@ export const getTaskHistory = async (taskId, date = null) => {
 };
 
 /**
- * 현재 Firestore에 저장된 모든 업무를 확인하는 디버깅 함수
+ * 디버깅을 위해 모든 업무 목록을 반환합니다.
  */
 export const debugShowAllTasks = async () => {
   try {
-    console.log("현재 Firestore에 저장된 모든 업무 조회 시작");
+    console.log("모든 업무 조회 시작");
     const tasksSnapshot = await getDocs(tasksCollectionRef());
 
     // .docs는 쿼리 결과의 문서 배열을 제공합니다
@@ -748,8 +761,14 @@ export const debugShowAllTasks = async () => {
       ...doc.data(),
     }));
 
-    console.log(`총 ${tasks.length}개의 업무가 있습니다:`, tasks);
-    return tasks;
+    // isHidden이 true인 업무는 필터링하여 제외
+    const visibleTasks = tasks.filter((task) => !task.isHidden);
+
+    console.log(
+      `총 ${tasks.length}개의 업무 중 ${visibleTasks.length}개 표시 가능:`,
+      visibleTasks
+    );
+    return visibleTasks;
   } catch (error) {
     console.error("업무 조회 중 오류:", error);
     return [];
