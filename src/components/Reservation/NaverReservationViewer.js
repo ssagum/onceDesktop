@@ -1389,9 +1389,12 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
 
     // 추출된 데이터 업데이트
     if (extractedData) {
+      // staffId 형식 맞추기 (doctor_0 형식으로)
       const formattedStaffId = staff.id.startsWith("doctor_")
         ? staff.id
-        : "doctor_0";
+        : staff.id === "박상현"
+        ? "doctor_0"
+        : `doctor_${staffList.indexOf(staff)}`;
 
       setExtractedData({
         ...extractedData,
@@ -1438,32 +1441,68 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   };
 
   // 선택된 예약들을 한 번에 예약 시스템에 등록하는 함수
-  const handleBulkRegister = () => {
+  const handleBulkRegister = async () => {
     // 단일 예약 선택일 경우
     if (selectedReservation && extractedData) {
       try {
+        // staffId 형식을 doctor_0 형식으로 변환
+        let scheduleGridStaffId = extractedData.staffId;
+        if (!scheduleGridStaffId.startsWith("doctor_")) {
+          scheduleGridStaffId =
+            scheduleGridStaffId === "박상현"
+              ? "doctor_0"
+              : `doctor_${staffList.findIndex(
+                  (s) => s.id === scheduleGridStaffId
+                )}`;
+          if (scheduleGridStaffId.includes("doctor_-1")) {
+            scheduleGridStaffId = "doctor_0"; // 못 찾을 경우 기본값
+          }
+        }
+
         // ScheduleGrid 형식에 맞게 데이터 변환
         const appointmentData = {
           date: extractedData.date,
           startTime: extractedData.startTime,
           endTime: extractedData.endTime,
           title: extractedData.title,
-          staffId: extractedData.staffId,
+          staffId: scheduleGridStaffId,
           staffName: extractedData.staffName,
           notes: `[네이버예약] ${extractedData.notes || ""} (연락처: ${
             extractedData.phone || ""
           }, 서비스: ${extractedData.service || ""})`.trim(),
-          type: "진료",
-          dateIndex: 0, // 날짜 인덱스는 일정표에서 계산됨
+          type: "예약",
+          dateIndex: 0,
           bookingNumber: extractedData.bookingNumber || "",
+          status: extractedData.status || "confirmed",
+          createdAt: new Date().toISOString(),
+          isHidden: false, // ScheduleGrid에 필요한 필드
         };
 
+        // 콜백 방식으로 데이터 전달
         if (onDataExtract) {
           onDataExtract(appointmentData);
+
+          // 단일 예약 등록 알림 전송
+          sendReservationNotification("단일", appointmentData);
+
           showToast("예약이 등록되었습니다.", "success");
           setIsVisible(false);
           return;
+        } else {
+          // 콜백이 없으면 Firebase에 직접 저장
+          const docRef = await addDoc(
+            collection(db, "reservations"),
+            appointmentData
+          );
+          console.log(`예약이 Firebase에 저장되었습니다. ID: ${docRef.id}`);
+
+          // 단일 예약 등록 알림 전송
+          sendReservationNotification("단일", appointmentData);
+
+          showToast("예약이 데이터베이스에 저장되었습니다.", "success");
+          setShowDataPanel(false);
         }
+        return;
       } catch (error) {
         console.error("예약 등록 중 오류:", error);
         showToast("예약 등록에 실패했습니다.", "error");
@@ -1479,13 +1518,25 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
       return;
     }
 
-    // 등록 성공 및 실패 카운트
-    let successCount = 0;
-    let failCount = 0;
+    try {
+      console.log(`총 ${selectedItems.length}개의 예약을 처리합니다.`);
 
-    // 각 예약 항목을 처리
-    selectedItems.forEach((reservation) => {
-      try {
+      // 처리된 예약 목록
+      const processedReservations = [];
+
+      // 각 예약 항목 처리
+      for (const reservation of selectedItems) {
+        // 예약 상태 확인 - 취소된 예약은 건너뛰기
+        if (reservation.status === "취소") {
+          console.log(
+            `예약 #${reservation.bookingNumber}(${
+              reservation.name || reservation.visitor
+            }): 취소된 예약이므로 등록 건너뜀`
+          );
+          continue;
+        }
+
+        // 날짜 정보 변환
         const dateInfo = formatReservationDate(reservation.useDate);
 
         // 시작 시간에서 종료 시간 계산 (기본 30분)
@@ -1502,44 +1553,159 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
           endMinutes
         ).padStart(2, "0")}`;
 
+        // 담당자 정보
         const staffInfo = reservation.selectedStaff || selectedStaff;
 
-        // ScheduleGrid 형식에 맞게 데이터 변환
+        // staffId 형식을 doctor_0 형식으로 변환
+        let scheduleGridStaffId = staffInfo.id;
+        if (!scheduleGridStaffId.startsWith("doctor_")) {
+          scheduleGridStaffId =
+            scheduleGridStaffId === "박상현"
+              ? "doctor_0"
+              : `doctor_${staffList.findIndex(
+                  (s) => s.id === scheduleGridStaffId
+                )}`;
+          if (scheduleGridStaffId.includes("doctor_-1")) {
+            scheduleGridStaffId = "doctor_0"; // 못 찾을 경우 기본값
+          }
+        }
+
+        // ScheduleGrid 형식에 맞게 데이터 준비
         const appointmentData = {
           date: dateInfo.date,
           startTime: dateInfo.time,
           endTime: endTime,
           title: reservation.visitor || reservation.name,
-          staffId: staffInfo.id,
+          staffId: scheduleGridStaffId,
           staffName: staffInfo.name,
           notes: `[네이버예약] ${
             reservation.comment !== "-" ? reservation.comment : ""
           } (연락처: ${reservation.phone || ""}, 서비스: ${
             reservation.product || ""
           })`.trim(),
-          type: "진료",
-          dateIndex: 0, // 날짜 인덱스는 일정표에서 계산됨
+          type: "예약",
+          dateIndex: 0,
           bookingNumber: reservation.bookingNumber || "",
+          status: "confirmed",
+          createdAt: new Date().toISOString(),
+          isHidden: false, // ScheduleGrid에 필요한 필드
         };
 
-        // 콜백을 통해 예약 등록
-        if (onDataExtract) {
-          onDataExtract(appointmentData);
-          successCount++;
-        } else {
-          failCount++;
-        }
-      } catch (error) {
-        console.error("예약 등록 중 오류:", error);
-        failCount++;
+        processedReservations.push(appointmentData);
       }
-    });
 
-    if (successCount > 0) {
-      showToast(`${successCount}건의 예약이 등록되었습니다.`, "success");
-      setIsVisible(false);
-    } else if (failCount > 0) {
-      showToast(`예약 등록에 실패했습니다.`, "error");
+      // 모든 예약 처리 후, 첫 번째 예약만 콜백으로 전달
+      if (processedReservations.length > 0) {
+        // 일괄 등록 알림 전송 (전체 예약 갯수 포함)
+        sendReservationNotification("일괄", null, processedReservations.length);
+
+        if (onDataExtract) {
+          // 첫 번째 예약만 콜백으로 전달
+          onDataExtract(processedReservations[0]);
+
+          if (processedReservations.length > 1) {
+            console.log(
+              `나머지 ${
+                processedReservations.length - 1
+              }개의 예약은 개별적으로 추가해야 합니다.`
+            );
+          }
+
+          showToast(
+            `${processedReservations.length}개의 예약이 등록되었습니다.`,
+            "success"
+          );
+          setIsVisible(false);
+        } else {
+          // 콜백이 없으면 Firebase에 직접 저장 (모든 예약)
+          setIsExtracting(true);
+          let successCount = 0;
+          let failCount = 0;
+
+          for (const data of processedReservations) {
+            try {
+              const docRef = await addDoc(collection(db, "reservations"), data);
+              console.log(
+                `예약 ${successCount + 1}번 저장 완료. ID: ${docRef.id}`
+              );
+              successCount++;
+            } catch (err) {
+              console.error(`예약 저장 중 오류:`, err);
+              failCount++;
+            }
+          }
+
+          setIsExtracting(false);
+          let resultMessage = `${successCount}개의 예약이 데이터베이스에 저장되었습니다.`;
+          if (failCount > 0) {
+            resultMessage += ` ${failCount}개 저장 실패.`;
+          }
+          showToast(resultMessage, successCount > 0 ? "success" : "warning");
+        }
+      } else {
+        showToast("등록할 수 있는 예약이 없습니다.", "warning");
+      }
+    } catch (error) {
+      setIsExtracting(false);
+      console.error("예약 일괄 등록 중 오류:", error);
+      showToast("예약 등록에 실패했습니다.", "error");
+    }
+  };
+
+  // 예약 등록 알림 전송 함수
+  const sendReservationNotification = async (
+    type,
+    appointmentData,
+    count = 1
+  ) => {
+    try {
+      // 수신자는 항상 진료팀으로 설정
+      const receiverId = "진료팀";
+
+      // 현재 시간 포맷팅
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const formattedTime = `${hours}:${minutes}`;
+
+      // 메시지 생성
+      let message = "";
+
+      if (type === "단일") {
+        // 단일 예약인 경우
+        const staffName = appointmentData.staffName || "담당자";
+        const time = `${appointmentData.startTime}-${appointmentData.endTime}`;
+        const date = appointmentData.date;
+        message = `[네이버예약 등록] ${date} ${time} | ${staffName} | ${
+          appointmentData.title || "예약"
+        }`;
+      } else {
+        // 일괄 등록인 경우
+        const today = format(new Date(), "yyyy-MM-dd");
+        message = `[네이버예약 일괄등록] ${today} | ${count}건의 예약이 일괄 등록되었습니다.`;
+      }
+
+      // 발신자 정보 - "네이버예약"으로 설정
+      const senderId = "네이버예약";
+
+      // call 데이터 생성
+      const callData = {
+        message,
+        receiverId,
+        senderId,
+        formattedTime,
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
+        type: "예약",
+        [receiverId]: true,
+        [senderId]: true,
+      };
+
+      // Firebase에 call 저장
+      await addDoc(collection(db, "calls"), callData);
+      console.log(`${receiverId}에게 네이버예약 등록 알림 전송 완료`);
+    } catch (error) {
+      console.error("네이버예약 알림 전송 오류:", error);
     }
   };
 
