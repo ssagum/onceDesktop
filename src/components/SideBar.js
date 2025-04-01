@@ -25,8 +25,8 @@ import packageJson from "../../package.json";
 import { useContext } from "react";
 import { useUserLevel } from "../utils/UserLevelContext";
 import {
-  isHospitalOwner,
   canAccessTaskManagement,
+  isHospitalOwner,
 } from "../utils/permissionUtils";
 
 const TopZone = styled.div``;
@@ -67,7 +67,7 @@ export default function SideBar() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const correctCode = "240550"; // 이곳에 실제 인증번호를 설정하세요
-  const { userLevelData, currentUser } = useUserLevel();
+  const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
 
   const handleCodeInputChange = (e) => {
     setVerificationCode(e.target.value);
@@ -77,6 +77,9 @@ export default function SideBar() {
     e.preventDefault();
     setIsModalOpen(true);
   };
+
+  const isDirector = isHospitalOwner(userLevelData, currentUser);
+  const role = currentUser?.role || "";
 
   return (
     <div className="flex flex-col h-full justify-center bg-onceBackground w-[250px] min-h-[900px] py-[20px]">

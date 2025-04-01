@@ -16,6 +16,7 @@ import {
   CHAT_TYPES,
 } from "./ChatService";
 import { useUserLevel } from "../../utils/UserLevelContext";
+import { isHospitalOwner } from "../../utils/permissionUtils";
 import { IoPaperPlaneSharp } from "react-icons/io5";
 import { db } from "../../firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -1026,7 +1027,7 @@ const LoadingSpinner = styled.div`
 `;
 
 const ChatWindow = () => {
-  const { userLevelData, isLoggedIn } = useUserLevel();
+  const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
   const [chatRooms, setChatRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1207,8 +1208,8 @@ const ChatWindow = () => {
 
       // userLevelData에서 department와 role 가져오기
       const department = userLevelData?.department || "";
-      const role = userLevelData?.role || "";
-      const isDirector = role === "대표원장";
+      const role = currentUser?.role || "";
+      const isDirector = isHospitalOwner(userLevelData, currentUser);
 
       console.log("현재 사용자 정보:", {
         department,
@@ -1279,7 +1280,7 @@ const ChatWindow = () => {
           const sender = {
             id: userLevelData?.uid || `temp-${Date.now()}`,
             name: userLevelData?.name || userLevelData?.displayName || "사용자",
-            role: userLevelData?.role || "",
+            role: currentUser?.role || "",
             department: userLevelData?.department || "",
           };
 
@@ -1536,15 +1537,54 @@ const ChatWindow = () => {
 
   // 헤더에 시크릿 모드 아이콘 추가
   const renderSecretModeIcon = () => {
-    const isDirector = userLevelData?.role === "대표원장";
+    const isDirector = currentUser?.role === "대표원장";
     //여기도 currentUser로
 
     console.log("isDirector", userLevelData);
 
     if (!isDirector) return null;
 
+    // 시크릿 모드일 때 아이콘 클릭 처리
+    const handleSecretModeIconClick = () => {
+      if (secretMode) {
+        // 시크릿 모드가 켜져 있을 때는 끄고 채팅 리스트로 돌아가기
+        setLoading(true);
+
+        setTimeout(() => {
+          // 구독 정리
+          if (messageUnsubscribe) {
+            messageUnsubscribe();
+            setMessageUnsubscribe(null);
+          }
+
+          // 채팅방 상태 초기화
+          setMessages([]);
+          setSelectedRoom(null);
+
+          // 답장 상태, 멘션 상태 등 초기화
+          setReplyToMessage(null);
+          setShowMentionSuggestions(false);
+          setShowMembers(false);
+
+          // 시크릿 모드 해제
+          setSecretMode(false);
+
+          // 채팅방 목록 다시 로드 (일반 모드로)
+          fetchChatRooms(false);
+
+          // 로딩 상태 해제
+          setTimeout(() => {
+            setLoading(false);
+          }, 500);
+        }, 50);
+      } else {
+        // 시크릿 모드가 꺼져 있을 때는 비밀번호 모달 표시
+        togglePasswordModal();
+      }
+    };
+
     return (
-      <SecretModeIcon onClick={togglePasswordModal}>
+      <SecretModeIcon onClick={handleSecretModeIconClick}>
         📶
         {secretMode && (
           <span
@@ -2004,7 +2044,7 @@ const ChatWindow = () => {
               formattedTime,
               createdAt: Date.now(),
               createdAt2: serverTimestamp(),
-              type: "chat",
+              type: "채팅",
               department: departmentName,
               senderInfo: selectedSender.name,
             };
@@ -2095,7 +2135,7 @@ const ChatWindow = () => {
   const messageGroups = groupMessagesByDate(messages);
 
   // 현재 사용자가 원장님인지 확인
-  const isDirector = userLevelData?.role === "대표원장";
+  const isDirector = isHospitalOwner(userLevelData, currentUser);
 
   // 메시지 표시 부분에서 멘션된 텍스트 하이라이트
   const renderMessageText = (message) => {

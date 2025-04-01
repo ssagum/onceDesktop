@@ -77,10 +77,51 @@ const getTimeInMillis = (timestamp) => {
     : 0;
 };
 
-export default function ReceivedCallList() {
+export default function ReceivedCallList({
+  setRequestModalVisible,
+  setRequestModalTab,
+  setSelectedRequestId,
+}) {
   const [calls, setCalls] = useState([]);
   const { userLevelData } = useUserLevel();
   const { showToast } = useToast();
+
+  // 요청 모달 열기 이벤트 핸들러
+  const handleOpenRequestModal = (tabName, requestId) => {
+    if (setRequestModalVisible && setRequestModalTab) {
+      setRequestModalVisible(true);
+      setRequestModalTab(tabName);
+      if (setSelectedRequestId && requestId) {
+        setSelectedRequestId(requestId);
+      }
+    } else {
+      console.error("요청 모달 열기 함수가 제공되지 않았습니다.");
+      showToast("요청 상세 정보를 볼 수 없습니다.", "error");
+    }
+  };
+
+  // 전역 함수로 요청 모달 열기 함수 등록
+  useEffect(() => {
+    // 전역 함수 등록
+    window.openRequestStatusModal = (tabName, requestId) => {
+      handleOpenRequestModal(tabName, requestId);
+    };
+
+    // 이벤트 리스너 등록
+    const eventHandler = (event) => {
+      const { tabName, requestId } = event.detail;
+      handleOpenRequestModal(tabName, requestId);
+    };
+
+    window.addEventListener("openRequestStatusModal", eventHandler);
+
+    // 컴포넌트 언마운트 시 정리
+    return () => {
+      window.removeEventListener("openRequestStatusModal", eventHandler);
+      // 전역 함수 제거
+      window.openRequestStatusModal = undefined;
+    };
+  }, [setRequestModalVisible, setRequestModalTab, setSelectedRequestId]);
 
   // 테스트 데이터 생성 함수
   const createTestCalls = async (targetReceiver) => {
@@ -89,7 +130,7 @@ export default function ReceivedCallList() {
       return;
     }
 
-    const callTypes = ["예약", "호출", "채팅", "시스템"];
+    const callTypes = ["예약", "호출", "채팅", "시스템", "요청"];
     const senders = ["접수실", "검사실", "간호사실", "원무과", "물리치료실"];
 
     // 각 타입별 특화된 메시지 정의
@@ -113,6 +154,11 @@ export default function ReceivedCallList() {
         "시스템 업데이트가 필요합니다",
         "백업 완료 알림",
         "디스크 공간 부족 경고",
+      ],
+      요청: [
+        "새로운 요청이 도착했습니다",
+        "요청 사항 검토가 필요합니다",
+        "부서 간 요청이 접수되었습니다",
       ],
     };
 
@@ -147,8 +193,24 @@ export default function ReceivedCallList() {
         await addDoc(collection(db, "calls"), callData);
       }
 
+      // 요청 타입의 호출도 하나 생성
+      const requestCall = {
+        message: "부서 간 요청이 도착했습니다",
+        receiverId: targetReceiver,
+        senderId: senders[Math.floor(Math.random() * senders.length)],
+        formattedTime: `${hours}:${minutes}`,
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
+        type: "요청",
+        requestId: `test-request-${Date.now()}`, // 테스트용 요청 ID
+        [targetReceiver]: true,
+        [randomSender]: true,
+      };
+
+      await addDoc(collection(db, "calls"), requestCall);
+
       showToast(
-        `${targetReceiver} 테스트 호출 4개가 생성되었습니다.`,
+        `${targetReceiver} 테스트 호출 5개가 생성되었습니다.`,
         "success"
       );
     } catch (error) {
@@ -184,10 +246,23 @@ export default function ReceivedCallList() {
     return () => unsubscribe();
   }, [userLevelData?.location, userLevelData?.department]);
 
+  // 호출 클릭 핸들러
+  const handleCallClick = (call) => {
+    if (call.type === "요청" && call.requestId) {
+      handleOpenRequestModal("request", call.requestId);
+    }
+  };
+
   return (
     <Container className="scrollbar-hide">
       {calls.length > 0 ? (
-        calls.map((call) => <RenderCallItem key={call.id} call={call} />)
+        calls.map((call) => (
+          <RenderCallItem
+            key={call.id}
+            call={call}
+            onClick={() => handleCallClick(call)}
+          />
+        ))
       ) : (
         <NoCallMessage>수신된 호출이 없습니다.</NoCallMessage>
       )}

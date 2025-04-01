@@ -431,13 +431,15 @@ const ItemDetailModal = ({
                 <p className="text-base">{item.priority || "중"}</p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">발신자</h3>
-                <p className="text-base">{item.senderPeople?.[0] || "익명"}</p>
+                <h3 className="text-sm font-medium text-gray-500">발신 부서</h3>
+                <p className="text-base font-medium bg-gray-100 px-2 py-1 rounded-md">
+                  {item.senderDepartment || "미지정"}
+                </p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">수신자</h3>
-                <p className="text-base">
-                  {item.receiverPeople?.length || 0}명
+                <h3 className="text-sm font-medium text-gray-500">수신 부서</h3>
+                <p className="text-base font-medium bg-purple-100 text-purple-800 px-2 py-1 rounded-md">
+                  {item.receiverDepartment || "미지정"}
                 </p>
               </div>
               <div>
@@ -1154,30 +1156,57 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
       content = (
         <>
           <div
-            className="font-medium text-gray-800 text-base mb-2 border-l-4 border-purple-500 pl-2 truncate"
+            className="font-medium text-gray-800 text-base mb-2 border-l-4 border-purple-500 pl-2 truncate flex items-center justify-between"
             title={data.title}
           >
-            {data.title || "요청"}
+            <span>{data.title || "요청"}</span>
+            <span
+              className={`text-xs font-bold rounded-full px-2 py-0.5 ml-2 ${
+                data.priority === "상"
+                  ? "bg-red-100 text-red-800"
+                  : data.priority === "중"
+                  ? "bg-yellow-100 text-yellow-800"
+                  : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {data.priority || "중"}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-center mb-2 mt-1">
+            <div className="flex items-center text-center w-full">
+              <span className="flex-1 font-medium text-xs text-gray-700 bg-gray-100 rounded-md px-2 py-1">
+                {data.senderDepartment || "발신부서 미상"}
+              </span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mx-2 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
+                />
+              </svg>
+              <span className="flex-1 font-medium text-xs text-purple-800 bg-purple-100 rounded-md px-2 py-1">
+                {data.receiverDepartment || "수신부서 미상"}
+              </span>
+            </div>
           </div>
 
           <div
-            className="text-sm text-gray-600 mb-2 line-clamp-2"
+            className="text-sm text-gray-600 mb-3 line-clamp-2 bg-gray-50 p-2 rounded-md"
             title={data.message}
           >
             {data.message}
           </div>
 
-          <div className="flex flex-wrap text-sm mb-2">
-            <span className="mr-2 bg-gray-100 px-2 py-0.5 rounded-full text-xs">
-              중요도: {data.priority || "중"}
-            </span>
-            <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">
-              수신자: {data.receiverPeople?.length || 0}명
-            </span>
-          </div>
-
           <div className="flex justify-between items-center mt-1 text-xs text-gray-500 pt-1 border-t border-gray-100">
-            <div className="flex items-center">
+            <div className="flex items-center text-gray-600">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-3 w-3 mr-1"
@@ -1189,12 +1218,28 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              {data.senderPeople?.[0] ? data.senderPeople[0] : "익명"}
+              {formatShortDate(data.timestamp)}
             </div>
-            <div>{formatShortDate(data.timestamp)}</div>
+            <div className="flex items-center text-gray-600">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3 w-3 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              {data.formattedTime || ""}
+            </div>
           </div>
         </>
       );
@@ -1847,6 +1892,8 @@ const RequestStatusModal = ({
   const [generalRequests, setGeneralRequests] = useState([]);
   // 누락된 상태 변수 추가
   const [stockItems, setStockItems] = useState([]);
+  // addTestData 변수 추가
+  const [addTestData, setAddTestData] = useState(true);
 
   // 거래처 모달 관련 상태 추가
   const [vendorModalVisible, setVendorModalVisible] = useState(false);
@@ -2318,10 +2365,50 @@ const RequestStatusModal = ({
       console.log("데이터 샘플 (첫 번째 항목):", data[0]);
     }
 
-    // 요청 데이터의 경우 - 누구나 모든 요청 데이터를 볼 수 있음
+    // 요청 데이터의 경우 - 필터링 로직 수정
     if (activeTab === "request") {
-      console.log("요청 데이터는 모든 사용자가 볼 수 있음");
-      return data;
+      console.log("요청 데이터 필터링 시작");
+
+      // 대표원장 여부 확인
+      const isOwner = isHospitalOwner(userLevelData, currentUser);
+      console.log("대표원장 여부 (isHospitalOwner):", isOwner);
+
+      // 대표원장인 경우 모든 데이터를 볼 수 있음
+      if (isOwner) {
+        console.log("대표원장 권한으로 모든 요청 데이터 조회", data);
+        return data;
+      }
+
+      // PC의 부서 정보 가져오기
+      const pcDepartment = userLevelData?.department || "";
+      console.log("PC 부서 정보:", pcDepartment);
+
+      if (!pcDepartment) {
+        console.log("부서 정보 없음 - 요청 데이터 없음");
+        return [];
+      }
+
+      // 요청 필터링:
+      // 1. 발신부서나 수신부서가 현재 부서와 일치
+      // 2. 발신부서나 수신부서가 '대표원장'이고 현재 사용자가 대표원장인 경우
+      const filtered = data.filter((item) => {
+        // 대표원장 관련 조건
+        const isOwnerRelated =
+          (item.senderDepartment === "대표원장" ||
+            item.receiverDepartment === "대표원장") &&
+          isOwner;
+
+        // 부서 일치 조건
+        const isDeptMatch =
+          isDepartmentMatch(item.senderDepartment, pcDepartment) ||
+          isDepartmentMatch(item.receiverDepartment, pcDepartment);
+
+        return isDeptMatch || isOwnerRelated;
+      });
+
+      console.log("필터링 전 요청 데이터 개수:", data.length);
+      console.log("필터링 후 요청 데이터 개수:", filtered.length);
+      return filtered;
     }
 
     // 대표원장 여부 확인 - 로그인 여부와 상관없이 role 정보만 사용
@@ -2710,6 +2797,14 @@ const RequestStatusModal = ({
           "success"
         );
 
+        // 요청 탭이고 상태가 승인됨 또는 반려됨인 경우 발신자에게 알림(call) 전송
+        if (
+          activeTab === "request" &&
+          (toStatus === "승인됨" || toStatus === "반려됨")
+        ) {
+          await sendCallNotification(currentItem, toStatus, reason);
+        }
+
         // 데이터 리프레시
         loadRealData();
 
@@ -2723,6 +2818,56 @@ const RequestStatusModal = ({
       console.error("상태 변경 처리 오류:", error);
       showToast("상태 변경 처리 중 오류가 발생했습니다.", "error");
       return Promise.reject(error); // 오류 시 reject
+    }
+  };
+
+  // 요청 상태 변경 알림(call) 전송 함수 추가
+  const sendCallNotification = async (requestItem, newStatus, reason) => {
+    try {
+      // 요청 항목에 필요한 정보가 있는지 확인
+      if (!requestItem.senderDepartment) {
+        console.warn("요청 항목에 발신 부서 정보가 없습니다:", requestItem);
+        return;
+      }
+
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const formattedTime = `${hours}:${minutes}`;
+
+      // 상태에 따른 메시지 내용 생성
+      const statusText = newStatus === "승인됨" ? "승인" : "반려";
+      const message = `[${
+        requestItem.receiverDepartment || userLevelData.department
+      }] ${requestItem.title} 요청이 ${statusText}되었습니다.`;
+
+      // 호출(call) 데이터 생성 - 발신부서에 알림
+      const callData = {
+        message: message,
+        receiverId: requestItem.senderDepartment, // 요청 발신 부서를 receiverId로 설정
+        senderId: requestItem.receiverDepartment || userLevelData.department, // 요청 수신 부서(현재 처리자 부서)를 senderId로 설정
+        formattedTime,
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
+        type: "요청", // 호출 타입을 '요청'으로 설정
+        requestId: requestItem.id, // 요청 ID 저장 (나중에 링크용)
+        approvalReason: reason, // 승인/반려 사유 추가
+        newStatus: newStatus, // 변경된 상태 정보 추가
+        [requestItem.senderDepartment]: true, // 수신 부서 필드 설정 (발신 부서)
+        [requestItem.receiverDepartment || userLevelData.department]: true, // 발신 부서 필드 설정 (수신 부서/처리자)
+      };
+
+      console.log("상태 변경 알림 콜 데이터:", callData);
+
+      // Firestore에 호출 데이터 저장
+      await addDoc(collection(db, "calls"), callData);
+      console.log("상태 변경 알림 전송 완료:", newStatus);
+
+      return true;
+    } catch (error) {
+      console.error("상태 변경 알림 전송 오류:", error);
+      // 알림 전송 오류는 사용자에게 표시하지 않음 (주요 기능에 영향 없음)
+      return false;
     }
   };
 
@@ -3340,6 +3485,132 @@ const RequestStatusModal = ({
 
   // ItemDetailModal에서 접근할 수 있도록 전역 객체에 할당
   globalThis.onceHandleVendorClick = handleVendorClick;
+
+  // // 테스트용 요청 데이터 추가
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV === "development" && addTestData) {
+  //     const addExampleRequests = async () => {
+  //       try {
+  //         // 이미 요청 데이터가 있는지 확인
+  //         const reqQuery = query(collection(db, "requests"));
+  //         const reqSnapshot = await getDocs(reqQuery);
+
+  //         if (reqSnapshot.docs.length >= 5) {
+  //           console.log(
+  //             "이미 충분한 요청 데이터가 있음, 테스트 데이터 추가 안함"
+  //           );
+  //           return;
+  //         }
+
+  //         // 부서 간 요청 예시 데이터
+  //         const exampleRequests = [
+  //           {
+  //             title: "물리치료 장비 점검 요청",
+  //             message:
+  //               "정기 점검일이 도래한 물리치료 장비(초음파 치료기 3대)에 대한 전문 점검을 요청드립니다. 가능한 빠른 일정으로 부탁드립니다.",
+  //             receiverDepartment: "원무팀",
+  //             senderDepartment: "물리치료팀",
+  //             senderName: "김치료",
+  //             priority: "중",
+  //             status: "대기중",
+  //             createdAt: Date.now() - 3600000 * 2, // 2시간 전
+  //             formattedTime: "14:30",
+  //           },
+  //           {
+  //             title: "간호 물품 추가 구매 요청",
+  //             message:
+  //               "병동에서 사용하는 1회용 장갑과 마스크가 예상보다 빨리 소진되고 있습니다. 추가 주문 부탁드립니다. 현재 재고: 장갑 2박스, 마스크 1박스",
+  //             receiverDepartment: "원무팀",
+  //             senderDepartment: "간호팀",
+  //             senderName: "박간호",
+  //             priority: "상",
+  //             status: "대기중",
+  //             createdAt: Date.now() - 3600000 * 8, // 8시간 전
+  //             formattedTime: "08:15",
+  //           },
+  //           {
+  //             title: "X-ray 장비 수리 요청",
+  //             message:
+  //               "영상의학과 2번 X-ray 장비에서 에러 메시지가 반복적으로 발생합니다. 기술 지원팀 방문 일정 조율 부탁드립니다.",
+  //             receiverDepartment: "원무팀",
+  //             senderDepartment: "영상의학팀",
+  //             senderName: "이방사",
+  //             priority: "상",
+  //             status: "대기중",
+  //             createdAt: Date.now() - 3600000 * 24, // 24시간 전
+  //             formattedTime: "16:45",
+  //           },
+  //           {
+  //             title: "환자 이송 지원 요청",
+  //             message:
+  //               "내일 오전 10시에 중환자 3명의 외부 병원 이송이 예정되어 있습니다. 이송 차량 및 인력 지원 부탁드립니다.",
+  //             receiverDepartment: "원무팀",
+  //             senderDepartment: "간호팀",
+  //             senderName: "최간호",
+  //             priority: "중",
+  //             status: "승인됨",
+  //             createdAt: Date.now() - 3600000 * 48, // 48시간 전
+  //             formattedTime: "09:30",
+  //             approvalReason:
+  //               "이송 차량 및 인력 배정 완료했습니다. 담당: 김이송",
+  //           },
+  //           {
+  //             title: "진료과 인턴 배정 요청",
+  //             message:
+  //               "다음 주부터 시작되는 새 학기를 맞아 내과에 인턴 2명 배정 요청드립니다. 이전 인턴들은 모두 실습을 마쳤습니다.",
+  //             receiverDepartment: "원무팀",
+  //             senderDepartment: "진료팀",
+  //             senderName: "정의사",
+  //             priority: "하",
+  //             status: "반려됨",
+  //             createdAt: Date.now() - 3600000 * 72, // 72시간 전
+  //             formattedTime: "11:20",
+  //             approvalReason:
+  //               "현재 인턴 배정이 모두 완료된 상태입니다. 다음 달 배정 시 우선 고려하겠습니다.",
+  //           },
+  //           {
+  //             title: "근무표 변경 승인 요청",
+  //             message:
+  //               "내과 의료진 휴가로 인한 다음 주 근무표 변경 건에 대해 검토 후 승인 부탁드립니다. 첨부된 수정안 참고 바랍니다.",
+  //             receiverDepartment: "대표원장",
+  //             senderDepartment: "간호팀",
+  //             senderName: "이수간",
+  //             priority: "중",
+  //             status: "대기중",
+  //             createdAt: Date.now() - 3600000 * 10, // 10시간 전
+  //             formattedTime: "10:15",
+  //           },
+  //           {
+  //             title: "의료장비 교체 예산 검토 요청",
+  //             message:
+  //               "노후화된 초음파 장비 교체에 관한 예산안을 검토 부탁드립니다. 3개 업체 견적서를 첨부하였으니 확인 바랍니다.",
+  //             receiverDepartment: "대표원장",
+  //             senderDepartment: "원무팀",
+  //             senderName: "박경리",
+  //             priority: "상",
+  //             status: "승인됨",
+  //             createdAt: Date.now() - 3600000 * 36, // 36시간 전
+  //             formattedTime: "15:40",
+  //             approvalReason:
+  //               "검토 완료. 견적서 3번 업체로 진행하세요. 구매 계약서는 별도 검토가 필요합니다.",
+  //           },
+  //         ];
+
+  //         // Firestore에 요청 데이터 저장
+  //         for (const request of exampleRequests) {
+  //           await addDoc(collection(db, "requests"), request);
+  //         }
+
+  //         console.log("테스트 요청 데이터가 추가되었습니다.");
+  //       } catch (error) {
+  //         console.error("테스트 요청 데이터 추가 중 오류:", error);
+  //       }
+  //     };
+
+  //     // 예시 데이터 추가 함수 호출
+  //     addExampleRequests();
+  //   }
+  // }, [addTestData]);
 
   return (
     <>

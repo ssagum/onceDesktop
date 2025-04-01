@@ -9,7 +9,9 @@ import {
   IoNotificationsOutline,
   IoChatbubblesOutline,
   IoConstructOutline,
+  IoDocumentTextOutline,
 } from "react-icons/io5";
+import { useToast } from "../../contexts/ToastContext";
 
 const CallContainer = styled(HoverFrame)`
   padding: 10px;
@@ -38,6 +40,8 @@ const TypeIcon = styled.div`
         return "rgba(255, 255, 0, 0.1)";
       case "시스템":
         return "rgba(255, 0, 0, 0.1)";
+      case "요청":
+        return "rgba(128, 0, 128, 0.1)";
       default:
         return "rgba(0, 128, 0, 0.1)";
     }
@@ -45,15 +49,17 @@ const TypeIcon = styled.div`
   color: ${(props) => {
     switch (props.callType) {
       case "예약":
-        return "#0000FF"; // 파란색
+        return "#0000FF";
       case "호출":
-        return "#008000"; // 초록색
+        return "#008000";
       case "채팅":
-        return "#8B8000"; // 어두운 노란색 (가독성을 위해)
+        return "#8B8000";
       case "시스템":
-        return "#FF0000"; // 빨간색
+        return "#FF0000";
+      case "요청":
+        return "#800080";
       default:
-        return "#008000"; // 초록색
+        return "#008000";
     }
   }};
   font-size: 20px;
@@ -132,6 +138,8 @@ const Badge = styled.span`
         return "#fffde7";
       case "시스템":
         return "#ffebee";
+      case "요청":
+        return "#f3e5f5";
       default:
         return "#e8f5e9";
     }
@@ -139,22 +147,42 @@ const Badge = styled.span`
   color: ${(props) => {
     switch (props.callType) {
       case "예약":
-        return "#0000FF"; // 파란색
+        return "#0000FF";
       case "호출":
-        return "#008000"; // 초록색
+        return "#008000";
       case "채팅":
-        return "#8B8000"; // 어두운 노란색
+        return "#8B8000";
       case "시스템":
-        return "#FF0000"; // 빨간색
+        return "#FF0000";
+      case "요청":
+        return "#800080";
       default:
-        return "#008000"; // 초록색
+        return "#008000";
     }
   }};
+`;
+
+// 버튼 컴포넌트 추가
+const ActionButton = styled.button`
+  background-color: #1a73e8;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #0d47a1;
+  }
 `;
 
 export default function RenderCallItem({ call }) {
   const [showModal, setShowModal] = useState(false);
   const callType = call.type || "호출";
+  const { showToast } = useToast();
 
   const getTypeIcon = (type) => {
     switch (type) {
@@ -166,6 +194,8 @@ export default function RenderCallItem({ call }) {
         return <IoChatbubblesOutline size={22} />;
       case "시스템":
         return <IoConstructOutline size={22} />;
+      case "요청":
+        return <IoDocumentTextOutline size={22} />;
       default:
         return <IoNotificationsOutline size={22} />;
     }
@@ -203,7 +233,34 @@ export default function RenderCallItem({ call }) {
 
   const handleModalClick = (e) => {
     e.stopPropagation();
-    setShowModal(true);
+
+    // 요청 타입이고 requestId가 있는 경우 바로 요청 모달 열기
+    if (callType === "요청" && call.requestId) {
+      openRequestStatusModal();
+    } else {
+      setShowModal(true);
+    }
+  };
+
+  // 요청 상태 모달 열기 함수
+  const openRequestStatusModal = () => {
+    if (typeof window.openRequestStatusModal === "function") {
+      window.openRequestStatusModal("request", call.requestId);
+      setShowModal(false); // 호출 모달 닫기
+    } else {
+      // 커스텀 이벤트 발생
+      const event = new CustomEvent("openRequestStatusModal", {
+        detail: { tabName: "request", requestId: call.requestId },
+      });
+      window.dispatchEvent(event);
+      setShowModal(false); // 호출 모달 닫기
+
+      // 디버깅용 메시지
+      console.log("요청 상태 모달 열기 이벤트 발생:", {
+        tabName: "request",
+        requestId: call.requestId,
+      });
+    }
   };
 
   return (
@@ -249,22 +306,33 @@ export default function RenderCallItem({ call }) {
                 <Badge callType={callType}>{callType}</Badge>
               </Value>
             </InfoRow>
+
             <InfoRow>
               <Label>발신:</Label>
               <Value>{call.senderId}</Value>
             </InfoRow>
+
             <InfoRow>
               <Label>수신:</Label>
               <Value>{call.receiverId}</Value>
             </InfoRow>
+
             <InfoRow>
               <Label>시간:</Label>
               <Value>{formatRelativeTime(call.createdAt)}</Value>
             </InfoRow>
+
             <InfoRow>
-              <Label>내용:</Label>
+              <Label>메시지:</Label>
               <Value>{call.message}</Value>
             </InfoRow>
+
+            {/* 요청 타입인 경우 요청 상세 보기 버튼 추가 */}
+            {callType === "요청" && call.requestId && (
+              <ActionButton onClick={openRequestStatusModal}>
+                요청 상세 보기
+              </ActionButton>
+            )}
           </ModalBody>
         </ModalContent>
       </ModalTemplate>
