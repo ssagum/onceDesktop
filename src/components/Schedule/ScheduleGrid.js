@@ -801,6 +801,61 @@ const sendScheduleNotification = async (action, appointmentData) => {
   }
 };
 
+// 메모 관련 알림을 보내는 함수 추가
+const sendMemoNotification = async (action, memoData, content) => {
+  try {
+    // 메모 유형에 따라 수신자 결정
+    const receiverId = memoData.type === "물리치료" ? "물리치료팀" : "진료팀";
+
+    // 액션에 따른 메시지 생성
+    let message = "";
+    const date = memoData.date;
+    const shortContent =
+      content && content.length > 20
+        ? content.substring(0, 20) + "..."
+        : content || "내용 없음";
+
+    switch (action) {
+      case "create":
+        message = `[메모 추가] ${date} | ${memoData.type} | ${shortContent}`;
+        break;
+      case "delete":
+        message = `[메모 삭제] ${date} | ${memoData.type} | ${shortContent}`;
+        break;
+      default:
+        message = `[메모 변경] ${date} | ${memoData.type}`;
+    }
+
+    // 현재 시간 포맷팅
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const formattedTime = `${hours}:${minutes}`;
+
+    // 발신자 정보 - "메모" 고정
+    const senderId = "메모";
+
+    // call 데이터 생성
+    const callData = {
+      message,
+      receiverId,
+      senderId,
+      formattedTime,
+      createdAt: Date.now(),
+      createdAt2: serverTimestamp(),
+      type: "예약",
+      [receiverId]: true,
+      [senderId]: true,
+    };
+
+    // Firebase에 call 저장
+    await addDoc(collection(db, "calls"), callData);
+    console.log(`${receiverId}에게 메모 ${action} 알림 전송 완료`);
+  } catch (error) {
+    console.error("메모 알림 전송 오류:", error);
+  }
+};
+
 // processAppointmentSubmit 함수 수정 - 일정 생성/수정 시 알림 전송 추가
 const processAppointmentSubmit = async (formData) => {
   // FormData 객체를 일반 JavaScript 객체로 변환
@@ -2038,13 +2093,16 @@ const ScheduleGrid = ({
       }));
 
       // Firestore에 저장
-      const [, date] = memoKey.split("-");
+      const [, date, type] = memoKey.split("-");
       const memoRef = doc(db, "memos", memoKey);
       await setDoc(memoRef, {
         date,
         content: finalItems,
         updatedAt: new Date(),
       });
+
+      // 메모 추가 알림 전송
+      await sendMemoNotification("create", { date, type }, content.trim());
 
       console.log(`메모 항목 추가됨: ${memoKey}`, content);
     } catch (error) {
@@ -2065,6 +2123,13 @@ const ScheduleGrid = ({
         currentItems = [];
       }
 
+      // 삭제할 항목 정보 저장
+      const deletedItem = currentItems[itemIndex];
+      const deletedContent =
+        typeof deletedItem === "string"
+          ? deletedItem
+          : deletedItem?.content || "";
+
       // 항목 삭제 (인덱스로 삭제)
       const updatedItems = currentItems.filter(
         (_, index) => index !== itemIndex
@@ -2077,7 +2142,7 @@ const ScheduleGrid = ({
       }));
 
       // Firestore에 저장
-      const [, date] = memoKey.split("-");
+      const [, date, type] = memoKey.split("-");
       const memoRef = doc(db, "memos", memoKey);
 
       if (updatedItems.length === 0) {
@@ -2093,6 +2158,9 @@ const ScheduleGrid = ({
         });
         console.log(`메모 항목 삭제됨: ${memoKey}`, itemIndex);
       }
+
+      // 메모 삭제 알림 전송
+      await sendMemoNotification("delete", { date, type }, deletedContent);
     } catch (error) {
       console.error("메모 항목 삭제 오류:", error);
     }
@@ -2324,16 +2392,14 @@ const ScheduleGrid = ({
           data-appointment-id={appointment.id}
           style={{
             gridColumn: colIndex,
-            gridRow: `${startTimeIndex + 1} / span ${
-              endTimeIndex - startTimeIndex + 1
-            }`,
+            gridRow: `${startTimeIndex + 1} / ${endTimeIndex + 1}`, // span 제거하고 직접 종료 셀 지정
             backgroundColor: appointmentColor,
             zIndex: 5,
             marginTop: `${startTimeOffset * cellHeight}px`,
             height: `${minHeight}px`,
             maxHeight: `${
-              (endTimeIndex - startTimeIndex + 1) * cellHeight - 4
-            }px`, // 여백 고려
+              endTimeIndex * cellHeight - startTimeIndex * cellHeight - 4
+            }px`, // 여백 고려, 종료 시간 셀은 포함하지 않음
           }}
           onClick={(e) => handleAppointmentClick(appointment, e)}
         >
@@ -2344,7 +2410,7 @@ const ScheduleGrid = ({
               title="참고사항 있음"
               style={{
                 opacity: 0.9,
-                borderWidth: "12px 12px 12px 12px",
+                borderWidth: "6px 6px 6px 6px",
               }}
             />
           )}
@@ -2355,14 +2421,6 @@ const ScheduleGrid = ({
               {formatTime(appointment.startTime)} -{" "}
               {formatTime(appointment.endTime)}
             </div>
-            {appointment.staffName && (
-              <div
-                className="staff-name"
-                style={{ fontSize: "0.8em", marginTop: "3px", opacity: 0.9 }}
-              >
-                {appointment.staffName}
-              </div>
-            )}
           </div>
         </AppointmentBlock>
       );
@@ -3233,9 +3291,7 @@ const ScheduleGrid = ({
             key={`vacation-${vacation.id}-${currentDateStr}`}
             style={{
               gridColumn: colIndex,
-              gridRow: `${finalStartTimeIndex + 1} / span ${
-                finalEndTimeIndex - finalStartTimeIndex + 1
-              }`,
+              gridRow: `${finalStartTimeIndex + 1} / ${finalEndTimeIndex + 1}`, // span 대신 직접 종료 셀 지정
               backgroundColor: "#E5E7EB", // 회색으로 변경
               zIndex: 8, // 예약(10)보다 낮고 기본 셀(1)보다 높게
               boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
