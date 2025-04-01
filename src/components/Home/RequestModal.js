@@ -249,13 +249,11 @@ export default function RequestModal({ isVisible, setIsVisible }) {
                   className="bg-white border border-gray-300 rounded-md px-4 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">부서 선택</option>
-                  {DEPARTMENTS.filter((dept) => dept !== senderDepartment).map(
-                    (dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    )
-                  )}
+                  {DEPARTMENTS.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

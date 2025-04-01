@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import ModalTemplate from "../common/ModalTemplate";
 import { cancel } from "../../assets";
 import {
@@ -100,16 +100,47 @@ const ItemDetailModal = ({
   itemType,
   isAdmin,
   onStatusChange,
+  verifiedItems,
 }) => {
-  const [currentStatus, setCurrentStatus] = useState("");
+  const { userLevelData, currentUser } = useUserLevel();
   const { showToast } = useToast();
   const [reason, setReason] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(null);
-  const { userLevelData, currentUser } = useUserLevel();
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(""); // 현재 상태를 저장할 변수 추가
 
-  // RequestStatusModal 컴포넌트에서 필요한 상태와 핸들러 추가
-  const [vendorModalVisible, setVendorModalVisible] = useState(false);
-  const [selectedVendorData, setSelectedVendorData] = useState(null);
+  // 대표원장 여부 확인
+  const isOwner = isHospitalOwner(userLevelData, currentUser);
+
+  // 비밀번호 검증 여부 확인 - 원장님인 경우 항상 true
+  const isItemVerified = useMemo(() => {
+    if (isOwner) return true;
+    return itemType === "vacation"
+      ? verifiedItems && verifiedItems[item?.id]
+      : true;
+  }, [itemType, verifiedItems, item?.id, isOwner]);
+
+  useEffect(() => {
+    // 모달이 열릴 때 선택된 상태 초기화
+    if (isVisible) {
+      setSelectedStatus(null);
+      setReason("");
+
+      // 휴가 정보이고 원장님이 아니고 검증되지 않은 경우 비밀번호 모달 표시
+      if (itemType === "vacation" && !isOwner && !isItemVerified) {
+        setShowPasswordModal(true);
+      }
+    }
+  }, [isVisible, itemType, isOwner, isItemVerified]);
+
+  // 비밀번호 확인 처리
+  const handlePasswordResult = (success) => {
+    if (!success) {
+      // 비밀번호가 맞지 않으면 모달 닫기
+      setIsVisible(false);
+    }
+  };
 
   // 거래처 클릭 핸들러 - 전역 함수로 정의
   const handleVendorClick = async (vendorName) => {
@@ -170,10 +201,8 @@ const ItemDetailModal = ({
           return false;
         }
       } else if (itemType === "request") {
-        if (!canManageRequest(userLevelData, currentUser)) {
-          showToast("요청을 승인/반려할 권한이 없습니다.", "error");
-          return false;
-        }
+        // 요청 항목은 누구나 상태 변경 가능
+        return true;
       }
     }
     // 주문 관련 상태 체크 (비품에만 해당)
@@ -299,6 +328,26 @@ const ItemDetailModal = ({
 
   // 아이템 유형별 상세 정보 렌더링
   const renderDetails = () => {
+    if (!item) return null;
+
+    // 휴가 정보이고 대표원장이 아니고 검증되지 않은 경우 내용 마스킹
+    if (itemType === "vacation" && !isItemVerified) {
+      return (
+        <div className="p-4 bg-gray-50 rounded-md text-center">
+          <p className="text-gray-500 mb-4">
+            <i className="fas fa-lock mr-2"></i>
+            비밀번호 인증이 필요합니다
+          </p>
+          <button
+            onClick={() => setShowPasswordModal(true)}
+            className="px-4 py-2 bg-onceBlue text-white rounded-md"
+          >
+            비밀번호 입력하기
+          </button>
+        </div>
+      );
+    }
+
     switch (itemType) {
       case "vacation":
         return (
@@ -427,10 +476,6 @@ const ItemDetailModal = ({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500">중요도</h3>
-                <p className="text-base">{item.priority || "중"}</p>
-              </div>
-              <div>
                 <h3 className="text-sm font-medium text-gray-500">발신 부서</h3>
                 <p className="text-base font-medium bg-gray-100 px-2 py-1 rounded-md">
                   {item.senderDepartment || "미지정"}
@@ -442,15 +487,20 @@ const ItemDetailModal = ({
                   {item.receiverDepartment || "미지정"}
                 </p>
               </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">중요도</h3>
+                <p className="text-base">{item.priority || "중"}</p>
+              </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">현재 상태</h3>
                 <p className={`text-base ${getStatusColor(item.status)}`}>
                   {item.status}
                 </p>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 py-1">
                 <h3 className="text-sm font-medium text-gray-500">내용</h3>
-                <p className="text-base bg-gray-50 p-2 rounded-md">
+                <p className="text-base bg-gray-50 p-2 rounded-md line-clamp-2 overflow-hidden text-ellipsis">
                   {item.message || "내용 없음"}
                 </p>
               </div>
@@ -612,6 +662,8 @@ const ReasonInputModal = ({
 }) => {
   const [reason, setReason] = useState("");
   const reasonRef = useRef(null);
+  const submitButtonRef = useRef(null);
+  const isSubmittingRef = useRef(false);
 
   // 모달이 열릴 때 입력 필드에 포커스
   useEffect(() => {
@@ -622,6 +674,11 @@ const ReasonInputModal = ({
       const defaultReason = getDefaultReason();
       setReason(defaultReason);
     }
+
+    // 모달이 닫힐 때 제출 중 상태 초기화
+    return () => {
+      isSubmittingRef.current = false;
+    };
   }, [isVisible, actionType, itemType]);
 
   // 사유 입력 핸들러
@@ -635,19 +692,49 @@ const ReasonInputModal = ({
     setIsVisible(false);
   };
 
-  // 확인 버튼 클릭 핸들러
+  // 개선된 제출 함수 - 비동기 처리를 통해 입력 내용이 모두 반영되도록 함
   const handleSubmit = () => {
-    if (onSubmit && reason.trim()) {
-      onSubmit(reason);
-    }
-    handleClose();
+    // 이미 제출 중이면 중복 제출 방지
+    if (isSubmittingRef.current) return;
+
+    // 제출 중 상태로 설정
+    isSubmittingRef.current = true;
+
+    // 비동기로 처리하여 입력이 완전히 적용되도록 보장
+    setTimeout(() => {
+      if (onSubmit && reason.trim()) {
+        onSubmit(reason);
+      }
+      handleClose();
+
+      // 제출 후 상태 초기화
+      isSubmittingRef.current = false;
+    }, 50); // 약간의 지연 추가
   };
 
-  // 키 다운 이벤트 핸들러 - 엔터 키 처리
+  // 개선된 키 이벤트 핸들러
   const handleKeyDown = (e) => {
+    // 이미 제출 중이면 처리하지 않음
+    if (isSubmittingRef.current) {
+      e.preventDefault();
+      return;
+    }
+
+    // Enter 키이고 Shift 키가 눌리지 않은 경우 폼 제출
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); // 기본 엔터 동작 방지
+
+      // 텍스트가 있을 경우에만 제출
       if (reason.trim()) {
+        // 현재 포커스된 요소를 기억
+        const activeElement = document.activeElement;
+
+        // 포커스를 blur하여 입력 이벤트가 모두 적용되도록 함
+        if (activeElement) {
+          activeElement.blur();
+        }
+
+        // 비동기 제출로 처리
         handleSubmit();
       }
     }
@@ -806,9 +893,10 @@ const ReasonInputModal = ({
             취소
           </button>
           <button
+            ref={submitButtonRef}
             onClick={handleSubmit}
             className="bg-onceBlue text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-            disabled={!reason.trim()}
+            disabled={!reason.trim() || isSubmittingRef.current}
           >
             확인
           </button>
@@ -826,8 +914,137 @@ let globalDragState = {
   targetStatus: null,
 };
 
+// 비밀번호 입력 모달 컴포넌트 추가
+const PasswordModal = ({
+  isVisible,
+  setIsVisible,
+  onPasswordSubmit,
+  itemData,
+}) => {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const passwordRef = useRef(null);
+
+  useEffect(() => {
+    if (isVisible && passwordRef.current) {
+      passwordRef.current.focus();
+    }
+    // 모달이 열릴 때마다 상태 초기화
+    if (isVisible) {
+      setPassword("");
+      setError("");
+    }
+  }, [isVisible]);
+
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    // 숫자만 입력 가능하도록 제한
+    if (value === "" || /^\d{0,6}$/.test(value)) {
+      setPassword(value);
+      if (error) setError("");
+    }
+  };
+
+  const handleSubmit = () => {
+    // 휴가 신청 시 설정한 6자리 비밀번호 확인
+    if (itemData?.password && password === itemData.password) {
+      onPasswordSubmit(true);
+      setIsVisible(false);
+    } else {
+      setError("비밀번호가 일치하지 않습니다.");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSubmit();
+    }
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-[400px] p-6 animate-fade-in-up">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">휴가 정보 보호</h2>
+          <button
+            onClick={() => setIsVisible(false)}
+            className="text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-4">
+          휴가 신청 정보를 확인하려면 6자리 비밀번호를 입력해주세요.
+        </p>
+
+        <div className="mb-4">
+          <input
+            ref={passwordRef}
+            type="password"
+            value={password}
+            onChange={handlePasswordChange}
+            onKeyDown={handleKeyDown}
+            maxLength={6}
+            inputMode="numeric"
+            placeholder="비밀번호 입력 (6자리)"
+            className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+        </div>
+
+        <div className="flex justify-end space-x-2">
+          <button
+            onClick={() => setIsVisible(false)}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="bg-onceBlue text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 드래그 가능한 항목 컴포넌트
-const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
+const DraggableItem = ({
+  id,
+  data,
+  type,
+  onItemClick,
+  isAdmin,
+  isVerified = false,
+}) => {
+  const { userLevelData, currentUser } = useUserLevel();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [isVerifiedState, setIsVerifiedState] = useState(isVerified);
+
+  // useEffect를 통해 외부에서 isVerified가 변경되면 내부 상태도 업데이트
+  useEffect(() => {
+    setIsVerifiedState(isVerified);
+  }, [isVerified]);
+
   const {
     attributes,
     listeners,
@@ -850,6 +1067,22 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
   // 컴포넌트의 ref
   const itemRef = useRef(null);
   const [isBeingHoveredOver, setIsBeingHoveredOver] = useState(false);
+
+  // 대표원장 여부 확인
+  const isOwner = useMemo(() => {
+    return isHospitalOwner(userLevelData, currentUser);
+  }, [userLevelData, currentUser]);
+
+  // 비밀번호 입력 결과 처리
+  const handlePasswordResult = (success) => {
+    if (success) {
+      setIsVerifiedState(true);
+      // 비밀번호 확인 후 바로 상세 모달 열기
+      if (onItemClick) {
+        onItemClick(data);
+      }
+    }
+  };
 
   // DndContext에서 모니터링을 위한 훅 사용
   const dndContext = useDndMonitor({
@@ -984,9 +1217,45 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
     return format(date, "yyyy/MM/dd");
   };
 
+  // 아이템 클릭 핸들러 수정
+  const handleItemClick = (e) => {
+    if (isDragging) return; // 드래그 중일 때는 클릭 무시
+    e.stopPropagation(); // 이벤트 전파 중단
+
+    // 휴가 타입일 때
+    if (type === "vacation") {
+      // 원장님은 비밀번호 없이 바로 확인 가능
+      if (isOwner) {
+        setIsVerifiedState(true);
+        if (onItemClick) {
+          onItemClick(data);
+        }
+      }
+      // 원장님이 아니고 아직 검증되지 않은 경우 비밀번호 입력
+      else if (!isVerifiedState) {
+        setShowPasswordModal(true);
+      }
+      // 이미 검증된 경우 바로 열기
+      else if (onItemClick) {
+        onItemClick(data);
+      }
+    }
+    // 다른 타입은 바로 열기
+    else if (onItemClick) {
+      onItemClick(data);
+    }
+  };
+
   let content;
   switch (type) {
     case "vacation":
+      // DraggableItem 상태에서는 원장님도 내용을 볼 수 없도록 마스킹
+      // 단, 원장님은 클릭 시 비밀번호 없이 볼 수 있음
+      const shouldMask = type === "vacation" && !isVerifiedState;
+
+      // 승인 상태인 경우 신청자 이름은 공개
+      const isApproved = data.status === "승인됨";
+
       content = (
         <>
           <div className="font-medium text-gray-800 text-base mb-2 border-l-4 border-blue-500 pl-2">
@@ -996,7 +1265,7 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
           <div className="flex items-center text-sm text-gray-700 mb-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4 mr-1 text-gray-500"
+              className="h-4 w-4 mr-1"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -1017,7 +1286,16 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
             className="text-sm text-gray-600 mb-2 line-clamp-2"
             title={data.reason}
           >
-            {data.reason}
+            {shouldMask ? (
+              <div className="flex items-center">
+                <span className="text-gray-500">
+                  <i className="fas fa-lock mr-1"></i>
+                  비밀번호 보호된 내용입니다
+                </span>
+              </div>
+            ) : (
+              data.reason
+            )}
           </div>
 
           <div className="flex justify-between items-center mt-1 text-xs text-gray-500 pt-1 border-t border-gray-100">
@@ -1036,10 +1314,19 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 />
               </svg>
-              {data.userName}
+              {shouldMask && !isApproved ? "***" : data.userName}
             </div>
             <div>{formatShortDate(data.timestamp)}</div>
           </div>
+
+          {shouldMask && (
+            <div
+              className="text-xs text-blue-500 mt-1 cursor-pointer hover:underline"
+              onClick={handleItemClick}
+            >
+              {isOwner ? "클릭하여 내용 확인" : "비밀번호 입력하여 확인"}
+            </div>
+          )}
         </>
       );
       break;
@@ -1201,6 +1488,14 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
           <div
             className="text-sm text-gray-600 mb-3 line-clamp-2 bg-gray-50 p-2 rounded-md"
             title={data.message}
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxHeight: "3rem",
+            }}
           >
             {data.message}
           </div>
@@ -1248,41 +1543,42 @@ const DraggableItem = ({ id, data, type, onItemClick, isAdmin }) => {
       content = <div>Unknown item type</div>;
   }
 
-  // 이벤트 핸들러를 래핑하여 이벤트 버블링 제어
-  const handleItemClick = (e) => {
-    if (isDragging) return; // 드래그 중일 때는 클릭 무시
-    e.stopPropagation(); // 이벤트 전파 중단
-    if (onItemClick) {
-      onItemClick(data);
-    }
-  };
-
   return (
-    <div
-      ref={(node) => {
-        setNodeRef(node);
-        itemRef.current = node;
-      }}
-      {...attributes}
-      {...listeners}
-      style={style}
-      className={`bg-white p-3 mb-2 rounded-lg shadow-sm cursor-grab border border-gray-200 hover:shadow-md transition-all relative hover-scale ${
-        isBeingHoveredOver
-          ? "border-blue-500 border-2 bg-blue-50/20 shadow-md"
-          : ""
-      }`}
-      onClick={handleItemClick}
-      data-item-id={id}
-      data-item-type={type}
-      data-parent-status={data.status}
-    >
-      {content}
+    <>
+      <div
+        ref={(node) => {
+          setNodeRef(node);
+          itemRef.current = node;
+        }}
+        {...attributes}
+        {...listeners}
+        style={style}
+        className={`bg-white p-3 mb-2 rounded-lg shadow-sm cursor-grab border border-gray-200 hover:shadow-md transition-all relative hover-scale ${
+          isBeingHoveredOver
+            ? "border-blue-500 border-2 bg-blue-50/20 shadow-md"
+            : ""
+        }`}
+        onClick={handleItemClick}
+        data-item-id={id}
+        data-item-type={type}
+        data-parent-status={data.status}
+      >
+        {content}
 
-      {/* 아이템 위에 드래그 중일 때 드롭 대상 표시 - 크기 축소 */}
-      {isBeingHoveredOver && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-blue-500/5 border border-blue-300 pointer-events-none z-10"></div>
-      )}
-    </div>
+        {/* 아이템 위에 드래그 중일 때 드롭 대상 표시 - 크기 축소 */}
+        {isBeingHoveredOver && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-blue-500/5 border border-blue-300 pointer-events-none z-10"></div>
+        )}
+      </div>
+
+      {/* 비밀번호 입력 모달 */}
+      <PasswordModal
+        isVisible={showPasswordModal}
+        setIsVisible={setShowPasswordModal}
+        onPasswordSubmit={handlePasswordResult}
+        itemData={data}
+      />
+    </>
   );
 };
 
@@ -1548,235 +1844,6 @@ const STATUS_DISPLAY_NAMES = {
   완료됨: "완료됨",
 };
 
-// 더미 데이터 정의
-const DUMMY_VACATION_REQUESTS = [
-  {
-    id: "vac1",
-    vacationType: "휴가",
-    startDate: "2023/12/20",
-    endDate: "2023/12/22",
-    startTime: "09:00",
-    endTime: "18:00",
-    status: "승인됨",
-    userName: "김의사",
-    days: 3,
-    reason: "연차 사용",
-    timestamp: new Date("2023/12/10").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "vac2",
-    vacationType: "반차",
-    startDate: "2023/12/15",
-    endDate: "2023/12/15",
-    startTime: "09:00",
-    endTime: "13:00",
-    status: "대기중",
-    userName: "박간호",
-    halfDayType: "오전반차",
-    days: 0.5,
-    reason: "개인 사정",
-    timestamp: new Date("2023/12/13").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "vac3",
-    vacationType: "경조사",
-    startDate: "2023/12/05",
-    endDate: "2023/12/07",
-    startTime: "09:00",
-    endTime: "18:00",
-    status: "반려됨",
-    userName: "최관리",
-    days: 3,
-    reason: "결혼식 참석",
-    timestamp: new Date("2023/12/01").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "vac4",
-    vacationType: "휴가",
-    startDate: "2023/12/24",
-    endDate: "2023/12/26",
-    startTime: "09:00",
-    endTime: "18:00",
-    status: "대기중",
-    userName: "이수석",
-    days: 3,
-    reason: "크리스마스 휴가",
-    timestamp: new Date("2023/12/18").getTime(),
-    requestType: "manual",
-  },
-];
-
-const DUMMY_STOCK_REQUESTS = [
-  {
-    id: "stock1",
-    itemName: "의료용 소독제",
-    category: "의료용 소모품",
-    quantity: 10,
-    measure: "개",
-    price: 25000,
-    status: "입고 완료",
-    requestedByName: "김의사",
-    timestamp: new Date("2023/12/05").getTime(),
-    requestType: "manual",
-    department: "진료", // 명시적 부서 추가
-    requestReason: "소독제 부족으로 추가 구매 필요",
-  },
-  {
-    id: "stock2",
-    itemName: "사무용 프린터 용지",
-    category: "사무용 소모품",
-    quantity: 5,
-    measure: "박스",
-    price: 35000,
-    status: "승인됨",
-    requestedByName: "박간호",
-    timestamp: new Date("2023/12/10").getTime(),
-    requestType: "manual",
-    department: "간호", // 명시적 부서 추가
-    requestReason: "문서 작업용 프린터 용지 신청",
-  },
-  {
-    id: "stock3",
-    itemName: "CT 장비",
-    category: "의료용품",
-    quantity: 1,
-    measure: "대",
-    price: 50000000,
-    status: "장바구니",
-    requestedByName: "최관리",
-    timestamp: new Date("2023/12/15").getTime(),
-    requestType: "manual",
-    requestReason: "노후 장비 교체 필요",
-    department: "원무",
-  },
-  {
-    id: "stock4",
-    itemName: "수술 장갑",
-    category: "의료용 소모품",
-    quantity: 30,
-    measure: "박스",
-    price: 120000,
-    status: "주문완료",
-    requestedByName: "이과장",
-    timestamp: new Date("2023/12/12").getTime(),
-    requestType: "auto",
-    requestReason: "안전재고(25) 이하로 수량(15)이 감소하여 자동 신청됨",
-    safeStock: 25,
-    department: "진료",
-  },
-  {
-    id: "stock5",
-    itemName: "모니터",
-    category: "사무용품",
-    quantity: 3,
-    measure: "대",
-    price: 750000,
-    status: "대기중",
-    requestedByName: "최과장",
-    timestamp: new Date("2023/12/17").getTime(),
-    requestType: "manual",
-    requestReason: "추가 근무 공간 설치를 위한 신청",
-    department: "원무",
-  },
-  {
-    id: "stock6",
-    itemName: "수액세트",
-    category: "의료용 소모품",
-    quantity: 50,
-    measure: "세트",
-    price: 15000,
-    status: "장바구니",
-    requestedByName: "김간호",
-    timestamp: new Date("2023/12/19").getTime(),
-    requestType: "auto",
-    requestReason: "안전재고(40) 이하로 수량(30)이 감소하여 자동 신청됨",
-    safeStock: 40,
-    department: "간호",
-  },
-  {
-    id: "stock7",
-    itemName: "소독용 알코올",
-    category: "의료용 소모품",
-    quantity: 20,
-    measure: "통",
-    price: 8000,
-    status: "대기중",
-    requestedByName: "시스템",
-    timestamp: new Date("2023/12/20").getTime(),
-    requestType: "auto",
-    requestReason: "안전재고(15) 이하로 수량(8)이 감소하여 자동 신청됨",
-    safeStock: 15,
-    department: "원무",
-  },
-  {
-    id: "stock8",
-    itemName: "주사기",
-    category: "의료용 소모품",
-    quantity: 100,
-    measure: "개",
-    price: 5000,
-    status: "승인됨",
-    requestedByName: "시스템",
-    timestamp: new Date("2023/12/18").getTime(),
-    requestType: "auto",
-    requestReason: "안전재고(80) 이하로 수량(35)이 감소하여 자동 신청됨",
-    safeStock: 80,
-    department: "원무",
-  },
-];
-
-const DUMMY_REQUESTS = [
-  {
-    id: "req1",
-    title: "진료실 에어컨 점검 요청",
-    message:
-      "3번 진료실 에어컨에서 이상한 소음이 발생하고 있습니다. 점검 부탁드립니다.",
-    status: "완료됨",
-    receiverPeople: ["admin1", "admin2"],
-    senderPeople: ["user1"],
-    priority: "상",
-    timestamp: new Date("2023/12/01").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "req2",
-    title: "약품 발주 요청",
-    message: "진통제가 부족하니 발주 부탁드립니다.",
-    status: "승인됨",
-    receiverPeople: ["admin1"],
-    senderPeople: ["user1"],
-    priority: "중",
-    timestamp: new Date("2023/12/10").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "req3",
-    title: "환자 기록 수정 요청",
-    message: "김환자의 진료 기록에 오류가 있습니다. 수정 부탁드립니다.",
-    status: "대기중",
-    receiverPeople: ["admin1", "admin2", "admin3"],
-    senderPeople: ["user1"],
-    priority: "하",
-    timestamp: new Date("2023/12/15").getTime(),
-    requestType: "manual",
-  },
-  {
-    id: "req4",
-    title: "회의실 사용 요청",
-    message:
-      "12월 20일 오후 2시에 팀 미팅을 위해 2번 회의실 사용을 요청합니다.",
-    status: "대기중",
-    receiverPeople: ["admin2"],
-    senderPeople: ["user1"],
-    priority: "중",
-    timestamp: new Date("2023/12/18").getTime(),
-    requestType: "manual",
-  },
-];
-
 // 휴가 신청 유형 포맷 함수
 const getVacationTitle = (item) => {
   if (item.vacationType === "휴가") {
@@ -1931,13 +1998,12 @@ const RequestStatusModal = ({
     toStatus: "",
   });
 
-  // 확인 모달 상태 추가
+  // 확인 모달 상태
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmModalProps, setConfirmModalProps] = useState({
-    title: "",
-    message: "",
-    onConfirm: null,
-  });
+  const [confirmModalProps, setConfirmModalProps] = useState({});
+
+  // 비밀번호 검증 상태 추가
+  const [verifiedItems, setVerifiedItems] = useState({});
 
   // 개선된 센서 설정
   const sensors = useSensors(
@@ -2071,15 +2137,8 @@ const RequestStatusModal = ({
             };
           });
 
+          //check 1
           console.log("요청 데이터 로드 성공:", requests.length, "건");
-          console.log(
-            "부서별 요청 데이터:",
-            requests.reduce((acc, item) => {
-              const dept = item.senderDepartment || "부서없음";
-              acc[dept] = (acc[dept] || 0) + 1;
-              return acc;
-            }, {})
-          );
 
           setGeneralRequests(requests);
         });
@@ -2252,10 +2311,8 @@ const RequestStatusModal = ({
           return;
         }
       } else if (activeTab === "request") {
-        if (!canManageRequest(userLevelData, currentUser)) {
-          showToast("요청을 승인/반려할 권한이 없습니다.", "error");
-          return;
-        }
+        // 요청 탭에서는 누구나 상태 변경 가능하도록 변경
+        // 권한 체크 로직 제거
       }
     }
     // 주문 관련 상태 체크 (비품에만 해당)
@@ -2339,8 +2396,30 @@ const RequestStatusModal = ({
         data = stockRequests;
         break;
       case "request":
-        data = generalRequests;
-        break;
+        // 요청 데이터는 발신 부서 또는 수신 부서가 사용자 부서인 것만 필터링
+        const pcDepartment = userLevelData?.department || "";
+        console.log("요청 데이터 필터링 - 사용자 부서:", pcDepartment);
+
+        if (pcDepartment) {
+          const filtered = generalRequests.filter((req) => {
+            const senderMatch = req.senderDepartment === pcDepartment;
+            const receiverMatch = req.receiverDepartment === pcDepartment;
+            if (senderMatch || receiverMatch) {
+              console.log(
+                `[부서 일치] 요청 - 발신부서: ${req.senderDepartment}, 수신부서: ${req.receiverDepartment}, PC 부서: ${pcDepartment}, 제목: ${req.title}`
+              );
+            }
+            return senderMatch || receiverMatch;
+          });
+
+          console.log("필터링 전 요청 데이터 개수:", generalRequests.length);
+          console.log("필터링 후 요청 데이터 개수:", filtered.length);
+          return filtered;
+        }
+
+        // 부서 정보가 없는 경우 모든 요청 반환 (이전과 동일)
+        console.log("부서 정보 없음 - 모든 요청 데이터 반환");
+        return generalRequests;
       default:
         data = [];
     }
@@ -2363,52 +2442,6 @@ const RequestStatusModal = ({
     } else {
       // 데이터 샘플 출력 (첫 번째 항목)
       console.log("데이터 샘플 (첫 번째 항목):", data[0]);
-    }
-
-    // 요청 데이터의 경우 - 필터링 로직 수정
-    if (activeTab === "request") {
-      console.log("요청 데이터 필터링 시작");
-
-      // 대표원장 여부 확인
-      const isOwner = isHospitalOwner(userLevelData, currentUser);
-      console.log("대표원장 여부 (isHospitalOwner):", isOwner);
-
-      // 대표원장인 경우 모든 데이터를 볼 수 있음
-      if (isOwner) {
-        console.log("대표원장 권한으로 모든 요청 데이터 조회", data);
-        return data;
-      }
-
-      // PC의 부서 정보 가져오기
-      const pcDepartment = userLevelData?.department || "";
-      console.log("PC 부서 정보:", pcDepartment);
-
-      if (!pcDepartment) {
-        console.log("부서 정보 없음 - 요청 데이터 없음");
-        return [];
-      }
-
-      // 요청 필터링:
-      // 1. 발신부서나 수신부서가 현재 부서와 일치
-      // 2. 발신부서나 수신부서가 '대표원장'이고 현재 사용자가 대표원장인 경우
-      const filtered = data.filter((item) => {
-        // 대표원장 관련 조건
-        const isOwnerRelated =
-          (item.senderDepartment === "대표원장" ||
-            item.receiverDepartment === "대표원장") &&
-          isOwner;
-
-        // 부서 일치 조건
-        const isDeptMatch =
-          isDepartmentMatch(item.senderDepartment, pcDepartment) ||
-          isDepartmentMatch(item.receiverDepartment, pcDepartment);
-
-        return isDeptMatch || isOwnerRelated;
-      });
-
-      console.log("필터링 전 요청 데이터 개수:", data.length);
-      console.log("필터링 후 요청 데이터 개수:", filtered.length);
-      return filtered;
     }
 
     // 대표원장 여부 확인 - 로그인 여부와 상관없이 role 정보만 사용
@@ -2738,6 +2771,26 @@ const RequestStatusModal = ({
 
   // 아이템 클릭 핸들러 함수 수정
   const handleItemClick = (item) => {
+    // 대표원장 권한 확인
+    const isOwner = isHospitalOwner(userLevelData, currentUser);
+
+    // 휴가 항목인 경우 처리
+    if (activeTab === "vacation") {
+      // 대표원장인 경우 자동으로 검증 상태로 설정
+      if (isOwner) {
+        setVerifiedItems((prev) => ({
+          ...prev,
+          [item.id]: true,
+        }));
+      }
+      // 일반 사용자의 경우 비밀번호 검증이 필요
+      else if (!verifiedItems[item.id] && item.password) {
+        // 비밀번호 검증을 DraggableItem 컴포넌트에서 처리함
+        // 검증 성공시 verifiedItems에 추가하고 상세 모달 표시
+        return; // 검증되지 않았으면 모달을 열지 않음
+      }
+    }
+
     setSelectedItem(item);
     setShowDetailModal(true);
   };
@@ -2887,10 +2940,8 @@ const RequestStatusModal = ({
           return;
         }
       } else if (activeTab === "request") {
-        if (!canManageRequest(userLevelData, currentUser)) {
-          showToast("요청을 승인/반려할 권한이 없습니다.", "error");
-          return;
-        }
+        // 요청 탭에서는 누구나 상태 변경 가능하도록 변경
+        // 권한 체크 로직 제거
       }
     }
     // 주문 관련 상태 체크 (비품에만 해당)
@@ -3204,7 +3255,7 @@ const RequestStatusModal = ({
 
     const unsubscribeStock = onSnapshot(stockQuery, (snapshot) => {
       const stocks = snapshot.docs.map((doc) => ({
-        id: doc.id,
+        id: doc?.id,
         ...doc.data(),
         timestamp: doc.data().createdAt || new Date().getTime(),
       }));
@@ -3213,14 +3264,11 @@ const RequestStatusModal = ({
     });
 
     // 일반 요청 데이터 가져오기
-    const requestQuery = query(
-      collection(db, "requests"),
-      orderBy("createdAt2", "desc")
-    );
+    const requestQuery = query(collection(db, "requests"));
 
     const unsubscribeRequest = onSnapshot(requestQuery, (snapshot) => {
       const requests = snapshot.docs.map((doc) => ({
-        id: doc.id,
+        id: doc?.id,
         ...doc.data(),
         timestamp: doc.data().createdAt || new Date().getTime(),
       }));
@@ -3486,132 +3534,6 @@ const RequestStatusModal = ({
   // ItemDetailModal에서 접근할 수 있도록 전역 객체에 할당
   globalThis.onceHandleVendorClick = handleVendorClick;
 
-  // // 테스트용 요청 데이터 추가
-  // useEffect(() => {
-  //   if (process.env.NODE_ENV === "development" && addTestData) {
-  //     const addExampleRequests = async () => {
-  //       try {
-  //         // 이미 요청 데이터가 있는지 확인
-  //         const reqQuery = query(collection(db, "requests"));
-  //         const reqSnapshot = await getDocs(reqQuery);
-
-  //         if (reqSnapshot.docs.length >= 5) {
-  //           console.log(
-  //             "이미 충분한 요청 데이터가 있음, 테스트 데이터 추가 안함"
-  //           );
-  //           return;
-  //         }
-
-  //         // 부서 간 요청 예시 데이터
-  //         const exampleRequests = [
-  //           {
-  //             title: "물리치료 장비 점검 요청",
-  //             message:
-  //               "정기 점검일이 도래한 물리치료 장비(초음파 치료기 3대)에 대한 전문 점검을 요청드립니다. 가능한 빠른 일정으로 부탁드립니다.",
-  //             receiverDepartment: "원무팀",
-  //             senderDepartment: "물리치료팀",
-  //             senderName: "김치료",
-  //             priority: "중",
-  //             status: "대기중",
-  //             createdAt: Date.now() - 3600000 * 2, // 2시간 전
-  //             formattedTime: "14:30",
-  //           },
-  //           {
-  //             title: "간호 물품 추가 구매 요청",
-  //             message:
-  //               "병동에서 사용하는 1회용 장갑과 마스크가 예상보다 빨리 소진되고 있습니다. 추가 주문 부탁드립니다. 현재 재고: 장갑 2박스, 마스크 1박스",
-  //             receiverDepartment: "원무팀",
-  //             senderDepartment: "간호팀",
-  //             senderName: "박간호",
-  //             priority: "상",
-  //             status: "대기중",
-  //             createdAt: Date.now() - 3600000 * 8, // 8시간 전
-  //             formattedTime: "08:15",
-  //           },
-  //           {
-  //             title: "X-ray 장비 수리 요청",
-  //             message:
-  //               "영상의학과 2번 X-ray 장비에서 에러 메시지가 반복적으로 발생합니다. 기술 지원팀 방문 일정 조율 부탁드립니다.",
-  //             receiverDepartment: "원무팀",
-  //             senderDepartment: "영상의학팀",
-  //             senderName: "이방사",
-  //             priority: "상",
-  //             status: "대기중",
-  //             createdAt: Date.now() - 3600000 * 24, // 24시간 전
-  //             formattedTime: "16:45",
-  //           },
-  //           {
-  //             title: "환자 이송 지원 요청",
-  //             message:
-  //               "내일 오전 10시에 중환자 3명의 외부 병원 이송이 예정되어 있습니다. 이송 차량 및 인력 지원 부탁드립니다.",
-  //             receiverDepartment: "원무팀",
-  //             senderDepartment: "간호팀",
-  //             senderName: "최간호",
-  //             priority: "중",
-  //             status: "승인됨",
-  //             createdAt: Date.now() - 3600000 * 48, // 48시간 전
-  //             formattedTime: "09:30",
-  //             approvalReason:
-  //               "이송 차량 및 인력 배정 완료했습니다. 담당: 김이송",
-  //           },
-  //           {
-  //             title: "진료과 인턴 배정 요청",
-  //             message:
-  //               "다음 주부터 시작되는 새 학기를 맞아 내과에 인턴 2명 배정 요청드립니다. 이전 인턴들은 모두 실습을 마쳤습니다.",
-  //             receiverDepartment: "원무팀",
-  //             senderDepartment: "진료팀",
-  //             senderName: "정의사",
-  //             priority: "하",
-  //             status: "반려됨",
-  //             createdAt: Date.now() - 3600000 * 72, // 72시간 전
-  //             formattedTime: "11:20",
-  //             approvalReason:
-  //               "현재 인턴 배정이 모두 완료된 상태입니다. 다음 달 배정 시 우선 고려하겠습니다.",
-  //           },
-  //           {
-  //             title: "근무표 변경 승인 요청",
-  //             message:
-  //               "내과 의료진 휴가로 인한 다음 주 근무표 변경 건에 대해 검토 후 승인 부탁드립니다. 첨부된 수정안 참고 바랍니다.",
-  //             receiverDepartment: "대표원장",
-  //             senderDepartment: "간호팀",
-  //             senderName: "이수간",
-  //             priority: "중",
-  //             status: "대기중",
-  //             createdAt: Date.now() - 3600000 * 10, // 10시간 전
-  //             formattedTime: "10:15",
-  //           },
-  //           {
-  //             title: "의료장비 교체 예산 검토 요청",
-  //             message:
-  //               "노후화된 초음파 장비 교체에 관한 예산안을 검토 부탁드립니다. 3개 업체 견적서를 첨부하였으니 확인 바랍니다.",
-  //             receiverDepartment: "대표원장",
-  //             senderDepartment: "원무팀",
-  //             senderName: "박경리",
-  //             priority: "상",
-  //             status: "승인됨",
-  //             createdAt: Date.now() - 3600000 * 36, // 36시간 전
-  //             formattedTime: "15:40",
-  //             approvalReason:
-  //               "검토 완료. 견적서 3번 업체로 진행하세요. 구매 계약서는 별도 검토가 필요합니다.",
-  //           },
-  //         ];
-
-  //         // Firestore에 요청 데이터 저장
-  //         for (const request of exampleRequests) {
-  //           await addDoc(collection(db, "requests"), request);
-  //         }
-
-  //         console.log("테스트 요청 데이터가 추가되었습니다.");
-  //       } catch (error) {
-  //         console.error("테스트 요청 데이터 추가 중 오류:", error);
-  //       }
-  //     };
-
-  //     // 예시 데이터 추가 함수 호출
-  //     addExampleRequests();
-  //   }
-  // }, [addTestData]);
-
   return (
     <>
       {/* 애니메이션 스타일 적용 */}
@@ -3803,6 +3725,7 @@ const RequestStatusModal = ({
                           data={item}
                           type={activeTab}
                           onItemClick={handleItemClick}
+                          isVerified={verifiedItems[item.id] || false}
                         />
                       )}
                     />
@@ -3839,6 +3762,7 @@ const RequestStatusModal = ({
           itemType={activeTab}
           isAdmin={isAdmin}
           onStatusChange={handleModalStatusChange}
+          verifiedItems={verifiedItems}
         />
       )}
 

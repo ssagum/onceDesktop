@@ -4,6 +4,7 @@ import NameCoin from "./NameCoin";
 import ModalTemplate from "./ModalTemplate";
 import HospitalStaffSelector from "./HospitalStaffSelector";
 import WhoSelector from "./WhoSelector";
+import TaskCompleterSelector from "./TaskCompleterSelector";
 import TaskRecordModal from "../Task/TaskRecordModal";
 import { getTaskHistory, getTaskCompleters } from "../Task/TaskService";
 import { useToast } from "../../contexts/ToastContext";
@@ -374,6 +375,26 @@ function SingleTodoItem({
     }
   };
 
+  // 현재 날짜인지 확인하는 함수
+  const isToday = () => {
+    if (!currentDate) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let compareDate;
+    if (typeof currentDate === "string") {
+      compareDate = new Date(currentDate);
+    } else if (currentDate instanceof Date) {
+      compareDate = new Date(currentDate.getTime());
+    } else {
+      return false;
+    }
+
+    compareDate.setHours(0, 0, 0, 0);
+    return compareDate.getTime() === today.getTime();
+  };
+
   return (
     <>
       <div
@@ -398,14 +419,13 @@ function SingleTodoItem({
           </span>
         </TextZone>
 
-        {/* 완료자 선택 표시 */}
+        {/* 완료자 선택 표시 - TaskCompleterSelector로 교체 */}
         {showCompleter && (
           <div
             onClick={(e) => e.stopPropagation()}
             className="flex items-center"
           >
-            <WhoSelector
-              who="완료자"
+            <TaskCompleterSelector
               selectedPeople={selectedCompleters}
               onPeopleChange={(selectedIds) => {
                 // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
@@ -413,7 +433,8 @@ function SingleTodoItem({
                   handleCompleteTask(selectedIds);
                 }
               }}
-              singleSelectMode={false}
+              isCurrentDate={isToday()}
+              isCompleted={isCompletedForCurrentDate()}
             />
           </div>
         )}

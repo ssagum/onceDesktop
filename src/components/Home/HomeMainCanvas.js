@@ -275,25 +275,59 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
 
       console.log("StatusBar - 전체 요청 데이터:", requests.length, "건");
 
-      // 대기중 상태인 요청만 필터링
+      // 먼저 대기중 상태인 요청만 필터링
       const waitingRequests = requests.filter((req) => req.status === "대기중");
-      console.log("StatusBar - 대기중 요청:", waitingRequests.length, "건");
+      console.log(
+        "StatusBar - 상태가 대기중인 요청:",
+        waitingRequests.length,
+        "건"
+      );
 
-      // 디버깅: 대기중인 요청 항목 상세 정보 출력
-      console.log("요청 대기중 필터링 조건:", "status === '대기중'");
-      if (waitingRequests.length > 0) {
-        console.log("대기중 요청 첫 번째 항목 예시:", {
-          id: waitingRequests[0].id,
-          status: waitingRequests[0].status,
-          title: waitingRequests[0].title,
-          requestedBy: waitingRequests[0].requestedBy,
-          department: waitingRequests[0].department,
-          createdAt: waitingRequests[0].createdAt,
+      // 사용자의 부서 가져오기
+      const userDepartment = userLevelData?.department || "";
+      console.log("StatusBar - 현재 사용자 부서:", userDepartment);
+
+      // 권한에 따라 필터링 로직 적용
+      let filteredRequests = waitingRequests;
+
+      // 대표원장이나 원무과장이 아닌 경우에만 부서 필터링 적용
+      if (userDepartment) {
+        filteredRequests = waitingRequests.filter((req) => {
+          // 발신 부서 또는 수신 부서가 사용자 부서와 일치하는지 확인
+          const senderMatch = req.senderDepartment === userDepartment;
+          const receiverMatch = req.receiverDepartment === userDepartment;
+
+          if (senderMatch || receiverMatch) {
+            console.log(
+              `StatusBar - 부서 일치 요청: ID=${req.id}, 제목=${req.title}, 발신=${req.senderDepartment}, 수신=${req.receiverDepartment}`
+            );
+          }
+
+          return senderMatch || receiverMatch;
         });
+
+        console.log(
+          `StatusBar - 부서(${userDepartment}) 필터링 후 대기중 요청:`,
+          filteredRequests.length,
+          "건"
+        );
+      } else {
+        console.log("StatusBar - 관리자 권한으로 모든 대기중 요청 표시");
       }
 
+      // 필터링된 요청 목록 로깅
+      console.log(
+        "StatusBar - 최종 필터링된 요청 목록:",
+        filteredRequests.map((req) => ({
+          id: req.id,
+          title: req.title,
+          sender: req.senderDepartment,
+          receiver: req.receiverDepartment,
+        }))
+      );
+
       // 상태변수 업데이트
-      setPendingRequests(waitingRequests);
+      setPendingRequests(filteredRequests);
     });
     unsubscribes.push(requestsUnsubscribe);
 
@@ -363,7 +397,7 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
     console.log("총 결재 필요 건수:", totalPending);
     console.log("휴가 대기중:", pendingVacations.length, "건");
     console.log("비품 대기중:", pendingStocks.length, "건");
-    console.log("요청 대기중:", pendingRequests.length, "건");
+    console.log("요청 대기중 (필터링 후):", pendingRequests.length, "건");
     console.log("=================================");
 
     setApprovalCount(totalPending);
@@ -1275,7 +1309,16 @@ export default function HomeMainCanvas() {
                 </button>
               </InsideHeaderZone>
               <div className="w-full h-[200px] overflow-y-auto px-[20px] scrollbar-hide">
-                <ReceivedCallList />
+                <ReceivedCallList
+                  setRequestModalVisible={setRequestStatusModalVisible}
+                  setRequestModalTab={setRequestStatusModalTab}
+                  setSelectedRequestId={(id) => {
+                    // 선택된 요청 ID를 저장
+                    // 필요한 경우 이 ID로 요청 상세 정보를 불러올 수 있음
+                    console.log("선택된 요청 ID:", id);
+                    // 여기에 추가적인 요청 ID 처리 로직 추가 가능
+                  }}
+                />
               </div>
             </RightTopZone>
             <RightBottomZone className="w-full flex-row flex">

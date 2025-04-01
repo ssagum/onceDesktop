@@ -257,6 +257,50 @@ const TimeInput = styled.input`
   }
 `;
 
+// 비밀번호 입력 필드 스타일 추가
+const PasswordInput = styled.input`
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  height: 40px;
+  min-width: 120px;
+  width: 120px;
+  font-size: 14px;
+  text-align: center;
+  letter-spacing: 2px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--once-blue);
+    box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
+  }
+
+  &::placeholder {
+    color: #a0aec0;
+    letter-spacing: 0;
+  }
+`;
+
+// 비밀번호 설명 텍스트
+const PasswordDescription = styled.div`
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+  line-height: 1.4;
+`;
+
+// 비밀번호 컨테이너
+const PasswordContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+`;
+
 export default function VacationModal({ isVisible, setIsVisible }) {
   const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
   const { showToast } = useToast();
@@ -282,6 +326,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     vacationType: "휴가", // 기본값: 휴가
     holidayCount: null, // 초기값을 null로 설정
     halfDayType: "오전반차", // 반차 타입 (오전/오후)
+    password: "", // 비밀번호 필드 추가
   });
 
   // 신청자 및 대체자 상태
@@ -789,7 +834,19 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     return userVacationInfo.remainingVacationDays || 0;
   };
 
-  // 필수 필드 검증 함수 추가
+  // 비밀번호 변경 핸들러 추가
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    // 숫자만 입력 가능하도록 제한
+    if (value === "" || /^\d{0,6}$/.test(value)) {
+      setVacationForm({
+        ...vacationForm,
+        password: value,
+      });
+    }
+  };
+
+  // 필수 필드 검증 함수 수정
   const validateRequiredFields = () => {
     // 로그인 확인
     if (!isLoggedIn) {
@@ -811,6 +868,11 @@ export default function VacationModal({ isVisible, setIsVisible }) {
       return false;
     }
 
+    // 비밀번호 확인 (6자리)
+    if (!vacationForm.password || vacationForm.password.length !== 6) {
+      return false;
+    }
+
     // 휴가 일수가 0이면 경고 (경조사는 제외)
     if (calculatedDays <= 0 && vacationForm.vacationType !== "경조사") {
       return false;
@@ -819,7 +881,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
     return true;
   };
 
-  // 휴가 신청 제출 핸들러
+  // 휴가 신청 제출 핸들러 수정
   const handleSubmit = async () => {
     try {
       // 로그인 확인
@@ -845,12 +907,9 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         return;
       }
 
-      // 계산된 휴가 일수가 0이면 경고 (경조사는 제외)
-      if (calculatedDays <= 0 && vacationForm.vacationType !== "경조사") {
-        showToast(
-          "휴가 일수가 0일입니다. 날짜 또는 시간을 확인해주세요.",
-          "error"
-        );
+      // 비밀번호 검증 추가
+      if (!vacationForm.password || vacationForm.password.length !== 6) {
+        showToast("6자리 비밀번호를 입력해주세요.", "error");
         return;
       }
 
@@ -902,6 +961,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
           selectedReplacement.length > 0 ? selectedReplacement[0] : null,
         status: "대기중", // 기본 상태: 대기중, 승인됨, 거부됨
         days: calculatedDays, // 계산된 휴가 일수 저장
+        password: vacationForm.password, // 비밀번호 저장
         createdAt: serverTimestamp(),
       };
 
@@ -945,6 +1005,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         vacationType: "휴가",
         holidayCount: null,
         halfDayType: "오전반차",
+        password: "", // 비밀번호 초기화
       });
       setDayTypes({});
 
@@ -1058,6 +1119,32 @@ export default function VacationModal({ isVisible, setIsVisible }) {
                   singleDateMode={vacationForm.vacationType === "반차"}
                   startDayOnlyMode={false}
                 />
+
+                {/* 비밀번호 입력 필드 추가 */}
+                <PasswordContainer>
+                  <div className="flex items-center mb-2">
+                    <FormLabel required>비밀번호</FormLabel>
+                    <PasswordInput
+                      type="password"
+                      placeholder="6자리"
+                      value={vacationForm.password}
+                      onChange={handlePasswordChange}
+                      maxLength={6}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <PasswordDescription>
+                    <p>
+                      • 휴가신청 정보 보호를 위해 6자리 숫자 비밀번호를
+                      설정해주세요.
+                    </p>
+                    <p>
+                      • 대표원장이 아닌 사용자가 휴가 내용을 확인하려면 이
+                      비밀번호가 필요합니다.
+                    </p>
+                    <p>• 비밀번호는 숫자 6자리만 가능합니다.</p>
+                  </PasswordDescription>
+                </PasswordContainer>
               </LeftTopSection>
 
               {/* 우상단 - 신청 정보 */}
