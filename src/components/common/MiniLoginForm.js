@@ -178,7 +178,7 @@ function MiniLoginForm({ onLoginSuccess }) {
               >
                 비밀번호 초기화
               </button>
-              <button
+              {/* <button
                 type="button"
                 onClick={() => {
                   localStorage.clear();
@@ -187,7 +187,7 @@ function MiniLoginForm({ onLoginSuccess }) {
                 className="text-gray-600 text-xs hover:underline"
               >
                 로컬 데이터 초기화
-              </button>
+              </button> */}
               <button
                 type="button"
                 onClick={handleSignupClick}

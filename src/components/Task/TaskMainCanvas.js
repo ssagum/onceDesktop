@@ -508,7 +508,7 @@ export function ToDoDragComponent({
           <div className="absolute right-4 -top-[44px] z-10">
             {/* 단일 파란색 탭 */}
             <div
-              className="relative w-[110px] h-[60px] cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
+              className="relative w-[130px] h-[60px] cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
               onClick={handleOpenDateModal} // 모달 열기 함수 연결
               title="날짜별 보기"
             >

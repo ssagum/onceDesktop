@@ -119,7 +119,7 @@ if (!gotTheLock) {
     });
 
     // Open the DevTools.
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
   };
 
   // 시스템 트레이 아이콘 생성
@@ -382,9 +382,9 @@ if (!gotTheLock) {
       }
     );
 
-    if (isDevelopment) {
-      timerWindow.webContents.openDevTools();
-    }
+    // if (isDevelopment) {
+    //   timerWindow.webContents.openDevTools();
+    // }
 
     // 창이 닫힐 때 참조 제거
     timerWindow.on("closed", () => {
@@ -437,7 +437,7 @@ if (!gotTheLock) {
     );
 
     // 항상 개발 도구 열기
-    chatWindow.webContents.openDevTools();
+    // chatWindow.webContents.openDevTools();
 
     // 창이 닫힐 때 이벤트 처리
     chatWindow.on("closed", () => {
@@ -509,6 +509,13 @@ if (!gotTheLock) {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
       }
+    });
+
+    // 앱이 시작될 때 Electron 내장 API 사용하여 시작 프로그램에 등록
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      // 시스템 시작 시 창 표시
+      openAsHidden: false
     });
   });
 

@@ -3549,26 +3549,6 @@ const RequestStatusModal = ({
           <div className="flex flex-row w-full justify-between h-[50px] items-center mb-[10px]">
             <span className="text-[34px] font-bold">신청 현황</span>
             <div className="flex flex-row items-center">
-              {isGeneratingData ? (
-                <span className="mr-5 text-xs text-blue-500">
-                  테스트 데이터 생성 중...
-                </span>
-              ) : (
-                <button
-                  onClick={() => {
-                    setConfirmModalProps({
-                      title: "테스트 데이터 생성",
-                      message:
-                        "Firebase에 테스트 데이터를 생성하시겠습니까? 이 작업은 실제 데이터베이스에 영향을 줍니다.",
-                      onConfirm: generateTestData,
-                    });
-                    setShowConfirmModal(true);
-                  }}
-                  className="mr-5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
-                >
-                  테스트 데이터 생성
-                </button>
-              )}
               <img
                 onClick={() => setIsVisible(false)}
                 className="w-[30px] cursor-pointer"
