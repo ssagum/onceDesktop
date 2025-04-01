@@ -14,6 +14,12 @@ import {
 } from "date-fns";
 import { chevronBackward, chevronForward } from "../../assets";
 const RenderHeader = ({ currentMonth, prevMonth, nextMonth }) => {
+  // 유효한 Date 객체인지 확인
+  const safeDate =
+    currentMonth instanceof Date && !isNaN(currentMonth.getTime())
+      ? currentMonth
+      : new Date();
+
   // 월 이름을 한글로 변환
   const getKoreanMonth = (month) => {
     return `${month + 1}월`;
@@ -22,8 +28,8 @@ const RenderHeader = ({ currentMonth, prevMonth, nextMonth }) => {
   return (
     <section className="flex flex-col">
       <section className="flex flex-row items-center">
-        <p className="text-[18px]">{getKoreanMonth(currentMonth.getMonth())}</p>
-        <p className="text-[18px] ml-[6px]">{format(currentMonth, "yyyy")}</p>
+        <p className="text-[18px]">{getKoreanMonth(safeDate.getMonth())}</p>
+        <p className="text-[18px] ml-[6px]">{format(safeDate, "yyyy")}</p>
         <div className="flex flex-row ml-[14px]">
           <img
             onClick={prevMonth}
@@ -195,12 +201,22 @@ export const JcyCalendar = memo(
     singleDateMode = false, // 날짜를 하나만 선택하는 모드 (1회성 업무용)
     startDayOnlyMode = false, // 시작일만 선택하는 모드 (반복성 업무용)
   }) => {
-    // 초기 월 설정을 위해 preStartDay가 있으면 파싱해서 사용
     const getInitialMonth = () => {
       if (preStartDay) {
         try {
-          // yyyy/MM/dd 형식 파싱
-          const parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
+          // yyyy-MM-dd 형식 또는 yyyy/MM/dd 형식 파싱 시도
+          let parsedDate;
+
+          // 날짜 형식 감지
+          if (preStartDay.includes("-")) {
+            parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
+          } else if (preStartDay.includes("/")) {
+            parsedDate = parse(preStartDay, "yyyy/MM/dd", new Date());
+          } else {
+            // 다른 형식이면 일반 Date 생성자 시도
+            parsedDate = new Date(preStartDay);
+          }
+
           if (!isNaN(parsedDate.getTime())) {
             console.log(`JcyCalendar: 시작일 ${preStartDay}로 달력 초기화`);
             return parsedDate;
@@ -209,7 +225,10 @@ export const JcyCalendar = memo(
           console.error("초기 월 설정 중 오류:", error);
         }
       }
-      return new Date(); // 기본값은 현재 날짜
+      // 기본값은 현재 날짜의 시작 부분으로 설정
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      return now;
     };
 
     const [currentMonth, setCurrentMonth] = useState(getInitialMonth());
@@ -217,31 +236,67 @@ export const JcyCalendar = memo(
     const [startDate, setStartDate] = useState(null);
     const [endDate, setEndDate] = useState(null);
     const [isSelectingStart, setIsSelectingStart] = useState(true);
-    const [currentView, setCurrentView] = useState(currentMonth); // 현재 보고 있는 월 유지
+    const [currentView, setCurrentView] = useState(getInitialMonth()); // 현재 보고 있는 월 유지
 
     // 초기 렌더링 및 props 변경 추적을 위한 ref
     const initializedRef = useRef(false);
     const previousPropsRef = useRef({ preStartDay, preEndDay });
 
     const parseCustomDate = (dateStr) => {
-      // yyyy/MM/dd 형식으로 변경
-      const parsedDate = parse(dateStr, "yyyy-MM-dd", new Date());
+      if (!dateStr) return null;
 
-      if (isNaN(parsedDate.getTime())) {
-        console.error(`Invalid date format: ${dateStr}`);
+      try {
+        // yyyy-MM-dd 형식 시도
+        let parsedDate = parse(dateStr, "yyyy-MM-dd", new Date());
+
+        // yyyy/MM/dd 형식 시도
+        if (isNaN(parsedDate.getTime())) {
+          parsedDate = parse(dateStr, "yyyy/MM/dd", new Date());
+        }
+
+        if (isNaN(parsedDate.getTime())) {
+          console.error(`Invalid date format: ${dateStr}`);
+          return null;
+        }
+
+        return parsedDate;
+      } catch (error) {
+        console.error(`Date parsing error: ${error.message}`);
         return null;
       }
-      return parsedDate;
     };
 
     // preStartDay 변경 시 최초 1회는 항상 해당 월로 이동
     useEffect(() => {
       if (preStartDay && !startDate) {
-        // yyyy-MM-dd 형식 파싱
-        const parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
-        setStartDate(parsedDate);
-        setCurrentMonth(new Date(parsedDate));
-        setCurrentView(new Date(parsedDate));
+        try {
+          // 날짜 형식 감지 및 파싱
+          let parsedDate;
+
+          if (preStartDay.includes("-")) {
+            parsedDate = parse(preStartDay, "yyyy-MM-dd", new Date());
+          } else if (preStartDay.includes("/")) {
+            parsedDate = parse(preStartDay, "yyyy/MM/dd", new Date());
+          } else {
+            parsedDate = new Date(preStartDay);
+          }
+
+          if (isNaN(parsedDate.getTime())) {
+            console.error(`유효하지 않은 날짜 형식: ${preStartDay}`);
+            parsedDate = new Date(); // 기본값 설정
+          }
+
+          setStartDate(parsedDate);
+          setCurrentMonth(new Date(parsedDate));
+          setCurrentView(new Date(parsedDate));
+        } catch (error) {
+          console.error("시작일 처리 중 오류:", error);
+          // 오류 발생 시 현재 날짜로 초기화
+          const now = new Date();
+          setStartDate(now);
+          setCurrentMonth(now);
+          setCurrentView(now);
+        }
       }
     }, [preStartDay, startDate]);
 
@@ -262,6 +317,7 @@ export const JcyCalendar = memo(
       // 현재 props를 기억
       previousPropsRef.current = { preStartDay, preEndDay };
 
+      // parseCustomDate 함수 사용
       const parsedStartDate = parseCustomDate(preStartDay);
       const parsedEndDate = parseCustomDate(preEndDay);
 

@@ -41,6 +41,22 @@ const getInitialDate = (dateValue) => {
   return formatSafeDate(dateValue);
 };
 
+// 날짜 형식 변환 함수 추가 (yyyy/MM/dd -> yyyy-MM-dd)
+const formatDateForCalendar = (dateStr) => {
+  if (!dateStr) return format(new Date(), "yyyy-MM-dd");
+
+  try {
+    // yyyy/MM/dd 형식을 yyyy-MM-dd 형식으로 변환
+    if (dateStr.includes("/")) {
+      return dateStr.replace(/\//g, "-");
+    }
+    return dateStr;
+  } catch (error) {
+    console.error("날짜 형식 변환 중 오류:", error);
+    return format(new Date(), "yyyy-MM-dd");
+  }
+};
+
 function TaskAddModal({
   isVisible,
   setIsVisible,
@@ -314,8 +330,14 @@ function TaskAddModal({
       console.log("handleStartDateChange called with date:", date);
 
       try {
+        // date가 이미 yyyy-MM-dd 형식으로 들어오므로, 이를 yyyy/MM/dd 형식으로 변환
+        let formattedDate = date;
+        if (date && date.includes("-")) {
+          formattedDate = date.replace(/-/g, "/");
+        }
+
         // formatSafeDate 함수를 사용하여 일관된 날짜 처리
-        const formattedDate = formatSafeDate(date);
+        formattedDate = formatSafeDate(formattedDate);
 
         // 현재 값과 같으면 불필요한 상태 업데이트를 피함
         if (
@@ -386,8 +408,14 @@ function TaskAddModal({
           return;
         }
 
+        // date가 이미 yyyy-MM-dd 형식으로 들어오므로, 이를 yyyy/MM/dd 형식으로 변환
+        let formattedDate = date;
+        if (date && date.includes("-")) {
+          formattedDate = date.replace(/-/g, "/");
+        }
+
         // formatSafeDate 함수를 사용하여 일관된 날짜 처리
-        const formattedDate = formatSafeDate(date);
+        formattedDate = formatSafeDate(formattedDate);
 
         // 현재 값과 같으면 불필요한 상태 업데이트를 피함
         if (
@@ -550,8 +578,8 @@ function TaskAddModal({
             <div className="flex-[5] flex flex-row w-full items-center justify-center h-full">
               <div className="flex flex-col items-center">
                 <JcyCalendar
-                  preStartDay={startDate}
-                  preEndDay={endDate}
+                  preStartDay={formatDateForCalendar(startDate)}
+                  preEndDay={formatDateForCalendar(endDate)}
                   setTargetStartDay={handleStartDateChange}
                   setTargetEndDay={handleEndDateChange}
                   lockDates={!isFieldEditable}

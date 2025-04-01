@@ -14,6 +14,16 @@ import { useUserLevel } from "../../utils/UserLevelContext";
 import ChipText from "../common/ChipText";
 import { format } from "date-fns";
 import { useToast } from "../../contexts/ToastContext";
+import {
+  isHospitalOwner,
+  isAdministrativeManager,
+  canApproveVacation,
+  canOrderStock,
+  canApproveStockRequest,
+  canManageRequest,
+  canViewStockRequests,
+  canViewDepartmentVacations,
+} from "../../utils/permissionUtils";
 
 const Container = styled.div`
   display: flex;
@@ -281,18 +291,51 @@ const AdminRequestsManager = () => {
   const [generalRequests, setGeneralRequests] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("대기중");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [userPermissions, setUserPermissions] = useState({
+    canApproveVacation: false,
+    canApproveStock: false,
+    canOrderStock: false,
+    canManageRequest: false,
+    isOwner: false,
+    isAdminManager: false,
+  });
+
+  // 권한 설정
+  useEffect(() => {
+    if (userLevelData) {
+      console.log("현재 사용자 역할:", userLevelData.role);
+      console.log("현재 사용자 부서:", userLevelData.department);
+
+      const isOwner = isHospitalOwner(userLevelData);
+      const isAdminManager = isAdministrativeManager(userLevelData);
+      const canManageReq = canManageRequest(userLevelData);
+
+      console.log("대표원장 여부:", isOwner);
+      console.log("원무과장 여부:", isAdminManager);
+      console.log("요청 관리 권한:", canManageReq);
+
+      setUserPermissions({
+        canApproveVacation: canApproveVacation(userLevelData),
+        canApproveStock: canApproveStockRequest(userLevelData),
+        canOrderStock: canOrderStock(userLevelData),
+        canManageRequest: canManageReq,
+        isOwner: isOwner,
+        isAdminManager: isAdminManager,
+      });
+    }
+  }, [userLevelData]);
+
+  // 사용자 부서 정보 가져오기
+  const userDepartment = userLevelData?.department || "";
 
   useEffect(() => {
     fetchRequests();
-  }, [activeTab, statusFilter]);
+  }, [activeTab, statusFilter, userLevelData]);
 
   const fetchRequests = async () => {
-    if (
-      !userLevelData?.role ||
-      !["admin", "manager"].includes(userLevelData.role)
-    ) {
-      showToast("관리자 권한이 필요합니다.", "error");
+    if (!userLevelData) {
+      showToast("사용자 정보를 불러올 수 없습니다.", "error");
       return;
     }
 
@@ -319,14 +362,38 @@ const AdminRequestsManager = () => {
   const fetchVacationRequests = async () => {
     let q;
 
-    if (statusFilter === "all") {
-      q = query(collection(db, "vacations"), orderBy("createdAt", "desc"));
+    console.log("휴가 데이터 조회 - 권한 확인");
+    console.log("대표원장 여부:", userPermissions.isOwner);
+
+    // 대표원장은 모든 부서의 휴가 신청을 볼 수 있음
+    if (userPermissions.isOwner) {
+      console.log("대표원장 권한으로 모든 휴가 조회");
+      if (statusFilter === "all") {
+        q = query(collection(db, "vacations"), orderBy("createdAt", "desc"));
+      } else {
+        q = query(
+          collection(db, "vacations"),
+          where("status", "==", statusFilter),
+          orderBy("createdAt", "desc")
+        );
+      }
     } else {
-      q = query(
-        collection(db, "vacations"),
-        where("status", "==", statusFilter),
-        orderBy("createdAt", "desc")
-      );
+      // 다른 사용자는 자신의 부서에 해당하는 휴가 신청만 볼 수 있음
+      console.log("일반 사용자 권한으로 부서 휴가만 조회:", userDepartment);
+      if (statusFilter === "all") {
+        q = query(
+          collection(db, "vacations"),
+          where("department", "==", userDepartment),
+          orderBy("createdAt", "desc")
+        );
+      } else {
+        q = query(
+          collection(db, "vacations"),
+          where("department", "==", userDepartment),
+          where("status", "==", statusFilter),
+          orderBy("createdAt", "desc")
+        );
+      }
     }
 
     const querySnapshot = await getDocs(q);
@@ -336,20 +403,49 @@ const AdminRequestsManager = () => {
       timestamp: doc.data().createdAt?.toDate?.() || new Date(),
     }));
 
+    console.log(`조회된 휴가 개수: ${requests.length}건`);
     setVacationRequests(requests);
   };
 
   const fetchStockRequests = async () => {
     let q;
 
-    if (statusFilter === "all") {
-      q = query(collection(db, "stockRequests"), orderBy("createdAt2", "desc"));
+    console.log("비품 데이터 조회 - 권한 확인");
+    console.log("대표원장 여부:", userPermissions.isOwner);
+    console.log("원무과장 여부:", userPermissions.isAdminManager);
+
+    // 대표원장과 원무과장은 모든 부서의 비품 신청을 볼 수 있음
+    if (userPermissions.isOwner || userPermissions.isAdminManager) {
+      console.log("대표원장/원무과장 권한으로 모든 비품 조회");
+      if (statusFilter === "all") {
+        q = query(
+          collection(db, "stockRequests"),
+          orderBy("createdAt2", "desc")
+        );
+      } else {
+        q = query(
+          collection(db, "stockRequests"),
+          where("status", "==", statusFilter),
+          orderBy("createdAt2", "desc")
+        );
+      }
     } else {
-      q = query(
-        collection(db, "stockRequests"),
-        where("status", "==", statusFilter),
-        orderBy("createdAt2", "desc")
-      );
+      // 다른 사용자는 자신의 부서에 해당하는 비품 신청만 볼 수 있음
+      console.log("일반 사용자 권한으로 부서 비품만 조회:", userDepartment);
+      if (statusFilter === "all") {
+        q = query(
+          collection(db, "stockRequests"),
+          where("department", "==", userDepartment),
+          orderBy("createdAt2", "desc")
+        );
+      } else {
+        q = query(
+          collection(db, "stockRequests"),
+          where("department", "==", userDepartment),
+          where("status", "==", statusFilter),
+          orderBy("createdAt2", "desc")
+        );
+      }
     }
 
     const querySnapshot = await getDocs(q);
@@ -359,20 +455,60 @@ const AdminRequestsManager = () => {
       timestamp: doc.data().createdAt || new Date().getTime(),
     }));
 
+    console.log(`조회된 비품 개수: ${requests.length}건`);
     setStockRequests(requests);
   };
 
   const fetchGeneralRequests = async () => {
     let q;
 
-    if (statusFilter === "all") {
-      q = query(collection(db, "requests"), orderBy("createdAt2", "desc"));
-    } else {
-      q = query(
-        collection(db, "requests"),
-        where("status", "==", statusFilter),
-        orderBy("createdAt2", "desc")
-      );
+    console.log("요청 데이터 조회 - 권한 확인");
+    console.log("대표원장 여부:", userPermissions.isOwner);
+    console.log("요청 관리 권한:", userPermissions.canManageRequest);
+
+    // 대표원장은 모든 요청을 볼 수 있음
+    if (userPermissions.isOwner) {
+      console.log("대표원장 권한으로 모든 요청 조회");
+      if (statusFilter === "all") {
+        q = query(collection(db, "requests"), orderBy("createdAt2", "desc"));
+      } else {
+        q = query(
+          collection(db, "requests"),
+          where("status", "==", statusFilter),
+          orderBy("createdAt2", "desc")
+        );
+      }
+    }
+    // 팀장급 이상은 요청 관리 가능
+    else if (userPermissions.canManageRequest) {
+      console.log("팀장급 권한으로 요청 조회");
+      if (statusFilter === "all") {
+        q = query(collection(db, "requests"), orderBy("createdAt2", "desc"));
+      } else {
+        q = query(
+          collection(db, "requests"),
+          where("status", "==", statusFilter),
+          orderBy("createdAt2", "desc")
+        );
+      }
+    }
+    // 일반 사용자는 자신의 부서 요청만 볼 수 있음
+    else {
+      console.log("일반 사용자 권한으로 부서 요청만 조회:", userDepartment);
+      if (statusFilter === "all") {
+        q = query(
+          collection(db, "requests"),
+          where("senderDepartment", "==", userDepartment),
+          orderBy("createdAt2", "desc")
+        );
+      } else {
+        q = query(
+          collection(db, "requests"),
+          where("senderDepartment", "==", userDepartment),
+          where("status", "==", statusFilter),
+          orderBy("createdAt2", "desc")
+        );
+      }
     }
 
     const querySnapshot = await getDocs(q);
@@ -382,6 +518,7 @@ const AdminRequestsManager = () => {
       timestamp: doc.data().createdAt || new Date().getTime(),
     }));
 
+    console.log(`조회된 요청 개수: ${requests.length}건`);
     setGeneralRequests(requests);
   };
 
@@ -418,12 +555,38 @@ const AdminRequestsManager = () => {
       let collectionName;
       switch (activeTab) {
         case "vacation":
+          // 휴가 신청 승인/반려 권한 체크
+          if (!userPermissions.canApproveVacation) {
+            showToast("휴가 신청을 승인/반려할 권한이 없습니다.", "error");
+            return;
+          }
           collectionName = "vacations";
           break;
         case "stock":
+          // 비품 신청 권한 체크 - 승인/반려는 대표원장만, 주문/입고는 원무과장도 가능
+          if (status === "승인됨" || status === "거부됨") {
+            if (!userPermissions.canApproveStock) {
+              showToast("비품 신청을 승인/반려할 권한이 없습니다.", "error");
+              return;
+            }
+          } else if (
+            status === "주문 필요" ||
+            status === "주문 완료" ||
+            status === "입고 완료"
+          ) {
+            if (!userPermissions.canOrderStock) {
+              showToast("비품 주문 상태를 변경할 권한이 없습니다.", "error");
+              return;
+            }
+          }
           collectionName = "stockRequests";
           break;
         case "request":
+          // 요청 승인/반려 권한 체크
+          if (!userPermissions.canManageRequest) {
+            showToast("요청을 승인/반려할 권한이 없습니다.", "error");
+            return;
+          }
           collectionName = "requests";
           break;
         default:
@@ -434,7 +597,7 @@ const AdminRequestsManager = () => {
       await updateDoc(requestRef, {
         status: status,
         updatedAt: new Date(),
-        updatedBy: userLevelData.id,
+        updatedBy: userLevelData.name,
         updatedByName: userLevelData.name,
       });
 
@@ -449,7 +612,7 @@ const AdminRequestsManager = () => {
           ...selectedItem,
           status: status,
           updatedAt: new Date(),
-          updatedBy: userLevelData.id,
+          updatedBy: userLevelData.name,
           updatedByName: userLevelData.name,
         });
       }
@@ -473,12 +636,13 @@ const AdminRequestsManager = () => {
   };
 
   const renderVacationActions = (item) => {
-    if (item.status === "대기중") {
+    // 대표원장만 휴가 승인/반려 가능
+    if (item.status === "대기중" && userPermissions.canApproveVacation) {
       return (
         <ButtonGroup>
           <ActionButton
             variant="approve"
-            onClick={() => updateRequestStatus(item.id, "승인")}
+            onClick={() => updateRequestStatus(item.id, "승인됨")}
           >
             승인
           </ActionButton>
@@ -495,95 +659,108 @@ const AdminRequestsManager = () => {
   };
 
   const renderStockActions = (item) => {
-    switch (item.status) {
-      case "대기중":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="approve"
-              onClick={() => updateRequestStatus(item.id, "승인")}
-            >
-              승인
-            </ActionButton>
-            <ActionButton
-              variant="reject"
-              onClick={() => updateRequestStatus(item.id, "거부됨")}
-            >
-              거부
-            </ActionButton>
-          </ButtonGroup>
-        );
-      case "승인":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="order"
-              onClick={() => updateRequestStatus(item.id, "주문 필요")}
-            >
-              주문 필요
-            </ActionButton>
-          </ButtonGroup>
-        );
-      case "주문 필요":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="order"
-              onClick={() => updateRequestStatus(item.id, "주문 완료")}
-            >
-              주문 완료
-            </ActionButton>
-          </ButtonGroup>
-        );
-      case "주문 완료":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="complete"
-              onClick={() => updateRequestStatus(item.id, "입고 완료")}
-            >
-              입고 완료
-            </ActionButton>
-          </ButtonGroup>
-        );
-      default:
-        return null;
+    // 대표원장만 비품 승인/반려 가능
+    if (item.status === "대기중" && userPermissions.canApproveStock) {
+      return (
+        <ButtonGroup>
+          <ActionButton
+            variant="approve"
+            onClick={() => updateRequestStatus(item.id, "승인됨")}
+          >
+            승인
+          </ActionButton>
+          <ActionButton
+            variant="reject"
+            onClick={() => updateRequestStatus(item.id, "거부됨")}
+          >
+            거부
+          </ActionButton>
+        </ButtonGroup>
+      );
     }
+
+    // 주문 관련 권한은 대표원장 또는 원무과장
+    if (userPermissions.canOrderStock) {
+      switch (item.status) {
+        case "승인됨":
+          return (
+            <ButtonGroup>
+              <ActionButton
+                variant="order"
+                onClick={() => updateRequestStatus(item.id, "주문 필요")}
+              >
+                주문 필요
+              </ActionButton>
+            </ButtonGroup>
+          );
+        case "주문 필요":
+          return (
+            <ButtonGroup>
+              <ActionButton
+                variant="order"
+                onClick={() => updateRequestStatus(item.id, "주문 완료")}
+              >
+                주문 완료
+              </ActionButton>
+            </ButtonGroup>
+          );
+        case "주문 완료":
+          return (
+            <ButtonGroup>
+              <ActionButton
+                variant="complete"
+                onClick={() => updateRequestStatus(item.id, "입고 완료")}
+              >
+                입고 완료
+              </ActionButton>
+            </ButtonGroup>
+          );
+        default:
+          return null;
+      }
+    }
+
+    return null;
   };
 
   const renderRequestActions = (item) => {
-    switch (item.status) {
-      case "대기중":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="approve"
-              onClick={() => updateRequestStatus(item.id, "처리중")}
-            >
-              접수
-            </ActionButton>
-            <ActionButton
-              variant="reject"
-              onClick={() => updateRequestStatus(item.id, "거부됨")}
-            >
-              거부
-            </ActionButton>
-          </ButtonGroup>
-        );
-      case "처리중":
-        return (
-          <ButtonGroup>
-            <ActionButton
-              variant="complete"
-              onClick={() => updateRequestStatus(item.id, "완료됨")}
-            >
-              완료
-            </ActionButton>
-          </ButtonGroup>
-        );
-      default:
-        return null;
+    // 팀장급 이상만 요청 승인/반려 가능
+    if (userPermissions.canManageRequest) {
+      switch (item.status) {
+        case "대기중":
+          return (
+            <ButtonGroup>
+              <ActionButton
+                variant="approve"
+                onClick={() => updateRequestStatus(item.id, "처리중")}
+              >
+                접수
+              </ActionButton>
+              <ActionButton
+                variant="reject"
+                onClick={() => updateRequestStatus(item.id, "거부됨")}
+              >
+                거부
+              </ActionButton>
+            </ButtonGroup>
+          );
+        case "처리중":
+          return (
+            <ButtonGroup>
+              <ActionButton
+                variant="complete"
+                onClick={() => updateRequestStatus(item.id, "완료됨")}
+              >
+                완료
+              </ActionButton>
+            </ButtonGroup>
+          );
+        default:
+          return null;
+      }
     }
+
+    return null;
   };
 
   const getVacationTitle = (item) => {
@@ -683,10 +860,10 @@ const AdminRequestsManager = () => {
             대기중
           </FilterButton>
           <FilterButton
-            active={statusFilter === "승인"}
-            onClick={() => setStatusFilter("승인")}
+            active={statusFilter === "승인됨"}
+            onClick={() => setStatusFilter("승인됨")}
           >
-            승인
+            승인됨
           </FilterButton>
           <FilterButton
             active={statusFilter === "처리중"}
@@ -876,6 +1053,23 @@ const AdminRequestsManager = () => {
     );
   };
 
+  // 권한에 따른 각 탭 렌더링 여부 확인
+  const shouldShowTab = (tabName) => {
+    switch (tabName) {
+      case "vacation":
+        // 대표원장은 모든 휴가 신청을 볼 수 있고, 다른 사용자는 자신의 부서 휴가만 볼 수 있음
+        return true;
+      case "stock":
+        // 대표원장과 원무과장은 모든 비품 신청을 볼 수 있고, 다른 사용자는 자신의 부서 비품만 볼 수 있음
+        return true;
+      case "request":
+        // 팀장급 이상은 모든 요청을 관리할 수 있고, 일반 사용자는 자신의 부서 요청만 볼 수 있음
+        return true;
+      default:
+        return false;
+    }
+  };
+
   return (
     <Container>
       <Header>
@@ -883,24 +1077,30 @@ const AdminRequestsManager = () => {
       </Header>
 
       <TabsContainer>
-        <Tab
-          active={activeTab === "vacation"}
-          onClick={() => handleTabChange("vacation")}
-        >
-          휴가 신청
-        </Tab>
-        <Tab
-          active={activeTab === "stock"}
-          onClick={() => handleTabChange("stock")}
-        >
-          비품 신청
-        </Tab>
-        <Tab
-          active={activeTab === "request"}
-          onClick={() => handleTabChange("request")}
-        >
-          요청 관리
-        </Tab>
+        {shouldShowTab("vacation") && (
+          <Tab
+            active={activeTab === "vacation"}
+            onClick={() => handleTabChange("vacation")}
+          >
+            휴가 신청
+          </Tab>
+        )}
+        {shouldShowTab("stock") && (
+          <Tab
+            active={activeTab === "stock"}
+            onClick={() => handleTabChange("stock")}
+          >
+            비품 신청
+          </Tab>
+        )}
+        {shouldShowTab("request") && (
+          <Tab
+            active={activeTab === "request"}
+            onClick={() => handleTabChange("request")}
+          >
+            요청 관리
+          </Tab>
+        )}
       </TabsContainer>
 
       <ContentArea>{renderContent()}</ContentArea>

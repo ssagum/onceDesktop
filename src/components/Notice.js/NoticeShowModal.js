@@ -69,26 +69,6 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       (notice.author === userLevelData.name && !notice.authorId) || // authorId가 없고 author가 일치하는 경우도 허용
       isHospitalOwner(userLevelData));
 
-  // 권한 디버깅용 로그
-  useEffect(() => {
-    if (notice && userLevelData) {
-      console.log("권한 확인: ", {
-        사용자정보: userLevelData,
-        게시물정보: {
-          작성자: notice.author,
-          작성자ID: notice.authorId,
-        },
-        권한체크: {
-          수정가능: canEdit,
-          삭제가능: canDelete,
-          작성자일치: isSameUser(userLevelData, notice.authorId),
-          이름일치: notice.author === userLevelData.name,
-          관리자여부: isHospitalOwner(userLevelData),
-        },
-      });
-    }
-  }, [notice, userLevelData, canEdit, canDelete]);
-
   const canComment = !!userLevelData; // 로그인한 사용자만 댓글 작성 가능
 
   // 모든 사용자 목록 가져오기

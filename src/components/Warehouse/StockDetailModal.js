@@ -640,7 +640,9 @@ export default function StockDetailModal({
                   readOnly
                   placeholder="거래처 정보 없음"
                   className={`w-full border border-gray-400 rounded-md h-[40px] px-4 bg-textBackground ${
-                    vendor ? "cursor-pointer hover:bg-gray-100" : ""
+                    vendor
+                      ? "cursor-pointer hover:bg-gray-100 text-blue-600"
+                      : ""
                   }`}
                   onClick={handleVendorClick}
                 />
@@ -663,7 +665,7 @@ export default function StockDetailModal({
                         d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    <span className="text-once14">상세보기</span>
+                    <span className="text-once14 font-medium">상세보기</span>
                   </div>
                 )}
               </div>

@@ -1537,6 +1537,7 @@ const ChatWindow = () => {
   // 헤더에 시크릿 모드 아이콘 추가
   const renderSecretModeIcon = () => {
     const isDirector = userLevelData?.role === "대표원장";
+    //여기도 currentUser로
 
     console.log("isDirector", userLevelData);
 

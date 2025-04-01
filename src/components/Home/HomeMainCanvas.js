@@ -61,7 +61,11 @@ import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
 import { getUnreadMessageCount } from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
-import { isHospitalOwner } from "../../utils/permissionUtils";
+import {
+  isHospitalOwner,
+  isAdministrativeManager,
+  isLeaderOrHigher,
+} from "../../utils/permissionUtils";
 import ManagementModal from "../Management/ManagementModal";
 import TextEditorModal from "../TextEditorModal";
 import { filterHiddenDocuments } from "../../utils/filterUtils";
@@ -137,87 +141,206 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
   const [vacationCount, setVacationCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
-  const { userLevelData } = useUserLevel();
+  const { userLevelData, currentUser } = useUserLevel();
+  const [userPermissions, setUserPermissions] = useState({
+    isOwner: false,
+    isAdminManager: false,
+    isLeader: false,
+  });
+
+  // 각 대기중 상태별 항목 수를 관리하는 상태 변수 추가
+  const [pendingVacations, setPendingVacations] = useState([]);
+  const [pendingStocks, setPendingStocks] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+
+  // 사용자 권한 설정
+  useEffect(() => {
+    if (userLevelData) {
+      setUserPermissions({
+        isOwner: isHospitalOwner(userLevelData, currentUser),
+        isAdminManager: isAdministrativeManager(userLevelData, currentUser),
+        isLeader: isLeaderOrHigher(userLevelData, currentUser),
+      });
+    }
+  }, [userLevelData, currentUser]);
 
   // Firestore에서 실제 데이터를 가져오도록 수정
   useEffect(() => {
     // 구독 해제할 함수들 배열
     const unsubscribes = [];
 
+    console.log("===== StatusBar 데이터 로딩 시작 =====");
+    console.log("현재 사용자 권한:", userPermissions);
+    console.log("현재 사용자 부서:", userLevelData?.department);
+
     // 오늘 날짜 범위 계산 (시작: 오늘 00:00:00, 종료: 오늘 23:59:59)
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0)).getTime();
     const endOfDay = new Date(today.setHours(23, 59, 59, 999)).getTime();
 
+    // 부서 정보 확인 - 시스템에서 사용하는 형식에 맞게 팀 이름 확인
+    const userDepartment = userLevelData?.department || "";
+
     // 1. 휴가자 정보 가져오기 - 오늘 날짜에 해당하는 승인된 휴가
     const vacationsRef = collection(db, "vacations");
-    const vacationsQuery = query(
-      vacationsRef,
-      where("status", "==", "승인됨"),
-      where("startDate", "<=", endOfDay),
-      where("endDate", ">=", startOfDay)
-    );
+
+    // 모든 휴가 데이터 가져오기
+    const vacationsQuery = query(vacationsRef);
 
     const vacationUnsubscribe = onSnapshot(vacationsQuery, (snapshot) => {
-      setVacationCount(snapshot.size);
+      // 모든 휴가 데이터 매핑
+      const vacations = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt?.toDate?.() || new Date(),
+      }));
+
+      console.log("StatusBar - 전체 휴가 데이터:", vacations.length, "건");
+
+      // 오늘 날짜에 해당하는 승인된 휴가만 필터링
+      const approvedVacations = vacations.filter((vacation) => {
+        // 승인됨 상태가 아니면 제외
+        if (vacation.status !== "승인됨") return false;
+
+        let startDate, endDate;
+
+        try {
+          // 시작일, 종료일 변환
+          if (typeof vacation.startDate === "string") {
+            startDate = new Date(vacation.startDate);
+          } else if (vacation.startDate?.seconds) {
+            startDate = new Date(vacation.startDate.seconds * 1000);
+          } else {
+            startDate = new Date(vacation.startDate);
+          }
+
+          if (typeof vacation.endDate === "string") {
+            endDate = new Date(vacation.endDate);
+          } else if (vacation.endDate?.seconds) {
+            endDate = new Date(vacation.endDate.seconds * 1000);
+          } else {
+            endDate = new Date(vacation.endDate);
+          }
+
+          // 오늘 날짜에 포함되는지 확인
+          return startDate <= endOfDay && endDate >= startOfDay;
+        } catch (error) {
+          console.error("휴가 날짜 처리 중 오류:", error);
+          return false;
+        }
+      });
+
+      console.log(
+        "StatusBar - 오늘 승인된 휴가:",
+        approvedVacations.length,
+        "건"
+      );
+
+      // 대기중인 휴가 항목도 찾아서 결제 대기 건수 계산에 사용
+      const waitingVacations = vacations.filter((v) => v.status === "대기중");
+      console.log("StatusBar - 대기중인 휴가:", waitingVacations.length, "건");
+
+      // 디버깅: 대기중인 휴가 항목 상세 정보 출력
+      console.log("휴가 대기중 필터링 조건:", "status === '대기중'");
+      if (waitingVacations.length > 0) {
+        console.log("대기중 휴가 첫 번째 항목 예시:", {
+          id: waitingVacations[0].id,
+          status: waitingVacations[0].status,
+          writer: waitingVacations[0].writer,
+          startDate: waitingVacations[0].startDate,
+          endDate: waitingVacations[0].endDate,
+        });
+      }
+
+      // 상태 업데이트
+      setPendingVacations(waitingVacations);
+      setVacationCount(approvedVacations.length);
     });
     unsubscribes.push(vacationUnsubscribe);
 
     // 2. 결제 필요 건수 가져오기 - 대기 중인 요청들
     const requestsRef = collection(db, "requests");
-    // 사용자 권한에 따라 필터링
-    let requestsQuery;
 
-    if (userLevelData?.role === "admin" || userLevelData?.role === "manager") {
-      // 관리자는 모든 대기중 요청 확인 가능
-      requestsQuery = query(requestsRef, where("status", "==", "대기중"));
-    } else if (userLevelData?.department) {
-      // 일반 사용자는 자신의 부서에 해당하는 요청만 확인
-      requestsQuery = query(
-        requestsRef,
-        where("status", "==", "대기중"),
-        where("senderDepartment", "==", userLevelData.department)
-      );
-    } else {
-      // 부서가 없는 경우 빈 쿼리
-      requestsQuery = query(
-        requestsRef,
-        where("status", "==", "대기중"),
-        where("senderPeople", "array-contains", userLevelData?.id || "")
-      );
-    }
+    // RequestStatusModal 방식과 같이 모든 요청 데이터를 가져오도록 수정
+    // 쿼리 조건 없이 모든 요청 데이터를 가져옴
+    const requestsQuery = query(requestsRef);
 
     const requestsUnsubscribe = onSnapshot(requestsQuery, (snapshot) => {
-      setApprovalCount(snapshot.size);
+      // 모든 요청 데이터 매핑
+      const requests = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt || new Date().getTime(),
+      }));
+
+      console.log("StatusBar - 전체 요청 데이터:", requests.length, "건");
+
+      // 대기중 상태인 요청만 필터링
+      const waitingRequests = requests.filter((req) => req.status === "대기중");
+      console.log("StatusBar - 대기중 요청:", waitingRequests.length, "건");
+
+      // 디버깅: 대기중인 요청 항목 상세 정보 출력
+      console.log("요청 대기중 필터링 조건:", "status === '대기중'");
+      if (waitingRequests.length > 0) {
+        console.log("대기중 요청 첫 번째 항목 예시:", {
+          id: waitingRequests[0].id,
+          status: waitingRequests[0].status,
+          title: waitingRequests[0].title,
+          requestedBy: waitingRequests[0].requestedBy,
+          department: waitingRequests[0].department,
+          createdAt: waitingRequests[0].createdAt,
+        });
+      }
+
+      // 상태변수 업데이트
+      setPendingRequests(waitingRequests);
     });
     unsubscribes.push(requestsUnsubscribe);
 
     // 3. 주문 필요 건수 가져오기 - 승인되었지만 아직 주문되지 않은 비품
     const stockRequestsRef = collection(db, "stockRequests");
-    // 사용자 권한에 따라 필터링
-    let stockQuery;
 
-    if (userLevelData?.role === "admin" || userLevelData?.role === "manager") {
-      // 관리자는 모든 승인된 비품 요청 확인 가능
-      stockQuery = query(stockRequestsRef, where("status", "==", "승인됨"));
-    } else if (userLevelData?.department) {
-      // 일반 사용자는 자신의 부서에 해당하는 요청만 확인
-      stockQuery = query(
-        stockRequestsRef,
-        where("status", "==", "승인됨"),
-        where("department", "==", userLevelData.department)
-      );
-    } else {
-      // 부서가 없는 경우 빈 쿼리
-      stockQuery = query(
-        stockRequestsRef,
-        where("status", "==", "승인됨"),
-        where("requestedBy", "==", userLevelData?.id || "")
-      );
-    }
+    // 조건 없이 모든 비품 요청 데이터 가져오기
+    const stockQuery = query(stockRequestsRef);
 
     const stockUnsubscribe = onSnapshot(stockQuery, (snapshot) => {
-      setOrderCount(snapshot.size);
+      // 모든 비품 요청 데이터 매핑
+      const stocks = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt || new Date().getTime(),
+      }));
+
+      console.log("StatusBar - 전체 비품 데이터:", stocks.length, "건");
+
+      // 승인됨 상태인 비품만 필터링
+      const approvedStocks = stocks.filter(
+        (stock) => stock.status === "승인됨"
+      );
+      console.log("StatusBar - 승인됨 비품:", approvedStocks.length, "건");
+
+      // 대기중인 비품 항목도 찾아서 결제 대기 건수 계산에 사용
+      const waitingStocks = stocks.filter((s) => s.status === "대기중");
+      console.log("StatusBar - 대기중인 비품:", waitingStocks.length, "건");
+
+      // 디버깅: 대기중인 비품 항목 상세 정보 출력
+      console.log("비품 대기중 필터링 조건:", "status === '대기중'");
+      if (waitingStocks.length > 0) {
+        console.log("대기중 비품 첫 번째 항목 예시:", {
+          id: waitingStocks[0].id,
+          status: waitingStocks[0].status,
+          itemName: waitingStocks[0].itemName,
+          requestedBy: waitingStocks[0].requestedBy,
+          department: waitingStocks[0].department,
+          quantity: waitingStocks[0].quantity,
+          createdAt: waitingStocks[0].createdAt,
+        });
+      }
+
+      // 상태변수 업데이트
+      setPendingStocks(waitingStocks);
+
+      setOrderCount(approvedStocks.length);
     });
     unsubscribes.push(stockUnsubscribe);
 
@@ -225,102 +348,125 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
     return () => {
       unsubscribes.forEach((unsubscribe) => unsubscribe());
     };
-  }, [currentDate, userLevelData]);
+  }, [currentDate, userLevelData, userPermissions]);
+
+  // 결제 대기 건수 업데이트를 위한 별도의 useEffect
+  useEffect(() => {
+    const totalPending =
+      pendingVacations.length + pendingStocks.length + pendingRequests.length;
+
+    // 상세 디버깅 로그 추가
+    console.log("==== 결재 필요 건수 디버깅 정보 ====");
+    console.log("휴가 대기중 항목:", pendingVacations);
+    console.log("비품 대기중 항목:", pendingStocks);
+    console.log("요청 대기중 항목:", pendingRequests);
+    console.log("총 결재 필요 건수:", totalPending);
+    console.log("휴가 대기중:", pendingVacations.length, "건");
+    console.log("비품 대기중:", pendingStocks.length, "건");
+    console.log("요청 대기중:", pendingRequests.length, "건");
+    console.log("=================================");
+
+    setApprovalCount(totalPending);
+  }, [pendingVacations, pendingStocks, pendingRequests]);
 
   return (
     <div className="w-full mt-4">
-      <div className="flex justify-between items-center bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* 휴가자 */}
-        <div
-          className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-all"
-          onClick={() => onOpenRequestModal("vacation")}
-        >
-          <div className="rounded-full bg-blue-100 p-2 mr-3">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-blue-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
+      {userPermissions.isOwner || userPermissions.isAdminManager ? (
+        <div className="flex justify-between items-center bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* 휴가자 */}
+          <div
+            className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-all"
+            onClick={() => onOpenRequestModal("vacation")}
+          >
+            <div className="rounded-full bg-blue-100 p-2 mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-blue-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">휴가자</p>
+              <p className="text-base font-bold text-blue-600">
+                {vacationCount > 0 ? `${vacationCount}명` : "없음"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-600">휴가자</p>
-            <p className="text-base font-bold text-blue-600">
-              {vacationCount > 0 ? `${vacationCount}명` : "없음"}
-            </p>
-          </div>
-        </div>
 
-        {/* 결제 필요 */}
-        <div
-          className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-yellow-50 transition-all"
-          onClick={() => onOpenRequestModal("request")}
-        >
-          <div className="rounded-full bg-yellow-100 p-2 mr-3">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-yellow-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
+          {/* 결제 필요 */}
+          <div
+            className="flex-1 py-3 px-4 flex items-center border-r border-gray-200 cursor-pointer hover:bg-yellow-50 transition-all"
+            onClick={() => onOpenRequestModal("request")}
+          >
+            <div className="rounded-full bg-yellow-100 p-2 mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-yellow-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">결재 필요</p>
+              <p className="text-base font-bold text-yellow-600">
+                {approvalCount}건
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-600">결재 필요</p>
-            <p className="text-base font-bold text-yellow-600">
-              {approvalCount}건
-            </p>
-          </div>
-        </div>
 
-        {/* 주문 필요 */}
-        <div
-          className="flex-1 py-3 px-4 flex items-center cursor-pointer hover:bg-green-50 transition-all"
-          onClick={() => onOpenRequestModal("stock")}
-        >
-          <div className="rounded-full bg-green-100 p-2 mr-3">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-green-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-600">주문 필요</p>
-            <p className="text-base font-bold text-green-600">{orderCount}건</p>
+          {/* 주문 필요 */}
+          <div
+            className="flex-1 py-3 px-4 flex items-center cursor-pointer hover:bg-green-50 transition-all"
+            onClick={() => onOpenRequestModal("stock")}
+          >
+            <div className="rounded-full bg-green-100 p-2 mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">주문 필요</p>
+              <p className="text-base font-bold text-green-600">
+                {orderCount}건
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };
 
 export default function HomeMainCanvas() {
-  const { userLevelData, updateUserLevelData } = useUserLevel();
+  const { userLevelData, currentUser, updateUserLevelData } = useUserLevel();
   const [selectedTask, setSelectedTask] = useState(null);
   const [showTaskDetail, setShowTaskDetail] = useState(false);
   const [showTaskHistory, setShowTaskHistory] = useState(false);
@@ -953,6 +1099,29 @@ export default function HomeMainCanvas() {
     }
   };
 
+  // 부서명 비교 유틸리티 함수
+  const isDepartmentMatch = (dept1, dept2) => {
+    // null/undefined/빈 문자열 체크
+    if (!dept1 || !dept2) return false;
+
+    // 문자열로 변환
+    const dept1Str = String(dept1).trim();
+    const dept2Str = String(dept2).trim();
+
+    // 정확히 일치하는 경우
+    if (dept1Str === dept2Str) return true;
+
+    // '팀' 명칭 제거 후 비교
+    const dept1Base = dept1Str.endsWith("팀")
+      ? dept1Str.slice(0, -1)
+      : dept1Str;
+    const dept2Base = dept2Str.endsWith("팀")
+      ? dept2Str.slice(0, -1)
+      : dept2Str;
+
+    return dept1Base === dept2Base;
+  };
+
   return (
     <div className="w-full flex flex-col h-full bg-onceBackground min-w-[1100px] min-h-[900px]">
       <TopZone className="flex-[1] w-full pt-[20px] px-[20px]">
@@ -964,15 +1133,75 @@ export default function HomeMainCanvas() {
             </Link>
           </InsideHeaderZone>
 
-          {notices
-            .filter((notice) => notice.pinned && !notice.isHidden)
-            .slice(0, 4)
-            .map((notice) => (
-              <RenderTitlePart key={notice.id} row={notice} isHomeMode={true} />
-            ))}
+          {/* 부서명 비교 유틸리티 함수 */}
+          {(() => {
+            // 부서명 비교 함수 (팀 명칭 유무에 상관없이 비교)
+            const isDepartmentMatch = (dept1, dept2) => {
+              // null/undefined/빈 문자열 체크
+              if (!dept1 || !dept2) return false;
 
-          {notices.filter((notice) => notice.pinned && !notice.isHidden)
-            .length === 0 && (
+              // 문자열로 변환
+              const dept1Str = String(dept1).trim();
+              const dept2Str = String(dept2).trim();
+
+              // 정확히 일치하는 경우
+              if (dept1Str === dept2Str) return true;
+
+              // '팀' 명칭 제거 후 비교
+              const dept1Base = dept1Str.endsWith("팀")
+                ? dept1Str.slice(0, -1)
+                : dept1Str;
+              const dept2Base = dept2Str.endsWith("팀")
+                ? dept2Str.slice(0, -1)
+                : dept2Str;
+
+              return dept1Base === dept2Base;
+            };
+
+            // 대표원장 확인
+            const isOwner = isHospitalOwner(userLevelData, currentUser);
+
+            // 필터링된 공지사항
+            const filteredNotices = notices
+              .filter((notice) => {
+                // 숨겨진 공지는 표시하지 않음
+                if (notice.isHidden) return false;
+
+                // 고정된 공지만 표시
+                if (!notice.pinned) return false;
+
+                // 대표원장은 모든 공지 확인 가능
+                if (isOwner) return true;
+
+                // 부서 정보가 없는 공지는 전체 공개 공지로 간주
+                if (!notice.department) return true;
+
+                // '전체' 부서인 공지는 모든 사용자에게 보임
+                if (notice.department === "전체") return true;
+
+                // 사용자 부서와 공지 부서 일치 여부 확인
+                return isDepartmentMatch(
+                  userLevelData?.department,
+                  notice.department
+                );
+              })
+              .slice(0, 4);
+
+            // 필터링된 공지사항 렌더링
+            return filteredNotices.map((notice) => (
+              <RenderTitlePart key={notice.id} row={notice} isHomeMode={true} />
+            ));
+          })()}
+
+          {notices.filter(
+            (notice) =>
+              notice.pinned &&
+              !notice.isHidden &&
+              (isHospitalOwner(userLevelData, currentUser) ||
+                !notice.department ||
+                notice.department === "전체" ||
+                isDepartmentMatch(userLevelData?.department, notice.department))
+          ).length === 0 && (
             <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
               <span className="mb-[40px]">등록된 공지사항이 없습니다.</span>
             </div>
@@ -997,10 +1226,25 @@ export default function HomeMainCanvas() {
             />
           </div>
 
-          <StatusBar
-            currentDate={currentDate}
-            onOpenRequestModal={openRequestStatusModal}
-          />
+          {/* StatusBar 컴포넌트를 조건부로 렌더링 */}
+          {(() => {
+            // 대표원장 또는 원무과장 여부 체크
+            const isOwner = isHospitalOwner(userLevelData, currentUser);
+            const isAdminManager = isAdministrativeManager(
+              userLevelData,
+              currentUser
+            );
+
+            if (isOwner || isAdminManager) {
+              return (
+                <StatusBar
+                  currentDate={currentDate}
+                  onOpenRequestModal={openRequestStatusModal}
+                />
+              );
+            }
+            return null;
+          })()}
 
           <ToDoZone className="flex-1 mt-[20px] overflow-auto">
             <ToDo
@@ -1087,7 +1331,7 @@ export default function HomeMainCanvas() {
                 </button>
               </div>
               <div className="w-[240px] h-[240px] flex-col flex justify-between">
-                {isHospitalOwner(userLevelData) ? (
+                {isHospitalOwner(userLevelData, currentUser) ? (
                   <div className="w-[240px] flex flex-row justify-between">
                     <div onClick={() => setShowNoticeEditor(true)}>
                       <Square title={"공지등록"} />
@@ -1110,7 +1354,7 @@ export default function HomeMainCanvas() {
                   <div onClick={openTimerWindow}>
                     <Square title={"타이머"} />
                   </div>
-                  {isHospitalOwner(userLevelData) ? (
+                  {isHospitalOwner(userLevelData, currentUser) ? (
                     <div onClick={() => setManagementModalVisible(true)}>
                       <Square title={"병원현황"} />
                     </div>

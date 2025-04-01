@@ -159,7 +159,7 @@ export default function SideBar() {
               JSON.stringify(userLevelData, null, 2)
             );
             console.log("사이드바 - 현재 사용자:", currentUser);
-            console.log("사이드바 - 역할:", userLevelData?.role);
+            console.log("사이드바 - 역할:", currentUser?.role);
             console.log("사이드바 - PC 부서:", userLevelData?.department);
             console.log("사이드바 - Firebase 부서:", currentUser?.department);
             console.log(
@@ -167,13 +167,10 @@ export default function SideBar() {
               userLevelData?.departmentLeader
             );
 
-            // Firebase 부서 정보가 있는 currentUser 객체를 함께 전달
-            const userDataWithFirebaseDept = {
-              ...userLevelData,
-              currentUser, // Firebase에서 가져온 사용자 정보를 함께 전달
-            };
-
-            const canAccess = canAccessTaskManagement(userDataWithFirebaseDept);
+            const canAccess = canAccessTaskManagement(
+              userLevelData,
+              currentUser
+            );
             console.log("사이드바 - 업무분장 접근 권한:", canAccess);
 
             return canAccess ? (

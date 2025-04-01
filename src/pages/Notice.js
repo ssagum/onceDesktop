@@ -82,12 +82,6 @@ const Notice = () => {
 
   // 게시글 작성 모달 표시 처리
   const handleCreatePost = () => {
-    // 로그인 여부 확인
-    if (!isLoggedIn || !userLevelData?.name) {
-      openLoginModal();
-      return;
-    }
-
     setShowEditor(true);
   };
 

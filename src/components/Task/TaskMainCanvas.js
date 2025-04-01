@@ -971,13 +971,7 @@ function TaskMainCanvas() {
     console.log("TaskMainCanvas - 사용자 데이터:", userLevelData);
     console.log("TaskMainCanvas - 현재 사용자:", currentUser);
 
-    // Firebase 부서 정보가 있는 currentUser 객체를 함께 전달
-    const userDataWithFirebaseDept = {
-      ...userLevelData,
-      currentUser, // Firebase에서 가져온 사용자 정보를 함께 전달
-    };
-
-    const folders = getVisibleFolders(userDataWithFirebaseDept);
+    const folders = getVisibleFolders(userLevelData, currentUser);
     console.log("TaskMainCanvas - 접근 가능한 폴더:", folders);
     return folders;
   }, [userLevelData, currentUser]);

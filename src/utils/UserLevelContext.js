@@ -116,7 +116,7 @@ export function UserLevelProvider({ children }) {
       if (autoLoginEnabled || isLoggedInStatus) {
         const user = getCurrentUser();
         if (user) {
-          console.log("로그인 상태 복원: ", user.name);
+          console.log("로그인 상태 복원: ", user);
           setCurrentUser(user);
         } else {
           // 사용자 정보가 없으면 로그아웃 처리
@@ -192,9 +192,9 @@ export function UserLevelProvider({ children }) {
     // 권한에 따라 다른 체크 로직을 적용
     switch (requiredPermission) {
       case "HOSPITAL_OWNER":
-        return isHospitalOwner(userLevelData);
+        return isHospitalOwner(userLevelData, currentUser);
       case "LEADER_OR_HIGHER":
-        return isLeaderOrHigher(userLevelData);
+        return isLeaderOrHigher(userLevelData, currentUser);
       default:
         // 기본적으로는 로그인한 사용자 모두 접근 가능
         return true;
@@ -218,6 +218,7 @@ export function UserLevelProvider({ children }) {
     const result = await loginUser(email, password);
 
     if (result.success) {
+      // Firebase에서 가져온 사용자 정보 설정
       setCurrentUser(result.user);
       setIsAutoLoginEnabled(rememberMe);
 
@@ -228,23 +229,29 @@ export function UserLevelProvider({ children }) {
       setLoginStatus(true);
 
       console.log("로그인 전 userLevelData:", userLevelData);
-      console.log("로그인한 사용자 정보:", result.user);
+      console.log("Firebase에서 가져온 사용자 정보:", result.user);
 
-      // PC 정보 보존하면서 사용자 정보 갱신
+      // PC 정보 보존하면서 사용자 정보 업데이트
+      // 사용자 식별 정보와 역할 정보는 Firebase에서 가져온 정보로 업데이트
+      // 로컬 환경 설정(department, location)은 기존 값 유지
       const updatedUserLevelData = {
-        // PC 정보는 무조건 현재 값 유지 (서버 값 무시)
+        // PC의 위치 정보는 유지
         department: userLevelData.department || "",
         location: userLevelData.location || "",
-        // 사용자 정보 갱신
+
+        // 사용자 식별 정보 업데이트 (Firebase에서 가져옴)
         id: result.user.id,
         uid: result.user.uid,
         email: result.user.email,
         name: result.user.name,
         displayName: result.user.displayName,
+
+        // 역할 정보 업데이트 (Firebase에서 가져옴)
         role: result.user.role || "",
         departmentLeader: result.user.departmentLeader || false,
       };
 
+      // userLevelData 상태 업데이트 및 로컬 스토리지에 저장
       setUserLevelData(updatedUserLevelData);
       localStorage.setItem(
         "userLevelData",
@@ -268,11 +275,12 @@ export function UserLevelProvider({ children }) {
   const getUserRoleLevel = () => {
     if (!currentUser) return "guest"; // 로그인하지 않은 경우
 
-    const { role } = userLevelData;
+    // Firebase에서 가져온 role 정보를 우선적으로 사용
+    const role = currentUser.role || userLevelData.role || "";
 
-    if (role?.includes("원장")) {
+    if (role.includes("원장")) {
       return "director";
-    } else if (role?.includes("장") || role?.includes("과장")) {
+    } else if (role.includes("장") || role.includes("과장")) {
       return "manager";
     } else {
       return "member";
@@ -298,15 +306,25 @@ export function UserLevelProvider({ children }) {
   return (
     <UserLevelContext.Provider
       value={{
+        // PC 환경 정보
         department: userLevelData.department,
         location: userLevelData.location,
-        role: userLevelData.role,
-        departmentLeader: userLevelData.departmentLeader,
+
+        // 역할 정보 (Firebase 우선)
+        role: currentUser?.role || userLevelData.role || "",
+        departmentLeader:
+          currentUser?.departmentLeader ||
+          userLevelData.departmentLeader ||
+          false,
+
+        // 상태 데이터
         userLevelData,
         isLoggedIn: !!currentUser,
         currentUser,
         isAutoLoginEnabled,
         isLoading,
+
+        // 함수들
         login,
         logout,
         register,

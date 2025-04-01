@@ -19,8 +19,7 @@ import NoticeShowModal from "./NoticeShowModal";
 import TextEditorModal from "../TextEditorModal";
 import { useToast } from "../../contexts/ToastContext";
 import { useUserLevel } from "../../utils/UserLevelContext";
-import { isLeaderOrHigher } from "../../utils/permissionUtils";
-import LoginPCModal from "../common/LoginPCModal";
+import { isLeaderOrHigher, isHospitalOwner } from "../../utils/permissionUtils";
 
 // === styled-components 영역 ===
 
@@ -38,8 +37,30 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const { showToast } = useToast();
-  const { userLevelData, isLoggedIn } = useUserLevel();
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
+
+  // 부서명 비교 함수 (팀 명칭 유무에 상관없이 비교)
+  const isDepartmentMatch = (dept1, dept2) => {
+    // null/undefined/빈 문자열 체크
+    if (!dept1 || !dept2) return false;
+
+    // 문자열로 변환
+    const dept1Str = String(dept1).trim();
+    const dept2Str = String(dept2).trim();
+
+    // 정확히 일치하는 경우
+    if (dept1Str === dept2Str) return true;
+
+    // '팀' 명칭 제거 후 비교
+    const dept1Base = dept1Str.endsWith("팀")
+      ? dept1Str.slice(0, -1)
+      : dept1Str;
+    const dept2Base = dept2Str.endsWith("팀")
+      ? dept2Str.slice(0, -1)
+      : dept2Str;
+
+    return dept1Base === dept2Base;
+  };
 
   useEffect(() => {
     // 모든 게시글을 먼저 가져옵니다
@@ -185,31 +206,8 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
     };
   }, [userLevelData]);
 
-  // 로그인 모달 관련 함수들
-  const openLoginModal = () => {
-    setLoginModalOpen(true);
-  };
-
-  const closeLoginModal = () => {
-    setLoginModalOpen(false);
-  };
-
-  const handleLoginSuccess = () => {
-    closeLoginModal();
-    // 로그인 성공 후 게시글 작성 모달 표시
-    if (onCreatePost) {
-      onCreatePost();
-    }
-  };
-
-  const handlePCAllocationSubmit = (pcData) => {
-    closeLoginModal();
-    showToast("PC 정보가 설정되었습니다.", "success");
-  };
-
-  // 게시글 작성 함수 수정 - 로그인 체크 제거
+  // 게시글 작성 함수 - 무조건 바로 게시글 작성 모달 열기
   const handleCreatePost = () => {
-    // 로그인 체크 제거 - 바로 게시글 작성 모달 열기
     if (onCreatePost) {
       onCreatePost();
     }
@@ -224,8 +222,26 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
     { label: "작성일", key: "createdAt" },
   ];
 
+  // 대표원장이 아닌 경우 부서 필터링 적용
+  const isOwner = isHospitalOwner(userLevelData, currentUser);
+
+  // 필터링된 공지사항
+  const filteredNotices = notices.filter((notice) => {
+    // 대표원장은 모든 공지 확인 가능
+    if (isOwner) return true;
+
+    // 부서 정보가 없는 공지는 전체 공개 공지로 간주
+    if (!notice.department) return true;
+
+    // '전체' 부서인 공지는 모든 사용자에게 보임
+    if (notice.department === "전체") return true;
+
+    // 사용자 부서와 공지 부서 일치 여부 확인
+    return isDepartmentMatch(userLevelData?.department, notice.department);
+  });
+
   // pinned(중요공지) 항목은 상단에 정렬하고, 일반 게시글에는 번호 부여
-  const sortedNotices = [...notices]
+  const sortedNotices = [...filteredNotices]
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
@@ -236,9 +252,9 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
       // 공지사항인 경우 "공지"로 표시, 아닌 경우 일련번호 부여
       const number = notice.pinned
         ? "공지"
-        : notices.filter((n) => n.pinned).length +
+        : filteredNotices.filter((n) => n.pinned).length +
           index -
-          notices.filter((n) => n.pinned).length +
+          filteredNotices.filter((n) => n.pinned).length +
           1;
 
       return {
@@ -301,15 +317,6 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
           editingPost={editingNotice}
         />
       </div>
-
-      {/* 로그인/PC할당 통합 모달 */}
-      <LoginPCModal
-        isOpen={loginModalOpen}
-        onClose={closeLoginModal}
-        onLoginSuccess={handleLoginSuccess}
-        onPCAllocationSubmit={handlePCAllocationSubmit}
-        defaultDepartment={userLevelData?.department || ""}
-      />
     </>
   );
 }

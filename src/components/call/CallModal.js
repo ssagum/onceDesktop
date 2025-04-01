@@ -144,15 +144,12 @@ const PRESETS_STORAGE_KEY = "callPresets";
 
 // 초기 프리셋 데이터 (기본값)
 const defaultPresets = [
-  {
-    receiver: "원무과장실 PC",
-    message: "원무과장실 PC 호출",
-  },
+  { receiver: "초음파실", message: "초음파실 호출" },
   { receiver: "X-RAY실", message: "X-RAY실 호출" },
   { receiver: "C-ARM실", message: "C-ARM실 호출" },
   { receiver: "원장실", message: "원장실 호출" },
-  { receiver: "", message: "" },
-  { receiver: "", message: "" },
+  { receiver: "원장실2", message: "원장실2 호출" },
+  { receiver: "원장실3", message: "원장실3 호출" },
   { receiver: "", message: "" },
 ];
 
@@ -444,7 +441,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
                     <PresetContent>
                       <PresetTitle>
                         {isEmptyPreset(preset)
-                          ? `빈 프리셋 ${index - 3 > 0 ? index - 3 : index + 1}`
+                          ? `빈 프리셋`
                           : `To. ${preset.receiver}`}
                       </PresetTitle>
                       <PresetMessage>
@@ -509,13 +506,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
           <div className="bg-white p-6 rounded-lg w-[400px] shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">
-                {presets[currentPresetIndex].receiver ||
-                  `빈 프리셋 ${
-                    currentPresetIndex - 3 > 0
-                      ? currentPresetIndex - 3
-                      : currentPresetIndex + 1
-                  }`}{" "}
-                설정
+                {presets[currentPresetIndex].receiver || `빈 프리셋`} 설정
               </h3>
               <button
                 onClick={closePresetModal}

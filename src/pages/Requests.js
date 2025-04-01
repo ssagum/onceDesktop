@@ -5,13 +5,18 @@ import SideBar from "../components/SideBar";
 import RequestsOverview from "../components/Requests/RequestsOverview";
 import AdminRequestsManager from "../components/Requests/AdminRequestsManager";
 import { useUserLevel } from "../utils/UserLevelContext";
+import {
+  isHospitalOwner,
+  isAdministrativeManager,
+  isLeaderOrHigher,
+} from "../utils/permissionUtils";
 
 const MainZone = styled.div``;
 
 const Requests = () => {
   const location = useLocation();
   const { userLevelData } = useUserLevel();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [activeTab, setActiveTab] = useState("vacation");
 
@@ -24,12 +29,13 @@ const Requests = () => {
       setActiveTab(tabParam);
     }
 
-    // 관리자 권한 확인
-    if (
-      userLevelData?.role &&
-      ["admin", "manager"].includes(userLevelData.role)
-    ) {
-      setIsAdmin(true);
+    // 관리자 권한 확인 - 대표원장, 원무과장, 팀장급만 관리자 모드 접근 가능
+    if (userLevelData) {
+      const isOwner = isHospitalOwner(userLevelData);
+      const isAdminManager = isAdministrativeManager(userLevelData);
+      const isLeader = isLeaderOrHigher(userLevelData);
+
+      setHasAdminAccess(isOwner || isAdminManager || isLeader);
     }
   }, [location.search, userLevelData]);
 
@@ -40,7 +46,7 @@ const Requests = () => {
       </div>
       <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground h-screen">
         <section className="flex flex-col items-center w-full h-full rounded-2xl p-4">
-          {isAdmin && (
+          {hasAdminAccess && (
             <div className="w-full flex justify-end mb-4">
               <button
                 onClick={() => setShowAdminPanel(!showAdminPanel)}
@@ -51,7 +57,7 @@ const Requests = () => {
             </div>
           )}
 
-          {showAdminPanel && isAdmin ? (
+          {showAdminPanel && hasAdminAccess ? (
             <AdminRequestsManager />
           ) : (
             <RequestsOverview initialTab={activeTab} />
