@@ -211,7 +211,8 @@ function DateViewModal({
                           task={task}
                           className="mb-2"
                           showCompleter={true}
-                          onTaskClick={() => handleTaskClick(task)} // 클릭 이벤트 추가
+                          onTaskClick={() => handleTaskClick(task)}
+                          currentDate={date}
                         />
                       ))
                     )}
