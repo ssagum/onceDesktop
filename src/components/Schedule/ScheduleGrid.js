@@ -25,6 +25,9 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
+// 요일 상수 추가
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
 // 애니메이션 정의
 const fadeIn = keyframes`
   from { opacity: 0; }
@@ -949,6 +952,18 @@ const ScheduleGrid = ({
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  // 담당자의 Off day 여부 확인 함수
+  const isOffDay = (dateIndex, staffIndex) => {
+    if (!staff[staffIndex] || !staff[staffIndex].offDays || !dates[dateIndex]) {
+      return false;
+    }
+
+    const date = dates[dateIndex];
+    const dayOfWeek = WEEKDAYS[date.getDay()]; // 요일 구하기 (0: 일요일, 1: 월요일, ...)
+
+    return staff[staffIndex].offDays.includes(dayOfWeek);
+  };
+
   // 휴가 상세 정보 모달 관련 상태 추가
   const [selectedVacation, setSelectedVacation] = useState(null);
   const [showVacationDetail, setShowVacationDetail] = useState(false);
@@ -1635,6 +1650,26 @@ const ScheduleGrid = ({
   // 일정 생성 함수 수정 - staffId 외에 staffName도 추가
   const createAppointment = async (data) => {
     try {
+      // Off day 체크
+      const selectedDate =
+        typeof data.date === "string" ? new Date(data.date) : data.date;
+      const dayOfWeek = WEEKDAYS[selectedDate.getDay()];
+      const staffIndex = staff.findIndex((s) => s.id === data.staffId);
+
+      if (
+        staffIndex !== -1 &&
+        staff[staffIndex].offDays &&
+        staff[staffIndex].offDays.includes(dayOfWeek)
+      ) {
+        if (showToast) {
+          showToast(
+            `${staff[staffIndex].name}의 ${dayOfWeek}요일은 Off day입니다.`,
+            "error"
+          );
+        }
+        return;
+      }
+
       // 필요한 예약 데이터 정리
       const appointment = {
         title: data.title || "새 예약",
@@ -1866,8 +1901,10 @@ const ScheduleGrid = ({
         staff.forEach((person, staffIndex) => {
           const colIndex = startCol + staffIndex + 1;
           const cellKey = `cell-${dateIndex}-${staffIndex}-${timeIndex}`;
+
           // 영업 시간 외여도 드래그는 가능하도록 변경, 휴게시간은 예외
-          const canInteract = !isBreakTimeForDay;
+          const isStaffOffDay = isOffDay(dateIndex, staffIndex);
+          const canInteract = !isBreakTimeForDay && !isStaffOffDay;
 
           cells.push(
             <Cell
@@ -1880,14 +1917,19 @@ const ScheduleGrid = ({
               style={{
                 gridColumn: colIndex,
                 gridRow: timeIndex + 1,
-                backgroundColor: isOutOfBusinessHours
+                backgroundColor: isStaffOffDay
+                  ? "#ffe6e6" // Off day 배경색을 연한 빨강으로 변경
+                  : isOutOfBusinessHours
                   ? "#f9f9f9"
                   : isBreakTimeForDay
                   ? "#fff8e1"
                   : isToday
                   ? "#fafeff"
                   : undefined,
-                cursor: isBreakTimeForDay ? "not-allowed" : "pointer",
+                cursor:
+                  isStaffOffDay || isBreakTimeForDay
+                    ? "not-allowed"
+                    : "pointer",
                 opacity: isOutOfBusinessHours ? 0.5 : 1,
                 minWidth: "150px",
                 height: "40px",
@@ -1906,6 +1948,7 @@ const ScheduleGrid = ({
                 canInteract &&
                 handleMouseUp(e, dateIndex, staffIndex, timeIndex)
               }
+              title={isStaffOffDay ? `${person.name}의 Off day입니다` : ""}
             />
           );
         });
@@ -2470,6 +2513,7 @@ const ScheduleGrid = ({
       const isToday =
         format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
       const startCol = dateIndex * (staff.length + 1) + 1;
+      const dayOfWeek = WEEKDAYS[date.getDay()]; // 요일 표시 추가
 
       // 각 날짜마다 시간 헤더 추가
       cells.push(
@@ -2489,13 +2533,17 @@ const ScheduleGrid = ({
             overflow: "hidden",
           }}
         >
-          시간
+          <div className="flex flex-col items-center">
+            <span>시간</span>
+            <span className="text-xs text-gray-500">{dayOfWeek}</span>
+          </div>
         </HeaderCell>
       );
 
       // 담당자 헤더들 추가
       staff.forEach((person, staffIndex) => {
         const colIndex = startCol + staffIndex + 1;
+        const isStaffOffDay = isOffDay(dateIndex, staffIndex);
 
         cells.push(
           <HeaderCell
@@ -2504,13 +2552,25 @@ const ScheduleGrid = ({
             style={{
               gridColumn: colIndex,
               gridRow: "2",
-              backgroundColor: isToday ? "#e6f7ff" : "#f9f9f9",
+              backgroundColor: isStaffOffDay
+                ? "#ffe6e6" // Off day 배경색을 연한 빨강으로 변경
+                : isToday
+                ? "#e6f7ff"
+                : "#f9f9f9",
               borderRight: "1px solid #eee",
               borderBottom: "1px solid #ddd",
               minWidth: minColumnWidth,
+              position: "relative",
             }}
           >
-            {person.name}
+            <div className="flex flex-col items-center">
+              <span>{person.name}</span>
+              {isStaffOffDay && (
+                <span className="text-xs text-red-600 font-bold bg-red-100 px-2 py-0.5 rounded">
+                  Off day
+                </span>
+              )}
+            </div>
           </HeaderCell>
         );
       });

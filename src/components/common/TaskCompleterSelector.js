@@ -157,6 +157,7 @@ export default function TaskCompleterSelector({
       <ModalTemplate
         isVisible={confirmModalOpen}
         setIsVisible={setConfirmModalOpen}
+        showCancel={false}
       >
         <div className="p-6 bg-white rounded-lg shadow-lg max-w-md">
           <div className="text-center mb-6">

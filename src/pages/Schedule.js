@@ -417,13 +417,6 @@ const Schedule = () => {
             "#3B82F6",
             "#14B8A6",
             "#8B5CF6",
-            // "#4F46E5", // 인디고/파란색 계열
-            // "#3B82F6",
-            // "#0EA5E9",
-            // "#06B6D4",
-            // "#0891B2",
-            // "#0284C7",
-            // "#1E40AF",
           ];
           const therapistColors = [
             "#4F46E5",
@@ -433,13 +426,6 @@ const Schedule = () => {
             "#3B82F6",
             "#14B8A6",
             "#8B5CF6",
-            // "#10B981", // 초록/보라 계열
-            // "#059669",
-            // "#047857",
-            // "#D946EF",
-            // "#8B5CF6",
-            // "#A855F7",
-            // "#6366F1",
           ];
 
           // 진료 담당자와 물리치료 담당자 목록 가져오기
@@ -448,18 +434,36 @@ const Schedule = () => {
 
           console.log("진료목록:", 진료목록);
 
-          // 각 담당자 이름을 객체 형식으로 변환 (id, name, color 속성 포함)
-          const 진료담당자 = 진료목록.map((name, index) => ({
-            id: `doctor_${index}`,
-            name: name,
-            color: doctorColors[index % doctorColors.length],
-          }));
+          // 각 담당자의 이름과 offDays 정보 처리
+          const 진료담당자 = 진료목록.map((provider, index) => {
+            // provider가 문자열인 경우(기존 형식) 객체로 변환
+            const name =
+              typeof provider === "string" ? provider : provider.name;
+            const offDays =
+              typeof provider === "string" ? [] : provider.offDays || [];
 
-          const 물리치료담당자 = 물리치료목록.map((name, index) => ({
-            id: `therapist_${index}`,
-            name: name,
-            color: therapistColors[index % therapistColors.length],
-          }));
+            return {
+              id: `doctor_${index}`,
+              name: name,
+              color: doctorColors[index % doctorColors.length],
+              offDays: offDays,
+            };
+          });
+
+          const 물리치료담당자 = 물리치료목록.map((provider, index) => {
+            // provider가 문자열인 경우(기존 형식) 객체로 변환
+            const name =
+              typeof provider === "string" ? provider : provider.name;
+            const offDays =
+              typeof provider === "string" ? [] : provider.offDays || [];
+
+            return {
+              id: `therapist_${index}`,
+              name: name,
+              color: therapistColors[index % therapistColors.length],
+              offDays: offDays,
+            };
+          });
 
           // 빈 배열 확인 및 기본값 설정
           if (진료담당자.length === 0) {
@@ -468,6 +472,7 @@ const Schedule = () => {
               id: "doctor_default",
               name: "기본 의사",
               color: doctorColors[0],
+              offDays: [],
             });
           }
 
@@ -477,6 +482,7 @@ const Schedule = () => {
               id: "therapist_default",
               name: "기본 치료사",
               color: therapistColors[0],
+              offDays: [],
             });
           }
 
@@ -491,19 +497,31 @@ const Schedule = () => {
           // 문서가 없는 경우 기본값 설정
           const defaultStaffData = {
             진료: [
-              { id: "doctor_0", name: "네트워크 에러", color: doctorColors[0] },
-              { id: "doctor_1", name: "네트워크 에러", color: doctorColors[1] },
+              {
+                id: "doctor_0",
+                name: "네트워크 에러",
+                color: doctorColors[0],
+                offDays: [],
+              },
+              {
+                id: "doctor_1",
+                name: "네트워크 에러",
+                color: doctorColors[1],
+                offDays: [],
+              },
             ],
             물리치료: [
               {
                 id: "therapist_0",
                 name: "네트워크 에러",
                 color: therapistColors[0],
+                offDays: [],
               },
               {
                 id: "therapist_1",
                 name: "네트워크 에러",
                 color: therapistColors[1],
+                offDays: [],
               },
             ],
           };
@@ -516,19 +534,31 @@ const Schedule = () => {
         // 오류 발생 시 기본값 설정
         const defaultStaffData = {
           진료: [
-            { id: "doctor_0", name: "네트워크 에러", color: doctorColors[0] },
-            { id: "doctor_1", name: "네트워크 에러", color: doctorColors[1] },
+            {
+              id: "doctor_0",
+              name: "네트워크 에러",
+              color: doctorColors[0],
+              offDays: [],
+            },
+            {
+              id: "doctor_1",
+              name: "네트워크 에러",
+              color: doctorColors[1],
+              offDays: [],
+            },
           ],
           물리치료: [
             {
               id: "therapist_0",
               name: "네트워크 에러",
               color: therapistColors[0],
+              offDays: [],
             },
             {
               id: "therapist_1",
               name: "네트워크 에러",
               color: therapistColors[1],
+              offDays: [],
             },
           ],
         };

@@ -608,6 +608,54 @@ const StaffManagement = () => {
     "경영지원팀",
   ];
 
+  // 담당자 추가
+  const handleAddProvider = () => {
+    if (!newProvider.trim()) return;
+
+    const updatedProviders = { ...providers };
+    // 담당자를 객체 형태로 추가 (이름과 비근무 요일 정보 포함)
+    updatedProviders[providerType] = [
+      ...updatedProviders[providerType],
+      {
+        name: newProvider.trim(),
+        offDays: [], // 기본적으로 비근무 요일은 없음
+      },
+    ];
+    setProviders(updatedProviders);
+    setNewProvider("");
+  };
+
+  // 담당자 제거
+  const handleRemoveProvider = (type, providerName) => {
+    const updatedProviders = { ...providers };
+    updatedProviders[type] = updatedProviders[type].filter(
+      (provider) => provider.name !== providerName
+    );
+    setProviders(updatedProviders);
+  };
+
+  // 비근무 요일 토글
+  const toggleOffDay = (type, providerName, day) => {
+    const updatedProviders = { ...providers };
+    const providerIndex = updatedProviders[type].findIndex(
+      (provider) => provider.name === providerName
+    );
+
+    if (providerIndex !== -1) {
+      const provider = updatedProviders[type][providerIndex];
+
+      // 이미 비근무 요일로 설정되어 있으면 제거, 아니면 추가
+      if (provider.offDays.includes(day)) {
+        provider.offDays = provider.offDays.filter((d) => d !== day);
+      } else {
+        provider.offDays = [...provider.offDays, day];
+      }
+
+      updatedProviders[type][providerIndex] = provider;
+      setProviders(updatedProviders);
+    }
+  };
+
   // Firebase에서 담당자 정보 가져오기
   useEffect(() => {
     const fetchProviders = async () => {
@@ -617,9 +665,23 @@ const StaffManagement = () => {
 
         if (settingDoc.exists()) {
           const data = settingDoc.data();
+
+          // 기존 데이터가 문자열 배열인 경우 객체 배열로 변환
+          const convertToObjectArray = (array) => {
+            if (!array) return [];
+            return array.map((item) => {
+              // 이미 객체인 경우 그대로 반환
+              if (typeof item === "object" && item !== null) {
+                return item;
+              }
+              // 문자열인 경우 객체로 변환
+              return { name: item, offDays: [] };
+            });
+          };
+
           setProviders({
-            진료: data.진료 || [],
-            물리치료: data.물리치료 || [],
+            진료: convertToObjectArray(data.진료 || []),
+            물리치료: convertToObjectArray(data.물리치료 || []),
           });
         } else {
         }
@@ -628,28 +690,6 @@ const StaffManagement = () => {
 
     fetchProviders();
   }, []);
-
-  // 담당자 추가
-  const handleAddProvider = () => {
-    if (!newProvider.trim()) return;
-
-    const updatedProviders = { ...providers };
-    updatedProviders[providerType] = [
-      ...updatedProviders[providerType],
-      newProvider.trim(),
-    ];
-    setProviders(updatedProviders);
-    setNewProvider("");
-  };
-
-  // 담당자 제거
-  const handleRemoveProvider = (type, name) => {
-    const updatedProviders = { ...providers };
-    updatedProviders[type] = updatedProviders[type].filter(
-      (provider) => provider !== name
-    );
-    setProviders(updatedProviders);
-  };
 
   // 담당자 정보 저장
   const handleSaveProviders = async () => {
@@ -972,31 +1012,60 @@ const StaffManagement = () => {
             <div className="grid grid-cols-2 gap-5">
               <div className="bg-white p-3 rounded-md border border-blue-100">
                 <h4 className="font-medium text-blue-900 mb-2">진료 담당자</h4>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {providers.진료.map((name, index) => (
+                <div className="space-y-3">
+                  {providers.진료.map((provider, index) => (
                     <div
                       key={`doctor-${index}`}
-                      className="flex items-center bg-blue-100 px-2 py-1 rounded"
+                      className="border border-blue-100 rounded-md p-2"
                     >
-                      <span className="mr-1">{name}</span>
-                      <button
-                        onClick={() => handleRemoveProvider("진료", name)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">{provider.name}</span>
+                        <button
+                          onClick={() =>
+                            handleRemoveProvider("진료", provider.name)
+                          }
+                          className="text-red-500 hover:text-red-700"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">
+                          비근무 요일:
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {["월", "화", "수", "목", "금", "토", "일"].map(
+                            (day) => (
+                              <button
+                                key={day}
+                                onClick={() =>
+                                  toggleOffDay("진료", provider.name, day)
+                                }
+                                className={`px-2 py-1 text-xs rounded-md ${
+                                  provider.offDays &&
+                                  provider.offDays.includes(day)
+                                    ? "bg-red-100 text-red-800 border border-red-300"
+                                    : "bg-gray-100 text-gray-800 border border-gray-200"
+                                }`}
+                              >
+                                {day}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1006,31 +1075,60 @@ const StaffManagement = () => {
                 <h4 className="font-medium text-blue-900 mb-2">
                   물리치료 담당자
                 </h4>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {providers.물리치료.map((name, index) => (
+                <div className="space-y-3">
+                  {providers.물리치료.map((provider, index) => (
                     <div
                       key={`therapist-${index}`}
-                      className="flex items-center bg-blue-100 px-2 py-1 rounded"
+                      className="border border-blue-100 rounded-md p-2"
                     >
-                      <span className="mr-1">{name}</span>
-                      <button
-                        onClick={() => handleRemoveProvider("물리치료", name)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">{provider.name}</span>
+                        <button
+                          onClick={() =>
+                            handleRemoveProvider("물리치료", provider.name)
+                          }
+                          className="text-red-500 hover:text-red-700"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">
+                          비근무 요일:
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {["월", "화", "수", "목", "금", "토", "일"].map(
+                            (day) => (
+                              <button
+                                key={day}
+                                onClick={() =>
+                                  toggleOffDay("물리치료", provider.name, day)
+                                }
+                                className={`px-2 py-1 text-xs rounded-md ${
+                                  provider.offDays &&
+                                  provider.offDays.includes(day)
+                                    ? "bg-red-100 text-red-800 border border-red-300"
+                                    : "bg-gray-100 text-gray-800 border border-gray-200"
+                                }`}
+                              >
+                                {day}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1067,15 +1165,54 @@ const StaffManagement = () => {
           <div className="grid grid-cols-2 gap-5">
             <div className="bg-white p-3 rounded-md border border-blue-100">
               <h4 className="font-medium text-blue-900 mb-2">진료 담당자</h4>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {providers.진료.length > 0 ? (
-                  providers.진료.map((name, index) => (
-                    <span
+                  providers.진료.map((provider, index) => (
+                    <div
                       key={`doctor-${index}`}
-                      className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                      className="border border-gray-100 p-2 rounded-md"
                     >
-                      {name}
-                    </span>
+                      <div className="flex items-center flex-wrap">
+                        <span className="text-blue-800 font-medium mr-2">
+                          {provider.name}
+                        </span>
+                        {(() => {
+                          // 일요일을 제외한 요일 배열
+                          const weekdays = ["월", "화", "수", "목", "금", "토"];
+                          // 일요일을 제외하고 비근무 요일 필터링
+                          const offDays = provider.offDays
+                            ? provider.offDays.filter((day) => day !== "일")
+                            : [];
+
+                          const workingDays = weekdays.filter(
+                            (day) => !offDays.includes(day)
+                          );
+
+                          if (offDays.length === 0) {
+                            // 월-토 모두 근무하는 경우
+                            return (
+                              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                매일 근무
+                              </span>
+                            );
+                          } else if (workingDays.length <= 2) {
+                            // 근무일이 1-2일인 경우 근무일 표시
+                            return (
+                              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                {workingDays.join(", ")}요일 근무
+                              </span>
+                            );
+                          } else {
+                            // 비근무일이 적은 경우 비근무일 표시
+                            return (
+                              <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                                {offDays.join(", ")}요일 휴무
+                              </span>
+                            );
+                          }
+                        })()}
+                      </div>
+                    </div>
                   ))
                 ) : (
                   <span className="text-gray-500 text-sm">
@@ -1089,15 +1226,54 @@ const StaffManagement = () => {
               <h4 className="font-medium text-blue-900 mb-2">
                 물리치료 담당자
               </h4>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {providers.물리치료.length > 0 ? (
-                  providers.물리치료.map((name, index) => (
-                    <span
+                  providers.물리치료.map((provider, index) => (
+                    <div
                       key={`therapist-${index}`}
-                      className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                      className="border border-gray-100 p-2 rounded-md"
                     >
-                      {name}
-                    </span>
+                      <div className="flex items-center flex-wrap">
+                        <span className="text-blue-800 font-medium mr-2">
+                          {provider.name}
+                        </span>
+                        {(() => {
+                          // 일요일을 제외한 요일 배열
+                          const weekdays = ["월", "화", "수", "목", "금", "토"];
+                          // 일요일을 제외하고 비근무 요일 필터링
+                          const offDays = provider.offDays
+                            ? provider.offDays.filter((day) => day !== "일")
+                            : [];
+
+                          const workingDays = weekdays.filter(
+                            (day) => !offDays.includes(day)
+                          );
+
+                          if (offDays.length === 0) {
+                            // 월-토 모두 근무하는 경우
+                            return (
+                              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                매일 근무
+                              </span>
+                            );
+                          } else if (workingDays.length <= 2) {
+                            // 근무일이 1-2일인 경우 근무일 표시
+                            return (
+                              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                {workingDays.join(", ")}요일 근무
+                              </span>
+                            );
+                          } else {
+                            // 비근무일이 적은 경우 비근무일 표시
+                            return (
+                              <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                                {offDays.join(", ")}요일 휴무
+                              </span>
+                            );
+                          }
+                        })()}
+                      </div>
+                    </div>
                   ))
                 ) : (
                   <span className="text-gray-500 text-sm">
@@ -1148,7 +1324,7 @@ const StaffManagement = () => {
             index % 2 === 0 ? "bg-gray-100" : "bg-white"
           }
           renderRow={renderStaffRow}
-          itemsPerPage={5}
+          itemsPerPage={2}
           emptyRowHeight="60px"
           onRowClick={(row) => {
             setSelectedStaff(row);
