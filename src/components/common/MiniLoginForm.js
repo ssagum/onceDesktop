@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import SignupModal from "./SignupModal";
+import { changePassword } from "../../utils/UserAuth";
 
 function MiniLoginForm({ onLoginSuccess }) {
   const {
@@ -22,6 +23,15 @@ function MiniLoginForm({ onLoginSuccess }) {
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  
+  // 비밀번호 변경 관련 상태
+  const [showPasswordChangeForm, setShowPasswordChangeForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changeMessage, setChangeMessage] = useState("");
+  const [changeMessageType, setChangeMessageType] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -108,6 +118,58 @@ function MiniLoginForm({ onLoginSuccess }) {
       setResetLoading(false);
     }
   };
+  
+  // 비밀번호 변경 폼 토글
+  const togglePasswordChangeForm = () => {
+    setShowPasswordChangeForm(!showPasswordChangeForm);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setChangeMessage("");
+  };
+  
+  // 비밀번호 변경 처리
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setChangeMessage("모든 필드를 입력해주세요.");
+      setChangeMessageType("error");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setChangeMessage("새 비밀번호가 일치하지 않습니다.");
+      setChangeMessageType("error");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    setChangeMessage("");
+
+    try {
+      // 비밀번호 변경 API 호출
+      const result = await changePassword(currentUser.email, currentPassword, newPassword);
+      
+      if (result.success) {
+        setChangeMessage("비밀번호가 성공적으로 변경되었습니다.");
+        setChangeMessageType("success");
+        setShowPasswordChangeForm(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        setChangeMessage(result.message || "비밀번호 변경 중 오류가 발생했습니다.");
+        setChangeMessageType("error");
+      }
+    } catch (error) {
+      setChangeMessage("비밀번호 변경 중 오류가 발생했습니다.");
+      setChangeMessageType("error");
+      console.error(error);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   // 이미 로그인되어 있는 경우 로그아웃 버튼만 보여줌
   if (isLoggedIn && currentUser) {
@@ -116,12 +178,77 @@ function MiniLoginForm({ onLoginSuccess }) {
         <div className="text-center mb-3">
           <p className="text-sm font-medium">{currentUser.name}님 로그인됨</p>
         </div>
-        <button
-          onClick={handleLogout}
-          className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded transition-colors"
-        >
-          로그아웃
-        </button>
+        
+        {showPasswordChangeForm ? (
+          <div className="w-full mb-3">
+            <form onSubmit={handlePasswordChange} className="space-y-2">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium">비밀번호 변경</h3>
+                <button
+                  type="button"
+                  onClick={togglePasswordChangeForm}
+                  className="text-gray-500 text-xs hover:text-gray-700"
+                >
+                  취소
+                </button>
+              </div>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="현재 비밀번호"
+                className="w-full border rounded px-3 py-1 text-sm"
+              />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="새 비밀번호"
+                className="w-full border rounded px-3 py-1 text-sm"
+              />
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="새 비밀번호 확인"
+                className="w-full border rounded px-3 py-1 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={isChangingPassword}
+                className="w-full bg-[#002855] text-white py-1 rounded text-sm disabled:bg-gray-400"
+              >
+                {isChangingPassword ? "변경 중..." : "비밀번호 변경"}
+              </button>
+              {changeMessage && (
+                <div
+                  className={`text-xs ${
+                    changeMessageType === "success"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {changeMessage}
+                </div>
+              )}
+            </form>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={togglePasswordChangeForm}
+              className="w-full bg-[#002855] text-white py-2 rounded mb-2 transition-colors"
+            >
+              비밀번호 변경
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded transition-colors"
+            >
+              로그아웃
+            </button>
+          </>
+        )}
       </div>
     );
   }

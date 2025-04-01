@@ -147,7 +147,7 @@ const GridContainer = styled.div`
 const ToggleContainer = styled.div`
   display: flex;
   position: relative;
-  width: 260px;
+  width: 300px;
   height: 50px;
   margin-bottom: 20px;
   border-radius: 25px;
@@ -388,7 +388,7 @@ const Schedule = () => {
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [viewMode, setViewMode] = useState(
-    department === "물리치료팀" ? "물리치료" : "진료"
+    "물리치료" 
   ); // 부서가 물리치료팀이면 물리치료 모드로 시작
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
   // 초기화 진행 상태 추가
@@ -571,13 +571,13 @@ const Schedule = () => {
   }, [showToast]);
 
   // 부서 정보가 변경될 때 viewMode 업데이트
-  useEffect(() => {
-    if (department === "물리치료팀") {
-      setViewMode("물리치료");
-    } else if (department && department !== "물리치료팀") {
-      setViewMode("진료");
-    }
-  }, [department]);
+  // useEffect(() => {
+  //   if (department === "물리치료팀") {
+  //     setViewMode("물리치료");
+  //   } else if (department && department !== "물리치료팀") {
+  //     setViewMode("진료");
+  //   }
+  // }, [department]);
 
   // 선택된 월의 주 수 계산
   const getWeeksForMonth = (year = selectedYear, month = selectedMonth) => {
@@ -1303,7 +1303,7 @@ const Schedule = () => {
       <div className="w-[250px] h-full flex flex-col">
         <SideBar />
       </div>
-      <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen">
+      <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground px-[20px] h-screen overflow-hidden">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <GridContainer>
             <div className="w-full flex justify-between mb-4">
@@ -1327,15 +1327,16 @@ const Schedule = () => {
                 </ToggleOption>
               </ToggleContainer>
 
-              {/*
+              
               <NaverReservationTrigger
                 onDataExtract={handleExtractedData}
                 buttonStyle={{
                   backgroundColor: "#22c55e",
                   padding: "8px 16px",
                   fontSize: "14px",
+                  height: "40px",
                 }}
-              /> */}
+              />
             </div>
 
             <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1347,9 +1348,7 @@ const Schedule = () => {
                   </span>
                 ) : (
                   <span>
-                    물리치료사 선생님들은 업무상 이동이 잦으시므로, 어디서든
-                    예약 변동 사항을 바로 확인하실 수 있게 물리치료팀 모든
-                    PC에서 알림이 울립니다.
+                    물리치료팀 모든 PC에서 알림이 울립니다.
                   </span>
                 )}
               </p>

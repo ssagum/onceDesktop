@@ -111,6 +111,28 @@ const InteractiveHeader = styled.div`
   }
 `;
 
+// 안전하게 시간 포맷팅하는 함수 - 컴포넌트 바깥으로 이동
+function formatTimeWithFallback(timestamp) {
+  try {
+    const date = new Date(timestamp);
+    return isValid(date) ? format(date, "HH:mm") : "-";
+  } catch (error) {
+    console.error("시간 포맷팅 오류:", error, timestamp);
+    return "-";
+  }
+}
+
+// 안전하게 오전/오후 구분하는 함수 - 컴포넌트 바깥으로 이동
+function getDayPeriod(timestamp) {
+  try {
+    const date = new Date(timestamp);
+    return isValid(date) ? (date.getHours() < 12 ? "오전" : "오후") : "-";
+  } catch (error) {
+    console.error("오전/오후 구분 오류:", error, timestamp);
+    return "-";
+  }
+}
+
 function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const [selectedDays, setSelectedDays] = useState(task?.days || []);
   const [selectedCycle, setSelectedCycle] = useState(task?.cycle || "매일");
@@ -124,10 +146,12 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     task?.endDate ? formatSafeDate(task.endDate) : formatSafeDate(new Date())
   );
   const [taskHistory, setTaskHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("일반");
   const [sortDirection, setSortDirection] = useState("desc"); // 기본값: 내림차순(최신순)
   const [showOnlyCompleted, setShowOnlyCompleted] = useState(false); // 기본값: 모든 기록 표시
+  const [filteredAndSortedRecords, setFilteredAndSortedRecords] = useState([]);
 
   // 무한 종료일 (반복성 업무용)
   const INFINITE_END_DATE = "2099/12/31";
@@ -147,12 +171,22 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     }
   }, [isVisible, task, setIsVisible]);
 
+  useEffect(() => {
+    if (!loading) {
+      // 데이터가 로드되었을 때 필터링된 기록 생성
+      const records = getFilteredAndSortedRecords();
+      setFilteredAndSortedRecords(records);
+      setDataReady(true);
+    }
+  }, [loading, showOnlyCompleted, sortDirection, taskHistory]);
+
   // 작업 이력 조회
   const fetchTaskHistory = async () => {
     if (!task?.id) return;
 
     try {
       setLoading(true);
+      setDataReady(false);
       const historyData = await getTaskHistory(task.id);
       setTaskHistory(historyData);
       console.log("업무 이력 조회 결과:", historyData);
@@ -498,38 +532,13 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     setShowOnlyCompleted(!showOnlyCompleted);
   };
 
-  // 정렬 및 필터링된 기록
-  const filteredAndSortedRecords = getFilteredAndSortedRecords();
-
-  // 요일 배열
-  const days = ["월", "화", "수", "목", "금", "토", "일"];
-
   // TaskAddModal로 돌아가기
   const handleBack = () => {
     setIsVisible(false);
   };
 
-  // 안전하게 시간 포맷팅하는 함수
-  const formatTimeWithFallback = (timestamp) => {
-    try {
-      const date = new Date(timestamp);
-      return isValid(date) ? format(date, "HH:mm") : "-";
-    } catch (error) {
-      console.error("시간 포맷팅 오류:", error, timestamp);
-      return "-";
-    }
-  };
-
-  // 안전하게 오전/오후 구분하는 함수
-  const getDayPeriod = (timestamp) => {
-    try {
-      const date = new Date(timestamp);
-      return isValid(date) ? (date.getHours() < 12 ? "오전" : "오후") : "-";
-    } catch (error) {
-      console.error("오전/오후 구분 오류:", error, timestamp);
-      return "-";
-    }
-  };
+  // 요일 배열
+  const days = ["월", "화", "수", "목", "금", "토", "일"];
 
   return (
     <ModalTemplate
@@ -770,7 +779,7 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
 
               {/* 테이블 본문 - 스크롤 가능한 영역 */}
               <div className="flex-1 overflow-y-auto border border-gray-200 rounded-md">
-                {loading ? (
+                {loading || !dataReady ? (
                   <div className="flex justify-center items-center h-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>

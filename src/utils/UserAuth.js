@@ -242,3 +242,48 @@ export const resetPassword = async (email) => {
     };
   }
 };
+
+// 비밀번호 변경 함수
+export const changePassword = async (email, currentPassword, newPassword) => {
+  try {
+    // 이메일로 사용자 찾기
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      return {
+        success: false,
+        message: "해당 이메일의 사용자를 찾을 수 없습니다.",
+      };
+    }
+
+    // 사용자 문서 참조
+    const userDoc = querySnapshot.docs[0];
+    const userData = userDoc.data();
+    
+    // 현재 비밀번호 확인
+    if (userData.password !== currentPassword) {
+      return {
+        success: false,
+        message: "현재 비밀번호가 일치하지 않습니다.",
+      };
+    }
+    
+    // 사용자 문서 참조 가져오기
+    const userRef = doc(db, "users", userDoc.id);
+
+    // 새 비밀번호로 업데이트
+    await updateDoc(userRef, {
+      password: newPassword,
+    });
+
+    return { success: true, message: "비밀번호가 성공적으로 변경되었습니다." };
+  } catch (error) {
+    console.error("비밀번호 변경 오류:", error);
+    return {
+      success: false,
+      message: "비밀번호 변경 중 오류가 발생했습니다.",
+    };
+  }
+};

@@ -740,7 +740,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
         </div>
         <div className="flex justify-between mb-8">
           <div className="flex items-center space-x-4">
-            <label className="text-black font-semibold w-[100px]">
+            <label className="text-black font-semibold w-[120px]">
               작성자:<span className="text-red-500">*</span>
             </label>
             <WhoSelector

@@ -94,6 +94,7 @@ function SingleTodoItem({
   const [taskHistory, setTaskHistory] = useState([]);
   const [hasTaskHistory, setHasTaskHistory] = useState(false);
   const [showTaskHistory, setShowTaskHistory] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const { showToast } = useToast();
 
   // 최신 currentDate를 추적하는 ref
@@ -149,21 +150,24 @@ function SingleTodoItem({
       // 비동기 함수 정의
       const fetchHistory = async () => {
         try {
+          setIsDataLoading(true);
           // 조회할 날짜 설정 (직접 props에서 받아옴)
           const dateToQuery = currentDate || new Date();
 
           // 이력 가져오기
           const history = await getTaskHistory(id, dateToQuery);
-          setTaskHistory(history || []);
-
+          
           // history가 없거나 빈 배열인 경우
           if (!history || history.length === 0) {
+            setTaskHistory([]);
             setHasTaskHistory(false);
             setSelectedCompleters([]);
+            setIsDataLoading(false);
             return;
           }
 
           // 히스토리가 존재하면 완료된 것으로 간주
+          setTaskHistory(history);
           setHasTaskHistory(true);
 
           // 가장 최근 기록 기준으로 완료자 정보 설정
@@ -198,6 +202,8 @@ function SingleTodoItem({
           // 오류 발생 시에도 상태 초기화
           setHasTaskHistory(false);
           setSelectedCompleters([]);
+        } finally {
+          setIsDataLoading(false);
         }
       };
 
@@ -260,6 +266,7 @@ function SingleTodoItem({
       try {
         // 처리 시작 플래그 설정
         isProcessingRef.current = true;
+        setIsDataLoading(true);
 
         // 완료자 검증
         if (
@@ -268,6 +275,7 @@ function SingleTodoItem({
         ) {
           showToast("완료자를 선택해주세요.", "warning");
           isProcessingRef.current = false;
+          setIsDataLoading(false);
           return;
         }
 
@@ -301,8 +309,8 @@ function SingleTodoItem({
         // 유효하지 않은 날짜인 경우 (여기서는 현재 날짜를 사용하지 않고 오류 처리)
         if (!dateObj || isNaN(dateObj.getTime())) {
           console.error("[ToDo] 유효한 날짜가 제공되지 않았습니다.");
-          // showToast("유효한 날짜를 선택해주세요.", "error");
           isProcessingRef.current = false;
+          setIsDataLoading(false);
           return;
         }
 
@@ -315,6 +323,7 @@ function SingleTodoItem({
         // 중복 요청 확인
         if (isDuplicateRequest(id, completers, dateStr)) {
           isProcessingRef.current = false;
+          setIsDataLoading(false);
           return;
         }
 
@@ -332,6 +341,10 @@ function SingleTodoItem({
           date: dateObj,
         };
 
+        // 먼저 상태를 업데이트하여 UI가 즉시 반응하도록 함
+        setHasTaskHistory(true);
+        setSelectedCompleters(completers);
+
         await completeTask(id, completers, options);
 
         // 완료한 날짜와 동일한 날짜로 이력 다시 조회
@@ -343,17 +356,21 @@ function SingleTodoItem({
         if (updatedHistory && updatedHistory.length > 0) {
           const latestHistory = updatedHistory[0];
           setHasTaskHistory(true);
-          setSelectedCompleters(latestHistory.actors || []);
+          setSelectedCompleters(latestHistory.actors || completers || []);
         }
+
+        // 성공 메시지 표시
+        showToast("업무가 성공적으로 완료되었습니다.", "success");
       } catch (error) {
         console.error("업무 완료 처리 중 오류:", error);
-        // showToast(
-        //   `업무 처리 중 오류가 발생했습니다: ${error.message}`,
-        //   "error"
-        // );
+        showToast(
+          "업무 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+          "error"
+        );
       } finally {
         // 처리 완료 플래그 설정
         isProcessingRef.current = false;
+        setIsDataLoading(false);
       }
     }, 300); // 300ms 디바운싱
   };
@@ -419,23 +436,29 @@ function SingleTodoItem({
           </span>
         </TextZone>
 
-        {/* 완료자 선택 표시 - TaskCompleterSelector로 교체 */}
+        {/* 완료자 선택 표시 - 로딩 상태 관리 추가 */}
         {showCompleter && (
           <div
             onClick={(e) => e.stopPropagation()}
             className="flex items-center"
           >
-            <TaskCompleterSelector
-              selectedPeople={selectedCompleters}
-              onPeopleChange={(selectedIds) => {
-                // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
-                if (selectedIds && selectedIds.length > 0) {
-                  handleCompleteTask(selectedIds);
-                }
-              }}
-              isCurrentDate={isToday()}
-              isCompleted={isCompletedForCurrentDate()}
-            />
+            {isDataLoading ? (
+              <div className="h-[40px] flex items-center justify-center px-4">
+                <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <TaskCompleterSelector
+                selectedPeople={selectedCompleters}
+                onPeopleChange={(selectedIds) => {
+                  // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
+                  if (selectedIds && selectedIds.length > 0) {
+                    handleCompleteTask(selectedIds);
+                  }
+                }}
+                isCurrentDate={isToday()}
+                isCompleted={isCompletedForCurrentDate()}
+              />
+            )}
           </div>
         )}
 

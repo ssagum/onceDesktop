@@ -358,7 +358,7 @@ const ReservationList = styled.div`
   top: 10px;
   left: 10px;
   width: 520px;
-  max-height: calc(100% - 20px);
+  max-height: 500px;
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);

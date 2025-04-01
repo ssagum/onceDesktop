@@ -25,7 +25,13 @@ export default function TaskCompleterSelector({
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [tempSelectedStaff, setTempSelectedStaff] = useState([]);
   const [staffData, setStaffData] = useState([]);
+  const [localIsCompleted, setLocalIsCompleted] = useState(isCompleted);
   const { showToast } = useToast();
+
+  // isCompleted prop이 변경되면 내부 상태도 업데이트
+  useEffect(() => {
+    setLocalIsCompleted(isCompleted);
+  }, [isCompleted]);
 
   // 사용자 정보 조회
   useEffect(() => {
@@ -70,6 +76,7 @@ export default function TaskCompleterSelector({
   const handleConfirm = () => {
     if (onPeopleChange && tempSelectedStaff.length > 0) {
       onPeopleChange(tempSelectedStaff);
+      setLocalIsCompleted(true); // 완료 상태를 즉시 로컬에서 업데이트
     }
     setConfirmModalOpen(false);
   };
@@ -90,7 +97,7 @@ export default function TaskCompleterSelector({
       return;
     }
 
-    if (isCompleted) {
+    if (localIsCompleted) {
       showToast("이미 완료된 업무입니다. 변경할 수 없습니다.", "warning");
       return;
     }
@@ -99,7 +106,7 @@ export default function TaskCompleterSelector({
   };
 
   // 이미 완료되었거나 현재 날짜가 아닌 경우 읽기 전용 표시
-  if (isCompleted || !isCurrentDate) {
+  if (localIsCompleted || !isCurrentDate) {
     return (
       <CompletedIndicator
         className="cursor-pointer"
@@ -112,11 +119,24 @@ export default function TaskCompleterSelector({
             {staffData.length > 0 ? (
               staffData.length <= 2 ? (
                 staffData.map((staff) => (
-                  <NameCoin key={staff.id} item={staff} />
+                  <NameCoin 
+                    key={staff.id} 
+                    item={{
+                      id: staff.id,
+                      name: staff.name, // 강제로 이름만 사용
+                      department: staff.department
+                    }} 
+                  />
                 ))
               ) : (
                 <>
-                  <NameCoin item={staffData[0]} />
+                  <NameCoin 
+                    item={{
+                      id: staffData[0].id,
+                      name: staffData[0].name, // 강제로 이름만 사용
+                      department: staffData[0].department
+                    }} 
+                  />
                   <NameCoin extraCount={staffData.length - 1} />
                 </>
               )

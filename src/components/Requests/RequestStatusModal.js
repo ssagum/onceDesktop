@@ -1800,10 +1800,8 @@ const DropArea = ({ id, title, items, itemType, renderItem, className }) => {
 
       {/* 스크롤 영역 부분 - 스크롤바 숨김 스타일 적용 */}
       <div
-        className="flex-1 overflow-y-auto p-1 min-h-[250px] h-[300px] rounded-md scrollbar-hide"
-        style={{
-          msOverflowStyle: "none",
-        }}
+        className="flex-1 overflow-y-auto p-1 min-h-[250px] h-[300px] rounded-md
+        [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
       >
         <SortableContext
           items={items.map((item) => item.id)}
@@ -3620,8 +3618,8 @@ const RequestStatusModal = ({
                 </span>
               ) : (
                 <span>
-                  신청 상태에 따라 자동으로 분류됩니다. 반려된 사안과 승인된
-                  사안(비품의 경우 주문완료)은 일주일 후 목록에서 사라집니다.
+                  신청 상태에 따라 자동으로 분류됩니다. 
+                  <br />반려된 사안과 승인된 사안(비품의 경우 주문완료)은 일주일 후 목록에서 사라집니다.
                 </span>
               )}
             </div>
@@ -3673,7 +3671,7 @@ const RequestStatusModal = ({
                 {STATUS_FLOW[activeTab]?.map((status) => {
                   const itemsByStatus = getItemsByStatus();
                   const items = itemsByStatus[status] || [];
-
+                  //임의 값(arbitrary value) 클래스를 사용하여 scrollbar-hide 스타일 적용 
                   return (
                     <DropArea
                       key={status}

@@ -178,6 +178,7 @@ const MessageContent = styled.div`
 const SenderUserName = styled.div`
   font-size: 16px;
   font-weight: 500;
+  margin-bottom: 8px;
 `;
 
 const MessageBubble = styled.div`
@@ -1360,18 +1361,9 @@ const ChatWindow = () => {
 
     // 메시지 전송 권한 설정 - 개선된 로직
     if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL) {
-      // 전체 채팅 여부를 ID와 타입 모두 확인 (더 안전한 접근)
-      const isManagementTeam = userLevelData?.department === "경영지원팀";
-      console.log("경영지원팀 여부:", isManagementTeam);
-
-      // 전체 채팅인 경우:
-      // 1. 경영지원팀이 아니면 권한 있음
-      // 2. 부서가 할당되지 않은 경우(빈 문자열)도 권한 있음
-      setCanSend(!isManagementTeam || !userLevelData?.department);
-      console.log(
-        "전체 채팅 권한 설정:",
-        !isManagementTeam || !userLevelData?.department
-      );
+      // 전체 채팅에서는 누구나 입력 권한이 있음
+      setCanSend(true);
+      console.log("전체 채팅 권한 설정: 모든 사용자에게 허용");
     } else {
       // 다른 채팅방은 기존 로직 유지
       setCanSend(room.canSend);
