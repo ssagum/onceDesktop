@@ -1157,7 +1157,7 @@ const ChatWindow = () => {
 
       // 사용자 정보 가져오기
       const department = userLevelData?.department || "";
-      const role = userLevelData?.role || "";
+      const role = currentUser?.role || "";
       const isDirector = role === "대표원장";
 
       // 시크릿 모드로 채팅방 목록 조회
@@ -1216,21 +1216,20 @@ const ChatWindow = () => {
         department,
         role,
         userLevelData,
+        currentUser,
+        isDirector,
         isSecretMode,
       });
 
-      // 대표원장이고 시크릿 모드인 경우에만 모든 채팅방 가져오기
-      if (isDirector && isSecretMode) {
-        // 모든 채팅방 가져오기 (시크릿 모드)
-        const rooms = await getChatRooms(deviceId, department, role, true);
-        console.log("시크릿 모드: 모든 채팅방 목록:", rooms);
+      // 대표원장인 경우 항상 모든 채팅방 가져오기 (시크릿 모드 상관없이)
+      if (isDirector) {
+        // 모든 채팅방 가져오기
+        const rooms = await getChatRooms(deviceId, department, "대표원장", true);
+        console.log("대표원장: 모든 채팅방 목록:", rooms);
         setChatRooms(rooms);
       } else if (department) {
-        // 시크릿 모드가 아닌 경우 또는 대표원장이 아닌 경우
-        // 대표원장이라도 시크릿 모드가 아니면 "일반사용자" 역할로 가져오기
-        const effectiveRole = isDirector && !isSecretMode ? "일반사용자" : role;
-
-        const rooms = await getChatRooms(deviceId, department, effectiveRole);
+        // 대표원장이 아닌 경우 기존 로직 유지
+        const rooms = await getChatRooms(deviceId, department, role);
         console.log("일반 모드: 가져온 채팅방 목록:", rooms);
         setChatRooms(rooms);
       } else {
@@ -1359,11 +1358,14 @@ const ChatWindow = () => {
     console.log("사용자 부서:", userLevelData?.department);
     console.log("현재 발신자:", selectedSender);
 
+    // 대표원장 여부 확인
+    const isDirector = isHospitalOwner(userLevelData, currentUser);
+
     // 메시지 전송 권한 설정 - 개선된 로직
-    if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL) {
-      // 전체 채팅에서는 누구나 입력 권한이 있음
+    if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL || isDirector) {
+      // 전체 채팅이거나 대표원장이면 항상 입력 권한 부여
       setCanSend(true);
-      console.log("전체 채팅 권한 설정: 모든 사용자에게 허용");
+      console.log("채팅 권한 설정: 허용 (전체 채팅 또는 대표원장)");
     } else {
       // 다른 채팅방은 기존 로직 유지
       setCanSend(room.canSend);

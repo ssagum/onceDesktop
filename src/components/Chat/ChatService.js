@@ -206,6 +206,11 @@ export const canAccessChatRoom = (user, room) => {
 export const canSendMessage = (user, room) => {
   if (!user || !room) return false;
 
+  // 대표원장은 모든 채팅방에서 메시지 전송 가능
+  if (user.role === "대표원장") {
+    return true;
+  }
+
   // 전체 채팅방은 경영지원팀을 제외한 모든 사용자 전송 가능
   if (room.type === CHAT_TYPES.GLOBAL) {
     return user.department !== "경영지원팀";
@@ -213,7 +218,6 @@ export const canSendMessage = (user, room) => {
 
   // 팀 채팅방은 해당 부서 사용자만 전송 가능
   if (room.type === CHAT_TYPES.TEAM) {
-    // 원장님도 본인 팀 채팅방만 메시지 전송 가능
     return room.departmentName === user.department;
   }
 
@@ -252,17 +256,16 @@ export const getChatRooms = async (
 
     let accessibleRooms = [];
 
-    // 대표원장이고 시크릿 모드인 경우에만 모든 채팅방 접근 가능
-    if (role === "대표원장" && isSecretMode) {
+    // 대표원장은 시크릿 모드와 상관없이 모든 채팅방 접근 가능
+    if (role === "대표원장") {
       // 원장님은 모든 채팅방 접근 가능
       accessibleRooms = allRooms.map((room) => ({
         ...room,
         // 원장팀 채팅방은 isMine = true, 나머지는 false
         isMine:
           room.departmentName === "원장팀" || room.type === CHAT_TYPES.GLOBAL,
-        // 원장팀 채팅방이 아니면 메시지 전송 불가
-        canSend:
-          room.departmentName === "원장팀" || room.type === CHAT_TYPES.GLOBAL,
+        // 대표원장은 모든 채팅방에서 메시지 전송 가능
+        canSend: true,
       }));
     } else {
       // 일반 사용자는 전체 채팅방과 본인 부서 채팅방만 접근 가능

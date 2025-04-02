@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import logoLong from "./assets";
 import { useToast } from "../contexts/ToastContext";
+import { useAudio } from "../contexts/AudioContext";
 
 const MiniCall = () => {
   const [activeTab, setActiveTab] = useState("home");
@@ -23,12 +24,7 @@ const MiniCall = () => {
   const [isSending, setIsSending] = useState(false); // 쿨타임 상태
   const [firstTime, setFirstTime] = useState(true);
   const { showToast } = useToast();
-
-  // 📢 사운드 재생 함수
-  const playSound = () => {
-    const audio = new Audio("/notification.mp3");
-    audio.play();
-  };
+  const { playNotificationSound } = useAudio();
 
   // 📌 Firestore에서 실시간 호출 기록 불러오기
   useEffect(() => {
@@ -78,7 +74,7 @@ const MiniCall = () => {
             latestCall?.docId
           );
           setLatestCall(thisTimeLatestReceivedCall);
-          playSound();
+          playNotificationSound("/notification.mp3");
         } else {
           console.log("No new calls");
         }

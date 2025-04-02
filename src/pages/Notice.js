@@ -21,7 +21,7 @@ const Notice = () => {
   const [noticeType, setNoticeType] = useState("regular");
   const [classification, setClassification] = useState("전체");
   const { showToast } = useToast();
-  const { userLevelData, isLoggedIn } = useUserLevel();
+  const { userLevelData } = useUserLevel();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const handleCloseEditor = () => {
@@ -50,21 +50,14 @@ const Notice = () => {
   };
 
   const handleSaveContent = async (postData) => {
-    // 로그인 여부 확인
-    if (!isLoggedIn) {
-      // 토스트 메시지 대신 로그인 모달 표시
-      openLoginModal();
-      return;
-    }
-
     try {
-      // authorId를 직접 확인하여 추가
+      // authorId와 같은 기본 정보 설정
       const safePostData = {
         ...postData,
         isHidden: false, // 기본적으로 숨김 처리되지 않음
       };
 
-      // authorId가 있는 경우에만 추가 (undefined 방지)
+      // 로그인 상태인 경우에만 사용자 ID 추가
       if (userLevelData?.id) {
         safePostData.authorId = userLevelData.id;
       }

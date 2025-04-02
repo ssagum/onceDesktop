@@ -89,7 +89,7 @@ export default function RenderTitlePart({
   // row가 undefined일 경우 기본값 설정
   const {
     number = "",
-    classification = "기타",
+    classification = "전체",
     title = "제목 없음",
     author = "작성자 없음",
     createdAt = "날짜 없음",

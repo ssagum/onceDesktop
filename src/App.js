@@ -29,6 +29,8 @@ import Parking from "./pages/Parking";
 import { initializeChatRooms } from "./components/Chat/ChatService";
 // 신청 현황 페이지 추가
 import Requests from "./pages/Requests";
+// AudioContext 추가
+import { AudioProvider, useAudio } from "./contexts/AudioContext";
 // TODO: Add SDKs for Firebase products that you want to use
 
 // 앱 시작 시간 기록 (처음 실행 시 이전 메시지 알림 방지용)
@@ -38,8 +40,31 @@ console.log("앱 시작 시간:", new Date(APP_START_TIME).toLocaleTimeString())
 // 처리된 알림 메시지 ID를 추적하기 위한 Set
 const processedNotifications = new Set();
 
-const App = () => {
+const AppContent = () => {
   const { userLevelData } = useUserLevel();
+  const { playNotificationSound } = useAudio();
+
+  // 모든 미디어 요소에 대한 전역 볼륨 설정
+  useEffect(() => {
+    // HTML Media Element 기본 볼륨 정책 설정
+    // 이는 새로 생성되는 모든 Audio 객체의 기본 볼륨에 영향을 줍니다
+    try {
+      const mediaElements = document.querySelectorAll('audio, video');
+      mediaElements.forEach(element => {
+        // 볼륨 속성을 직접 조작
+        element.defaultMuted = false;
+        
+        // 모든 오디오 요소에 볼륨 변경 이벤트 리스너 추가
+        element.addEventListener('volumechange', (e) => {
+          console.log('미디어 요소 볼륨 변경됨:', e.target.volume);
+        });
+      });
+      
+      console.log('미디어 요소 기본 설정 적용 완료');
+    } catch (error) {
+      console.error('미디어 요소 설정 오류:', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (
@@ -112,19 +137,8 @@ const App = () => {
               window.electron?.sendNotification
             );
 
-            // 알림음 재생
-            try {
-              // 이미 재생 중인 오디오가 있으면 중지
-              const audio = new Audio(notification);
-              audio.oncanplaythrough = () => {
-                audio
-                  .play()
-                  .then(() => console.log("알림음 재생 성공"))
-                  .catch((error) => console.error("알림음 재생 실패:", error));
-              };
-            } catch (error) {
-              console.error("알림음 생성 실패:", error);
-            }
+            // 알림음 재생 - AudioContext 사용
+            playNotificationSound(notification);
 
             if (window.electron && window.electron.sendNotification) {
               // 호출 타입에 따른 메시지 포맷팅
@@ -168,7 +182,7 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [userLevelData]);
+  }, [userLevelData, playNotificationSound]);
 
   // Firebase 채팅방 초기화
   useEffect(() => {
@@ -183,26 +197,53 @@ const App = () => {
     initializeChat();
   }, []);
 
+  // 알림음 테스트 함수 (개발 환경에서만 사용)
+  const testNotificationSound = () => {
+    console.log("알림음 테스트");
+    playNotificationSound(notification);
+  };
+  
+  // 개발 환경에서 키보드 단축키를 통한 알림음 테스트
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Shift+T를 누르면 알림음 테스트
+      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        testNotificationSound();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playNotificationSound]);
+
   return (
-    <ToastProvider>
-      <div className="bg-primary w-full overflow-hidden bg-onceBackground">
-        {/* 헤더부분 */}
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/Notice" element={<Notice />} />
-          <Route path="/Education" element={<Education />} />
-          <Route path="/Warehouse" element={<Warehouse />} />
-          <Route path="/write" element={<Write />} />
-          <Route path="/Call" element={<Call />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/task" element={<Task />} />
-          <Route path="/schedule" element={<Schedule />} />
-          <Route path="/parking" element={<Parking />} />
-          <Route path="/requests" element={<Requests />} />
-        </Routes>
-        {/* <ChatBot /> */}
-      </div>
-    </ToastProvider>
+    <div className="bg-primary w-full overflow-hidden bg-onceBackground">
+      {/* 헤더부분 */}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/Notice" element={<Notice />} />
+        <Route path="/Education" element={<Education />} />
+        <Route path="/Warehouse" element={<Warehouse />} />
+        <Route path="/write" element={<Write />} />
+        <Route path="/Call" element={<Call />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/task" element={<Task />} />
+        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/parking" element={<Parking />} />
+        <Route path="/requests" element={<Requests />} />
+      </Routes>
+      {/* <ChatBot /> */}
+    </div>
+  );
+};
+
+const App = () => {
+  return (
+    <AudioProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </AudioProvider>
   );
 };
 

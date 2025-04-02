@@ -1679,15 +1679,25 @@ const ScheduleGrid = ({
         notes: "",
         duration: "30",
         type: "예약",
+        staffId: "",
+        staffName: "",
       });
       setSelection(null); // 선택 영역 초기화
       setCurrentCell(null); // 선택된 셀 초기화
+      setSelectedAppointment(null); // 선택된 일정 초기화
+      setIsEditing(false); // 편집 모드 비활성화
+      
+      // 화면 갱신을 위해 강제로 상태 업데이트
+      setLocalAppointments(prev => [...prev]);
     }
 
     // 휴가 상세 정보 모달이 표시되어 있고, 클릭한 요소가 폼 내부가 아닌 경우에만 처리
     if (showVacationDetail && !e.target.closest(".appointment-form")) {
       setShowVacationDetail(false);
       setSelectedVacation(null);
+      
+      // 화면 갱신을 위해 강제로 상태 업데이트
+      setVacations(prev => [...prev]);
     }
   };
 
@@ -2306,6 +2316,11 @@ const ScheduleGrid = ({
       const staffIndex = staff.findIndex((s) => s.id === appointment.staffId);
       if (staffIndex < 0) return null; // 직원을 찾을 수 없는 경우
 
+      // 날짜의 요일 확인 - 평일 여부 체크를 위해
+      const date = dates[dateIndex];
+      const dayOfWeek = date.getDay(); // 0: 일요일, 6: 토요일
+      const isWeekday = dayOfWeek > 0 && dayOfWeek < 6; // 월~금요일인지 확인
+      
       // 시작 시간에 가장 가까운 슬롯 찾기
       const startMinutes = timeToMinutes(appointment.startTime);
       let startTimeIndex = 0;
@@ -2354,9 +2369,36 @@ const ScheduleGrid = ({
         }
       }
 
-      // 컬럼 인덱스 계산
-      const startCol = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
-      const colIndex = startCol + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
+      // 점심 시간 보정 (평일에만 적용)
+      // 점심 시간 슬롯 인덱스는 9, 10 (timeIndex === 9, 10)
+      // 14:00(인덱스 11) 이후 시간에는 2개 슬롯만큼 조정 필요
+      const lunchTimeAdjustment = isWeekday ? 1 : 0; // 평일에는 점심시간 1개 슬롯 조정
+      
+      // 점심 시간 슬롯 고려
+      if (isWeekday) {
+        // 시작 시간이 14:00(인덱스 11) 이후인 경우 보정
+        if (timeToMinutes(appointment.startTime) >= timeToMinutes("14:00")) {
+          // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
+          startTimeIndex += lunchTimeAdjustment;
+        }
+        
+        // 종료 시간이 14:00(인덱스 11) 이후인 경우 보정
+        if (timeToMinutes(appointment.endTime) >= timeToMinutes("14:00")) {
+          // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
+          endTimeIndex += lunchTimeAdjustment;
+        }
+        
+        // 일정이 점심 시간을 포함하는 경우 (13:00-14:00 사이에 걸친 경우)
+        if (timeToMinutes(appointment.startTime) < timeToMinutes("13:00") && 
+            timeToMinutes(appointment.endTime) > timeToMinutes("14:00")) {
+          // 점심 시간을 포함하는 길이를 조정
+          endTimeIndex += lunchTimeAdjustment;
+        }
+      }
+
+      // 컬럼 인덱스 계산 - 변수 이름 변경
+      const appointmentColStart = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
+      const colIndex = appointmentColStart + staffIndex + 1; // 시간 열 다음부터 직원 열 시작
 
       // 참고사항이 있는지 확인
       const hasNotes = appointment.notes && appointment.notes.trim().length > 0;
@@ -3658,6 +3700,9 @@ const ScheduleGrid = ({
                 setCurrentCell(null); // 선택된 셀 초기화
                 setSelectedAppointment(null); // 선택된 일정 초기화
                 setIsEditing(false); // 편집 모드 비활성화
+                
+                // 화면 갱신을 위해 강제로 상태 업데이트
+                setLocalAppointments(prev => [...prev]);
               }}
             >
               취소

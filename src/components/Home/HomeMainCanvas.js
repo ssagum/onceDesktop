@@ -59,7 +59,11 @@ import TaskRecordModal from "../Task/TaskRecordModal";
 import { useToast } from "../../contexts/ToastContext";
 import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
-import { getUnreadMessageCount } from "../Chat/ChatService";
+import { 
+  getUnreadMessageCount, 
+  getChatRooms, 
+  subscribeToMessages 
+} from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
 import {
   isHospitalOwner,
@@ -84,8 +88,8 @@ const Square = ({ title, unreadCount = 0 }) => {
   return (
     <div className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer relative">
       {unreadCount > 0 && (
-        <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-          {unreadCount > 9 ? "9+" : unreadCount}
+        <div className="absolute top-2 right-2 bg-[#ff5050] text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-xs font-bold px-1.5">
+          {unreadCount > 99 ? "99+" : unreadCount > 9 ? `${unreadCount}+` : unreadCount}
         </div>
       )}
       <div className="w-[40px] h-[50px]">
@@ -556,22 +560,39 @@ export default function HomeMainCanvas() {
   useEffect(() => {
     // 읽지 않은 메시지 수 가져오기
     const fetchUnreadMessages = async () => {
-      if (userLevelData?.uid) {
-        const count = await getUnreadMessageCount(
-          userLevelData.uid,
-          userLevelData.department,
-          userLevelData.role
-        );
-        setUnreadChatCount(count);
+      try {
+        if (userLevelData?.uid) {
+          // 장치 ID 가져오기
+          const deviceId = localStorage.getItem("deviceId") || `device-${Date.now()}`;
+          if (!localStorage.getItem("deviceId")) {
+            localStorage.setItem("deviceId", deviceId);
+          }
+
+          // 사용자 정보 가져오기
+          const department = userLevelData?.department || "";
+          const role = currentUser?.role || "";
+
+          // ChatService의 getUnreadMessageCount 함수를 사용하여 안 읽은 메시지 수 가져오기
+          const count = await getUnreadMessageCount(deviceId, department, role);
+          console.log("안 읽은 메시지 수:", count);
+          setUnreadChatCount(count);
+        }
+      } catch (error) {
+        console.error("안 읽은 메시지 확인 중 오류:", error);
       }
     };
 
+    // 첫 로드 시 실행
     fetchUnreadMessages();
 
-    // 1분마다 갱신
-    const interval = setInterval(fetchUnreadMessages, 60000);
-    return () => clearInterval(interval);
-  }, [userLevelData?.uid, userLevelData?.department, userLevelData?.role]);
+    // 주기적으로 업데이트 (30초마다)
+    const interval = setInterval(fetchUnreadMessages, 30000);
+    
+    // 컴포넌트 언마운트 시 interval 정리
+    return () => {
+      clearInterval(interval);
+    };
+  }, [userLevelData?.uid, userLevelData?.department, currentUser?.role]);
 
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
@@ -1333,16 +1354,7 @@ export default function HomeMainCanvas() {
                 </div>
                 <div className="w-[240px] flex flex-row justify-between">
                   <div onClick={openChatWindow}>
-                    {unreadChatCount > 0 && (
-                      <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full px-1.5 min-w-[20px] h-5 flex items-center justify-center text-xs">
-                        {unreadChatCount > 99
-                          ? "99+"
-                          : unreadChatCount > 9
-                          ? `${unreadChatCount}+`
-                          : unreadChatCount}
-                      </div>
-                    )}
-                    <Square title={"채팅"} />
+                    <Square title={"채팅"} unreadCount={unreadChatCount} />
                   </div>
                   <div
                     onClick={() =>
@@ -1357,7 +1369,7 @@ export default function HomeMainCanvas() {
                   className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center relative"
                 >
                   {unreadChatCount > 0 && (
-                    <div className="absolute top-3 right-3 bg-red-500 text-white rounded-full px-1.5 min-w-[20px] h-5 flex items-center justify-center text-xs">
+                    <div className="absolute top-2 right-2 bg-[#ff5050] text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-xs font-bold px-1.5">
                       {unreadChatCount > 99
                         ? "99+"
                         : unreadChatCount > 9

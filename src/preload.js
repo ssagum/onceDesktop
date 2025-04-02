@@ -27,15 +27,32 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("download-complete", completeListener);
   },
-  testIPC: (message) => {
+  testIpc: (message) => {
     console.log("preload.js: testIPC 호출됨", message);
     ipcRenderer.send("test-ipc", message);
 
-    ipcRenderer.once("test-ipc-reply", (event, response) => {
-      console.log("preload.js: IPC 응답 수신", response);
-      alert("IPC 테스트 응답: " + response);
+    return new Promise((resolve) => {
+      ipcRenderer.once("test-ipc-reply", (event, response) => {
+        console.log("preload.js: IPC 응답 수신", response);
+        alert("IPC 테스트 응답: " + response);
+        resolve(response);
+      });
     });
   },
+  setAudioVolume: (volume) => {
+    ipcRenderer.send("set-audio-volume", volume);
+  },
+  setAudioMuted: (muted) => {
+    ipcRenderer.send("set-audio-muted", muted);
+  },
+  onVolumeChanged: (callback) => {
+    ipcRenderer.on("volume-changed", (_, volume) => callback(volume));
+    return () => ipcRenderer.removeListener("volume-changed", callback);
+  },
+  onMuteChanged: (callback) => {
+    ipcRenderer.on("mute-changed", (_, muted) => callback(muted));
+    return () => ipcRenderer.removeListener("mute-changed", callback);
+  }
 });
 
 // 알림 소리 재생을 위한 리스너 - 소리는 App.js에서 재생하므로 여기서는 제거

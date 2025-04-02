@@ -234,6 +234,12 @@ if (!gotTheLock) {
   // 알림 중복 방지를 위한 타임스탬프 저장
   let lastNotificationTime = 0;
 
+  // 오디오 설정 저장 (기본값)
+  let audioSettings = {
+    volume: 0.7,
+    muted: false
+  };
+
   // Firebase 알림 처리를 위한 IPC 통신
   ipcMain.on("show-notification", (event, message) => {
     console.log("알림 요청 받음:", message);
@@ -264,6 +270,32 @@ if (!gotTheLock) {
     } else {
       console.error("메인 창이 없음, 알림을 표시할 수 없습니다.");
     }
+  });
+
+  // 오디오 볼륨 설정 IPC 핸들러
+  ipcMain.on("set-audio-volume", (event, volume) => {
+    console.log("오디오 볼륨 설정:", volume);
+    audioSettings.volume = volume;
+    
+    // 모든 창에 볼륨 변경 알림
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send("volume-changed", volume);
+      }
+    });
+  });
+
+  // 오디오 음소거 설정 IPC 핸들러
+  ipcMain.on("set-audio-muted", (event, muted) => {
+    console.log("오디오 음소거 설정:", muted);
+    audioSettings.muted = muted;
+    
+    // 모든 창에 음소거 상태 변경 알림
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send("mute-changed", muted);
+      }
+    });
   });
 
   // 파일 다운로드 처리
