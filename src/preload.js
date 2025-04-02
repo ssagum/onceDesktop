@@ -3,12 +3,69 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Expose protected methods that allow the renderer process to use
+// the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld("electron", {
+  sendNotification: (message) => {
+    return ipcRenderer.send("show-notification", message);
+  },
+  send: (channel, data) => {
+    // 허용된 채널 목록
+    let validChannels = [
+      "test-ipc",
+      "open-timer-window",
+      "open-chat-window",
+      "download-file",
+      "set-audio-volume",
+      "set-audio-muted"
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
+    }
+  },
+  receive: (channel, func) => {
+    // 허용된 채널 목록
+    let validChannels = [
+      "test-ipc-reply",
+      "download-progress",
+      "download-complete",
+      "volume-changed",
+      "mute-changed",
+      "notification-displayed"
+    ];
+    if (validChannels.includes(channel)) {
+      // 이전 리스너 제거 (중복 방지)
+      ipcRenderer.removeAllListeners(channel);
+      
+      // 새 리스너 추가
+      ipcRenderer.on(channel, (event, ...args) => func(...args));
+    }
+  },
+  removeListener: (channel, func) => {
+    let validChannels = [
+      "test-ipc-reply",
+      "download-progress",
+      "download-complete",
+      "volume-changed",
+      "mute-changed",
+      "notification-displayed"
+    ];
+    if (validChannels.includes(channel)) {
+      if (func) {
+        ipcRenderer.removeListener(channel, func);
+      } else {
+        ipcRenderer.removeAllListeners(channel);
+      }
+    }
+  },
+  // 오디오 설정 가져오기
+  getAudioSettings: async () => {
+    return await ipcRenderer.invoke("get-audio-settings");
+  },
+  
+  // === 이전 API와의 호환성 유지를 위한 함수들 ===
   openTimerWindow: () => ipcRenderer.send("open-timer-window"),
   openChatWindow: () => ipcRenderer.send("open-chat-window"),
-  sendNotification: (message) => {
-    ipcRenderer.send("show-notification", message);
-  },
   downloadFile: (fileUrl, fileName) => {
     return ipcRenderer.send("download-file", {
       url: fileUrl,
@@ -16,16 +73,24 @@ contextBridge.exposeInMainWorld("electron", {
     });
   },
   onDownloadProgress: (callback) => {
-    const progressListener = (event, progress) => callback(progress);
-    ipcRenderer.on("download-progress", progressListener);
-    return () =>
-      ipcRenderer.removeListener("download-progress", progressListener);
+    // 이전 리스너 제거
+    ipcRenderer.removeAllListeners("download-progress");
+    
+    // 새 리스너 등록
+    ipcRenderer.on("download-progress", (event, progress) => callback(progress));
+    
+    // 정리 함수 반환
+    return () => ipcRenderer.removeListener("download-progress", callback);
   },
   onDownloadComplete: (callback) => {
-    const completeListener = (event, result) => callback(result);
-    ipcRenderer.on("download-complete", completeListener);
-    return () =>
-      ipcRenderer.removeListener("download-complete", completeListener);
+    // 이전 리스너 제거
+    ipcRenderer.removeAllListeners("download-complete");
+    
+    // 새 리스너 등록
+    ipcRenderer.on("download-complete", (event, result) => callback(result));
+    
+    // 정리 함수 반환
+    return () => ipcRenderer.removeListener("download-complete", callback);
   },
   testIpc: (message) => {
     console.log("preload.js: testIPC 호출됨", message);
@@ -34,7 +99,6 @@ contextBridge.exposeInMainWorld("electron", {
     return new Promise((resolve) => {
       ipcRenderer.once("test-ipc-reply", (event, response) => {
         console.log("preload.js: IPC 응답 수신", response);
-        alert("IPC 테스트 응답: " + response);
         resolve(response);
       });
     });
@@ -46,12 +110,37 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.send("set-audio-muted", muted);
   },
   onVolumeChanged: (callback) => {
+    // 이전 리스너 제거
+    ipcRenderer.removeAllListeners("volume-changed");
+    
+    // 새 리스너 등록
     ipcRenderer.on("volume-changed", (_, volume) => callback(volume));
+    
+    // 정리 함수 반환
     return () => ipcRenderer.removeListener("volume-changed", callback);
   },
   onMuteChanged: (callback) => {
+    // 이전 리스너 제거
+    ipcRenderer.removeAllListeners("mute-changed");
+    
+    // 새 리스너 등록
     ipcRenderer.on("mute-changed", (_, muted) => callback(muted));
+    
+    // 정리 함수 반환
     return () => ipcRenderer.removeListener("mute-changed", callback);
+  },
+  // 알림음 재생 요청 함수 추가
+  playNotificationSound: () => {
+    console.log("preload: playNotificationSound 호출됨");
+    ipcRenderer.send("play-notification-sound");
+    
+    // 이벤트 응답 처리를 위한 Promise 반환
+    return new Promise((resolve) => {
+      ipcRenderer.once("notification-sound-played", (_, result) => {
+        console.log("preload: notification-sound-played 응답 받음", result);
+        resolve(result);
+      });
+    });
   }
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "oncedesktop",
   "productName": "oncedesktop",
-  "version": "2.5.1",
+  "version": "2.7.1",
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {
@@ -51,6 +51,7 @@
     "firebase": "11.2.0",
     "fontkit": "2.0.4",
     "html2canvas": "1.4.1",
+    "node-notifier": "^10.0.1",
     "pdf-lib": "1.17.1",
     "qrcode.react": "4.2.0",
     "react": "19.0.0",

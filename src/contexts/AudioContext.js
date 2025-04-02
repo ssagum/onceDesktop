@@ -1,4 +1,5 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { NOTIFICATION_BASE64, NOTIFICATION_PATHS } from '../assets/sound';
 
 // 오디오 컨텍스트 생성
 const AudioContext = createContext();
@@ -8,108 +9,149 @@ const VOLUME_KEY = 'once_audio_volume';
 const MUTE_KEY = 'once_audio_mute';
 
 export const AudioProvider = ({ children }) => {
-  // 로컬 스토리지에서 볼륨 설정 불러오기 (기본값: 0.7)
-  const [volume, setVolume] = useState(() => {
-    const savedVolume = localStorage.getItem(VOLUME_KEY);
-    return savedVolume ? parseFloat(savedVolume) : 0.7;
-  });
-  
-  // 로컬 스토리지에서 음소거 설정 불러오기 (기본값: false)
-  const [isMuted, setIsMuted] = useState(() => {
-    const savedMute = localStorage.getItem(MUTE_KEY);
-    return savedMute ? savedMute === 'true' : false;
-  });
+  const [volume, setVolume] = useState(0.7);
+  const [muted, setMuted] = useState(false);
+  const [audioInstance, setAudioInstance] = useState(null);
 
-  // 볼륨 변경 시 로컬 스토리지에 저장 및 Electron에 설정 전달
+  // 초기 오디오 설정 로드
   useEffect(() => {
-    localStorage.setItem(VOLUME_KEY, volume.toString());
-    
-    // Electron 메인 프로세스에 볼륨 설정 전달
-    if (window.electron && window.electron.setAudioVolume) {
-      window.electron.setAudioVolume(volume);
-      console.log("Electron에 볼륨 설정 전달:", volume);
-    }
-  }, [volume]);
-
-  // 음소거 변경 시 로컬 스토리지에 저장 및 Electron에 설정 전달
-  useEffect(() => {
-    localStorage.setItem(MUTE_KEY, isMuted.toString());
-    
-    // Electron 메인 프로세스에 음소거 설정 전달
-    if (window.electron && window.electron.setAudioMuted) {
-      window.electron.setAudioMuted(isMuted);
-      console.log("Electron에 음소거 설정 전달:", isMuted);
-    }
-  }, [isMuted]);
-
-  // 앱 시작 시 Electron에 초기 설정 전달
-  useEffect(() => {
-    // 초기 볼륨 및 음소거 설정을 Electron에 전달
-    if (window.electron) {
-      if (window.electron.setAudioVolume) {
-        window.electron.setAudioVolume(volume);
-        console.log("Electron에 초기 볼륨 설정 전달:", volume);
+    const loadAudioSettings = async () => {
+      try {
+        if (window.electron && window.electron.getAudioSettings) {
+          const settings = await window.electron.getAudioSettings();
+          console.log('메인 프로세스에서 오디오 설정 로드:', settings);
+          setVolume(settings.volume);
+          setMuted(settings.muted);
+        }
+      } catch (error) {
+        console.error('오디오 설정 로드 오류:', error);
       }
-      
-      if (window.electron.setAudioMuted) {
-        window.electron.setAudioMuted(isMuted);
-        console.log("Electron에 초기 음소거 설정 전달:", isMuted);
-      }
-    }
+    };
+
+    loadAudioSettings();
   }, []);
 
-  // 볼륨 설정 함수
-  const changeVolume = (newVolume) => {
-    setVolume(Math.max(0, Math.min(1, newVolume))); // 0~1 사이 값으로 제한
-    
-    // 실시간으로 모든 오디오 요소의 볼륨 조절
-    updateAllAudioElements(newVolume, isMuted);
-  };
+  // 볼륨 변경 리스너 설정
+  useEffect(() => {
+    if (window.electron && window.electron.receive) {
+      // 볼륨 변경 리스너
+      window.electron.receive('volume-changed', (newVolume) => {
+        console.log('볼륨 변경됨:', newVolume);
+        setVolume(newVolume);
+        
+        // 현재 재생 중인 오디오에 볼륨 적용
+        if (audioInstance) {
+          audioInstance.volume = newVolume;
+        }
+      });
 
-  // 음소거 토글 함수
-  const toggleMute = () => {
-    const newMutedState = !isMuted;
-    setIsMuted(newMutedState);
-    
-    // 실시간으로 모든 오디오 요소의 음소거 상태 조절
-    updateAllAudioElements(volume, newMutedState);
-  };
-  
-  // 문서 내의 모든 오디오 요소 업데이트
-  const updateAllAudioElements = (vol, muted) => {
-    const audioElements = document.querySelectorAll('audio');
-    audioElements.forEach(audio => {
-      audio.volume = vol;
-      audio.muted = muted;
-    });
-  };
+      // 음소거 변경 리스너
+      window.electron.receive('mute-changed', (newMuted) => {
+        console.log('음소거 변경됨:', newMuted);
+        setMuted(newMuted);
+        
+        // 현재 재생 중인 오디오에 음소거 적용
+        if (audioInstance) {
+          audioInstance.muted = newMuted;
+        }
+      });
+    }
 
-  // 알림음 재생 함수
-  const playNotificationSound = (audioSrc) => {
-    if (isMuted) return; // 음소거 상태면 재생하지 않음
+    // 정리 함수
+    return () => {
+      if (window.electron && window.electron.removeListener) {
+        window.electron.removeListener('volume-changed');
+        window.electron.removeListener('mute-changed');
+      }
+    };
+  }, [audioInstance]);
+
+  // 볼륨 변경 핸들러
+  const handleVolumeChange = useCallback((newVolume) => {
+    setVolume(newVolume);
     
+    // 메인 프로세스에 볼륨 변경 알림
+    if (window.electron && window.electron.send) {
+      window.electron.send('set-audio-volume', newVolume);
+    }
+    
+    // 현재 재생 중인 오디오에 볼륨 적용
+    if (audioInstance) {
+      audioInstance.volume = newVolume;
+    }
+  }, [audioInstance]);
+
+  // 음소거 변경 핸들러
+  const handleMuteToggle = useCallback(() => {
+    const newMuted = !muted;
+    setMuted(newMuted);
+    
+    // 메인 프로세스에 음소거 변경 알림
+    if (window.electron && window.electron.send) {
+      window.electron.send('set-audio-muted', newMuted);
+    }
+    
+    // 현재 재생 중인 오디오에 음소거 적용
+    if (audioInstance) {
+      audioInstance.muted = newMuted;
+    }
+  }, [muted, audioInstance]);
+
+  // 알림음 재생 함수 - 이전 방식으로 단순화
+  const playNotificationSound = useCallback((soundFile) => {
     try {
-      const audio = new Audio(audioSrc);
+      console.log('알림음 재생 시도:', soundFile);
+      
+      // 음소거 상태일 때는 재생하지 않음
+      if (muted) {
+        console.log('음소거 상태: 알림음 재생 건너뜀');
+        return;
+      }
+      
+      // 직접 오디오 생성 및 재생
+      const audio = new Audio(soundFile);
       audio.volume = volume;
       
-      // oncanplaythrough 이벤트 사용하여 로드 완료 후 재생
-      audio.oncanplaythrough = () => {
+      // 인스턴스 저장
+      setAudioInstance(audio);
+      
+      // 디버깅을 위한 이벤트 리스너
+      audio.addEventListener('canplaythrough', () => {
+        console.log('알림음 로드 완료, 재생 시작');
         audio.play()
-          .then(() => console.log("알림음 재생 성공"))
-          .catch(error => console.error("알림음 재생 실패:", error));
+          .then(() => console.log('알림음 재생 성공'))
+          .catch(err => console.error('알림음 재생 실패:', err));
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.error('알림음 로드 오류:', e);
+      });
+      
+      // 재생 완료 시 인스턴스 정리
+      audio.onended = () => {
+        console.log('알림음 재생 완료');
+        setAudioInstance(null);
       };
       
-      // 로드 오류 처리
-      audio.onerror = (error) => {
-        console.error("알림음 로드 실패:", error);
-      };
+      // 명시적 로드 시작
+      audio.load();
+      
     } catch (error) {
-      console.error("알림음 생성 실패:", error);
+      console.error('알림음 재생 오류:', error);
     }
+  }, [volume, muted]);
+
+  const value = {
+    volume,
+    muted,
+    isMuted: muted, // 편의를 위한 별칭
+    setVolume: handleVolumeChange,
+    toggleMute: handleMuteToggle,
+    playNotificationSound
   };
 
   return (
-    <AudioContext.Provider value={{ volume, isMuted, changeVolume, toggleMute, playNotificationSound }}>
+    <AudioContext.Provider value={value}>
       {children}
     </AudioContext.Provider>
   );
@@ -118,8 +160,8 @@ export const AudioProvider = ({ children }) => {
 // 커스텀 훅
 export const useAudio = () => {
   const context = useContext(AudioContext);
-  if (!context) {
-    throw new Error("useAudio must be used within an AudioProvider");
+  if (context === undefined) {
+    throw new Error('useAudio must be used within an AudioProvider');
   }
   return context;
 }; 

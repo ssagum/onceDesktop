@@ -1,108 +1,51 @@
-import React from "react";
-import { useAudio } from "../contexts/AudioContext";
-import styled from "styled-components";
-
-const AudioControlContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 15px;
-  width: 100%;
-  padding: 0 15px;
-`;
-
-const ControlRow = styled.div`
-  display: flex;
-  align-items: center;
-  width: 100%;
-  margin-bottom: 5px;
-`;
-
-const AudioIcon = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 20px;
-  color: #162D66;
-  padding: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 8px;
-  
-  &:hover {
-    opacity: 0.8;
-  }
-`;
-
-const VolumeSlider = styled.input`
-  -webkit-appearance: none;
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: #e0e0e0;
-  outline: none;
-  
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #162D66;
-    cursor: pointer;
-  }
-  
-  &::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #162D66;
-    cursor: pointer;
-    border: none;
-  }
-`;
-
-const VolumeLabel = styled.span`
-  font-size: 12px;
-  color: #888888;
-  margin-left: 8px;
-  min-width: 30px;
-`;
+import React from 'react';
+import { useAudio } from '../contexts/AudioContext';
+import { FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
 
 const AudioControl = () => {
-  const { volume, isMuted, changeVolume, toggleMute } = useAudio();
-  
+  const { volume, muted, setVolume, toggleMute } = useAudio();
+
   const handleVolumeChange = (e) => {
     const newVolume = parseFloat(e.target.value);
-    changeVolume(newVolume);
+    setVolume(newVolume);
   };
-  
-  // 음소거 아이콘 결정 (폰트 어썸 아이콘 코드 사용)
-  const getVolumeIcon = () => {
-    if (isMuted) return "🔇";
-    if (volume < 0.1) return "🔇";
-    if (volume < 0.5) return "🔉";
-    return "🔊";
-  };
-  
+
   return (
-    <AudioControlContainer>
-      <ControlRow>
-        <AudioIcon onClick={toggleMute}>
-          {getVolumeIcon()}
-        </AudioIcon>
-        <VolumeSlider
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={handleVolumeChange}
-          disabled={isMuted}
-        />
-        <VolumeLabel>{Math.round(volume * 100)}%</VolumeLabel>
-      </ControlRow>
-    </AudioControlContainer>
+    <div className="flex flex-col items-center w-full">
+      <div className="flex items-center justify-between w-full mb-2">
+        <button 
+          onClick={toggleMute}
+          className="text-onceBlue hover:text-blue-700 p-2 rounded-full focus:outline-none"
+          aria-label={muted ? "음소거 해제" : "음소거"}
+        >
+          {muted ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
+        </button>
+        
+        <div className="text-onceGray text-sm font-semibold">
+          {Math.round(volume * 100)}%
+        </div>
+      </div>
+      
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={volume}
+        onChange={handleVolumeChange}
+        className="w-full h-2 appearance-none bg-gray-200 rounded-lg outline-none cursor-pointer"
+        style={{
+          // 볼륨 슬라이더 스타일 커스터마이징
+          backgroundImage: `linear-gradient(to right, #162D66 0%, #162D66 ${volume * 100}%, #E5E7EB ${volume * 100}%, #E5E7EB 100%)`,
+        }}
+        disabled={muted}
+        aria-label="볼륨 조절"
+      />
+      
+      <div className="mt-2 text-center text-xs text-onceGray">
+        {muted ? "음소거 상태" : "알림 볼륨"}
+      </div>
+    </div>
   );
 };
 

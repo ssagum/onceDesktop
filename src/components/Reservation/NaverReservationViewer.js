@@ -887,8 +887,10 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
 
   // 외부 브라우저에서 네이버 예약 페이지 열기
   const openInExternalBrowser = () => {
-    if (window.electron && window.electron.shell) {
-      window.electron.shell.openExternal(naverReservationUrl);
+    if (window.electron) {
+      // window.electron.shell은 더 이상 사용할 수 없으므로 
+      // 새 탭에서 열도록 변경
+      window.open(naverReservationUrl, "_blank");
     } else {
       // 일반 웹 환경에서는 새 탭에서 열기
       window.open(naverReservationUrl, "_blank");

@@ -254,21 +254,55 @@ if (!gotTheLock) {
     // 알림 시간 업데이트
     lastNotificationTime = now;
 
-    // 가장 단순한 방법으로 dialog만 사용하여 알림 표시
-    if (mainWindow) {
-      try {
+    // Windows 10 토스트 알림 사용
+    try {
+      if (Notification.isSupported()) {
+        const notificationOptions = {
+          title: "삼성원스정형외과",
+          body: message,
+          icon: isDevelopment
+            ? path.join(app.getAppPath(), "src/assets/icons", "icon.png")
+            : path.join(process.resourcesPath, "app.asar", "src/assets/icons", "icon.png"),
+          silent: audioSettings.muted // 음소거 설정이면 시스템 알림음 끄기
+        };
+
+        const notification = new Notification(notificationOptions);
+        
+        // 클릭 시 메인 윈도우 표시
+        notification.on('click', () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        });
+        
+        notification.show();
+        console.log("토스트 알림 표시됨");
+        
+        // 알림음 재생 여부를 메인 창에 알림 (음소거 상태에 따라)
+        event.reply("notification-displayed", { muted: audioSettings.muted });
+      } else {
+        // 토스트 알림을 지원하지 않는 환경에서는 dialog 사용
         dialog.showMessageBox({
           type: "info",
           title: "삼성원스정형외과",
           message: message,
           buttons: ["확인"],
         });
-        console.log("알림 표시됨 (dialog 사용)");
-      } catch (error) {
-        console.error("dialog 표시 실패:", error);
+        console.log("대체 알림 표시됨 (dialog 사용)");
+        event.reply("notification-displayed", { muted: audioSettings.muted });
       }
-    } else {
-      console.error("메인 창이 없음, 알림을 표시할 수 없습니다.");
+    } catch (error) {
+      console.error("알림 표시 실패:", error);
+      // 오류 발생 시 기존 방식으로 대체
+      dialog.showMessageBox({
+        type: "info",
+        title: "삼성원스정형외과",
+        message: message,
+        buttons: ["확인"],
+      });
+      event.reply("notification-displayed", { muted: audioSettings.muted });
     }
   });
 
@@ -296,6 +330,11 @@ if (!gotTheLock) {
         window.webContents.send("mute-changed", muted);
       }
     });
+  });
+
+  // 현재 오디오 설정 가져오기
+  ipcMain.handle("get-audio-settings", (event) => {
+    return audioSettings;
   });
 
   // 파일 다운로드 처리
@@ -525,6 +564,21 @@ if (!gotTheLock) {
       createChatWindow();
     } catch (error) {
       console.error("채팅 창 생성 중 오류 발생:", error);
+    }
+  });
+
+  // 알림음 재생 요청 처리
+  ipcMain.on("play-notification-sound", (event) => {
+    try {
+      console.log("메인 프로세스에서 알림음 재생 요청 받음");
+      
+      // 알림음 재생 성공 시 응답
+      event.reply("notification-sound-played", { success: true });
+      
+      // 알림음은 렌더러에서 처리하므로 여기서는 성공 응답만 보냄
+    } catch (error) {
+      console.error("알림음 재생 요청 처리 오류:", error);
+      event.reply("notification-sound-played", { success: false, error: error.message });
     }
   });
 

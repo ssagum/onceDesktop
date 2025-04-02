@@ -21,7 +21,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { notification } from "./assets/sound";
+import { notification, NOTIFICATION_BASE64 } from "./assets/sound";
 // Toast Provider 추가
 import { ToastProvider } from "./contexts/ToastContext";
 import { useUserLevel } from "./utils/UserLevelContext";
@@ -137,8 +137,20 @@ const AppContent = () => {
               window.electron?.sendNotification
             );
 
-            // 알림음 재생 - AudioContext 사용
-            playNotificationSound(notification);
+            // 알림음 재생 - 이전에 작동하던 방식으로 복원
+            try {
+              // 먼저 notification 객체 사용
+              playNotificationSound(notification);
+              console.log("notification 객체로 알림음 재생 시도");
+              
+              // 백업으로 Base64 데이터 시도
+              setTimeout(() => {
+                console.log("백업: Base64 데이터로 알림음 재생 시도");
+                playNotificationSound(NOTIFICATION_BASE64);
+              }, 300);
+            } catch (error) {
+              console.error("알림음 재생 오류:", error);
+            }
 
             if (window.electron && window.electron.sendNotification) {
               // 호출 타입에 따른 메시지 포맷팅
@@ -199,8 +211,22 @@ const AppContent = () => {
 
   // 알림음 테스트 함수 (개발 환경에서만 사용)
   const testNotificationSound = () => {
-    console.log("알림음 테스트");
-    playNotificationSound(notification);
+    console.log("알림음 테스트 시작");
+    
+    // 직접 재생 방식으로 변경
+    try {
+      // 다양한 방법 시도
+      console.log("1. notification 객체로 재생 시도");
+      playNotificationSound(notification);
+      
+      // 300ms 후에 백업 방식 시도
+      setTimeout(() => {
+        console.log("2. Base64 데이터로 재생 시도");
+        playNotificationSound(NOTIFICATION_BASE64);
+      }, 300);
+    } catch (error) {
+      console.error("알림음 테스트 오류:", error);
+    }
   };
   
   // 개발 환경에서 키보드 단축키를 통한 알림음 테스트

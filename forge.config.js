@@ -75,6 +75,13 @@ module.exports = {
             },
           ],
         },
+        devServer: {
+          hot: true,
+          client: {
+            overlay: false,
+            progress: true,
+          },
+        },
       },
     },
     // Fuses are used to enable/disable various Electron functionality

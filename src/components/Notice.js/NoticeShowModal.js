@@ -203,17 +203,14 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
     });
 
     // 다운로드 이벤트 리스너 등록
-    let removeProgressListener = null;
-    let removeCompleteListener = null;
-
     if (electronAPI) {
       // 다운로드 진행률 리스너
-      removeProgressListener = electronAPI.onDownloadProgress((progress) => {
+      electronAPI.receive("download-progress", (progress) => {
         console.log("다운로드 진행률:", progress);
       });
 
       // 다운로드 완료 리스너
-      removeCompleteListener = electronAPI.onDownloadComplete((result) => {
+      electronAPI.receive("download-complete", (result) => {
         const { success, filePath, error } = result;
         if (success) {
           showToast(
@@ -247,8 +244,11 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
 
     return () => {
       unsubscribe();
-      if (removeProgressListener) removeProgressListener();
-      if (removeCompleteListener) removeCompleteListener();
+      // 이벤트 리스너 제거
+      if (electronAPI && electronAPI.removeListener) {
+        electronAPI.removeListener("download-progress");
+        electronAPI.removeListener("download-complete");
+      }
     };
   }, [notice?.id, showToast]);
 
@@ -281,7 +281,10 @@ const NoticeShowModal = ({ show, handleClose, notice, onEdit, onDelete }) => {
       const encodedFileName = encodeURIComponent(normalizedFileName);
 
       // Electron 환경인 경우 contextBridge API를 통해 다운로드 요청
-      electronAPI.downloadFile(fileUrl, encodedFileName);
+      electronAPI.send("download-file", {
+        url: fileUrl,
+        fileName: encodedFileName
+      });
       showToast("파일 다운로드가 시작되었습니다.", "info");
     } else {
       // 웹 환경인 경우 기존 방식으로 다운로드

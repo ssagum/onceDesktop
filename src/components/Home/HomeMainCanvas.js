@@ -134,11 +134,15 @@ const Square = ({ title, unreadCount = 0 }) => {
 };
 
 const openTimerWindow = () => {
-  window.electron.openTimerWindow();
+  if (window.electron) {
+    window.electron.send("open-timer-window");
+  }
 };
 
 const openChatWindow = () => {
-  window.electron.openChatWindow();
+  if (window.electron) {
+    window.electron.send("open-chat-window");
+  }
 };
 
 const StatusBar = ({ currentDate, onOpenRequestModal }) => {

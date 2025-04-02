@@ -19,4 +19,11 @@ module.exports = {
   resolve: {
     extensions: [".js", ".jsx", ".json"],
   },
+  
+  // webpack-dev-server 설정 추가 - 오버레이 비활성화
+  devServer: {
+    client: {
+      overlay: false, // 오류 오버레이를 비활성화
+    },
+  }
 };
