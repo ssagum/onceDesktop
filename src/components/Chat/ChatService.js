@@ -528,8 +528,18 @@ export const subscribeToUnreadCount = async (deviceId, department, role, callbac
     // 각 채팅방별 구독 관리
     const unsubscribeFunctions = [];
     
-    // 총 안 읽은 메시지 수
-    let totalUnreadCount = 0;
+    // 룸별 안 읽은 메시지 수 저장 객체
+    let roomsUnreadData = {};
+    
+    // 초기 안 읽은 메시지 수 로드
+    for (const room of chatRooms) {
+      const unreadCount = await getUnreadMessageCountByRoom(deviceId, room.id);
+      roomsUnreadData[room.id] = unreadCount;
+    }
+    
+    // 초기 데이터로 콜백 호출
+    const initialTotalCount = Object.values(roomsUnreadData).reduce((sum, count) => sum + count, 0);
+    callback(initialTotalCount, roomsUnreadData);
     
     // 각 채팅방별로 메시지 구독 설정
     for (const room of chatRooms) {
@@ -538,31 +548,18 @@ export const subscribeToUnreadCount = async (deviceId, department, role, callbac
         const unreadMessages = messages.filter(msg => !msg.readBy || !msg.readBy.includes(deviceId));
         const roomUnreadCount = unreadMessages.length;
         
-        // 룸 ID와 안 읽은 메시지 수를 로컬 스토리지에 저장
-        try {
-          const roomsUnreadData = JSON.parse(localStorage.getItem('roomsUnreadData') || '{}');
-          roomsUnreadData[room.id] = roomUnreadCount;
-          localStorage.setItem('roomsUnreadData', JSON.stringify(roomsUnreadData));
+        // 룸 ID와 안 읽은 메시지 수 업데이트
+        roomsUnreadData[room.id] = roomUnreadCount;
           
-          // 모든 채팅방의 총 안 읽은 메시지 수 계산
-          const totalCount = Object.values(roomsUnreadData).reduce((sum, count) => sum + count, 0);
-          
-          // 콜백 호출하여 상태 업데이트
-          if (totalCount !== totalUnreadCount) {
-            totalUnreadCount = totalCount;
-            callback(totalCount);
-          }
-        } catch (error) {
-          console.error("안 읽은 메시지 수 저장 중 오류:", error);
-        }
+        // 모든 채팅방의 총 안 읽은 메시지 수 계산
+        const totalCount = Object.values(roomsUnreadData).reduce((sum, count) => sum + count, 0);
+        
+        // 콜백 호출하여 상태 업데이트 - 룸별 데이터도 전달
+        callback(totalCount, { ...roomsUnreadData });
       });
       
       unsubscribeFunctions.push(unsubscribe);
     }
-    
-    // 초기 안 읽은 메시지 수 계산
-    const initialCount = await getUnreadMessageCount(deviceId, department, role);
-    callback(initialCount);
     
     // 구독 해제 함수 반환
     return () => {

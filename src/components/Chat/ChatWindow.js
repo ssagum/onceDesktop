@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
 import styled from "styled-components";
 import {
   getChatRooms,
@@ -14,12 +14,10 @@ import {
   addReaction,
   initializeChatRooms,
   CHAT_TYPES,
+  subscribeToUnreadCount,
 } from "./ChatService";
 import { useUserLevel } from "../../utils/UserLevelContext";
-import { isHospitalOwner } from "../../utils/permissionUtils";
 import { IoPaperPlaneSharp } from "react-icons/io5";
-import { db } from "../../firebase.js";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const Container = styled.div`
   display: flex;
@@ -178,7 +176,6 @@ const MessageContent = styled.div`
 const SenderUserName = styled.div`
   font-size: 16px;
   font-weight: 500;
-  margin-bottom: 8px;
 `;
 
 const MessageBubble = styled.div`
@@ -853,6 +850,9 @@ const formatDate = (date) => {
   return date.toLocaleDateString("ko-KR", options);
 };
 
+// 내가 보낸 메시지 판별 로직 (컴포넌트 내부에 정의)
+
+
 // 더미 메시지 데이터
 const DUMMY_MESSAGES = {
   "global-chat": [
@@ -927,9 +927,10 @@ const highlightMentions = (text) => {
 const SecretModeIcon = styled.div`
   font-size: 20px;
   cursor: pointer;
-  margin-right: 5px;
+  margin-right: 15px;
   opacity: 0.7;
   transition: opacity 0.2s;
+
   &:hover {
     opacity: 1;
   }
@@ -993,40 +994,6 @@ const ModalButton = styled.button`
   }
 `;
 
-// 로딩 화면 컴포넌트 추가
-const LoadingOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #f5f6f8;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 99999; /* z-index 값을 극단적으로 높게 설정 */
-  opacity: 1; /* 항상 완전 불투명하게 설정 */
-  transition: none; /* 애니메이션 효과 제거 */
-`;
-
-const LoadingSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e0e0e0;
-  border-top: 4px solid #304ffd;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
 const ChatWindow = () => {
   const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
   const [chatRooms, setChatRooms] = useState([]);
@@ -1045,7 +1012,7 @@ const ChatWindow = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
-
+  
   // 멤버 관련 상태
   const [showMembers, setShowMembers] = useState(false);
   const [members, setMembers] = useState([]);
@@ -1072,6 +1039,7 @@ const ChatWindow = () => {
 
   // 메시지 구독 관련
   const [messageUnsubscribe, setMessageUnsubscribe] = useState(null);
+  const [unreadCountUnsubscribe, setUnreadCountUnsubscribe] = useState(null);
 
   // 현재 선택된 발신자 상태 관리
   const [selectedSender, setSelectedSender] = useState(null);
@@ -1084,56 +1052,24 @@ const ChatWindow = () => {
   // 창 최소화/복원 감지
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // 페이지가 보이지 않게 되면 (최소화, 작업표시줄로 이동 등)
+      // 페이지가 보이지 않게 되면 (최소화 등)
       if (document.hidden) {
         isVisibleRef.current = false;
-
-        // 시크릿 모드였다면 즉시 채팅방에서 리스트로 돌아감
-        if (secretMode) {
-          console.log("앱 최소화: 시크릿 모드 감지, 로딩 화면 표시");
-          // 먼저 로딩 화면 표시 - 확실하게 우선 적용
-          setLoading(true);
-
-          // 작은 지연 후 상태 변경 (로딩이 확실히 적용된 후)
-          setTimeout(() => {
-            console.log("앱 최소화: 채팅방 상태 초기화 및 시크릿 모드 해제");
-            // 구독 정리
-            if (messageUnsubscribe) {
-              messageUnsubscribe();
-              setMessageUnsubscribe(null);
-            }
-
-            // 채팅방 상태 초기화
-            setMessages([]);
-            setSelectedRoom(null);
-
-            // 답장 상태, 멘션 상태 등 초기화
-            setReplyToMessage(null);
-            setShowMentionSuggestions(false);
-            setShowMembers(false);
-
-            // 시크릿 모드 해제
-            setSecretMode(false);
-          }, 50); // 아주 짧은 지연으로 로딩 화면이 먼저 렌더링되도록 함
-        }
       } else {
         // 페이지가 다시 보이게 되면
         if (!isVisibleRef.current) {
           isVisibleRef.current = true;
 
-          // 최소화 상태에서 복귀한 경우 (로딩 화면이 표시 중이면)
-          if (loading) {
-            console.log("앱 복귀: 로딩 상태 확인됨, 채팅방 목록 로드");
-            // 일반 모드로 채팅방 목록 로드
-            fetchChatRooms(false);
+          // 시크릿 모드였다면 해제
+          if (secretMode) {
+            setSecretMode(false);
 
-            // 충분한 지연 후 로딩 상태 해제 (2초 동안 로딩 화면 유지)
+            // 로딩 애니메이션 표시
+            setLoading(true);
+            // 약간의 지연 후 채팅방 목록 다시 로드
             setTimeout(() => {
-              console.log("앱 복귀: 로딩 화면 해제 (2초 지연 후)");
-              setLoading(false);
-            }, 2000);
-          } else {
-            console.log("앱 복귀: 로딩 상태 아님, 아무 작업 안함");
+              fetchChatRooms();
+            }, 500);
           }
         }
       }
@@ -1143,32 +1079,7 @@ const ChatWindow = () => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [secretMode, messageUnsubscribe, loading]);
-
-  // 로딩 화면 없이 채팅방 목록을 조용히 새로고침
-  const silentlyRefreshChatRooms = async () => {
-    try {
-      // 장치 ID 가져오기
-      const deviceId =
-        localStorage.getItem("deviceId") || `device-${Date.now()}`;
-      if (!localStorage.getItem("deviceId")) {
-        localStorage.setItem("deviceId", deviceId);
-      }
-
-      // 사용자 정보 가져오기
-      const department = userLevelData?.department || "";
-      const role = currentUser?.role || "";
-      const isDirector = role === "대표원장";
-
-      // 시크릿 모드로 채팅방 목록 조회
-      const rooms = await getChatRooms(deviceId, department, role, true);
-
-      // 상태 업데이트
-      setChatRooms(rooms);
-    } catch (error) {
-      console.error("채팅방 목록 조용히 갱신 중 오류:", error);
-    }
-  };
+  }, [secretMode]);
 
   // 비밀번호 모달 토글
   const togglePasswordModal = () => {
@@ -1210,28 +1121,35 @@ const ChatWindow = () => {
       // userLevelData에서 department와 role 가져오기
       const department = userLevelData?.department || "";
       const role = currentUser?.role || "";
-      const isDirector = isHospitalOwner(userLevelData, currentUser);
+      const isDirector = role === "대표원장";
 
       console.log("현재 사용자 정보:", {
         department,
         role,
         userLevelData,
-        currentUser,
-        isDirector,
         isSecretMode,
       });
 
-      // 대표원장인 경우 항상 모든 채팅방 가져오기 (시크릿 모드 상관없이)
-      if (isDirector) {
-        // 모든 채팅방 가져오기
-        const rooms = await getChatRooms(deviceId, department, "대표원장", true);
-        console.log("대표원장: 모든 채팅방 목록:", rooms);
+      // 대표원장이고 시크릿 모드인 경우에만 모든 채팅방 가져오기
+      if (isDirector && isSecretMode) {
+        // 모든 채팅방 가져오기 (시크릿 모드)
+        const rooms = await getChatRooms(deviceId, department, role, true);
+        console.log("시크릿 모드: 모든 채팅방 목록:", rooms);
         setChatRooms(rooms);
+        
+        // 안 읽은 메시지 수 실시간 구독 설정
+        setupUnreadCountSubscription(deviceId, department, role, true);
       } else if (department) {
-        // 대표원장이 아닌 경우 기존 로직 유지
-        const rooms = await getChatRooms(deviceId, department, role);
+        // 시크릿 모드가 아닌 경우 또는 대표원장이 아닌 경우
+        // 대표원장이라도 시크릿 모드가 아니면 "일반사용자" 역할로 가져오기
+        const effectiveRole = isDirector && !isSecretMode ? "일반사용자" : role;
+
+        const rooms = await getChatRooms(deviceId, department, effectiveRole);
         console.log("일반 모드: 가져온 채팅방 목록:", rooms);
         setChatRooms(rooms);
+        
+        // 안 읽은 메시지 수 실시간 구독 설정
+        setupUnreadCountSubscription(deviceId, department, effectiveRole, false);
       } else {
         // 부서가 없는 경우 전체 채팅방만 표시
         const globalRoomId = "global-chat";
@@ -1248,10 +1166,38 @@ const ChatWindow = () => {
     } catch (error) {
       console.error("채팅방 목록 가져오기 오류:", error);
     } finally {
-      // 약간의 지연 후 로딩 상태 해제 - 부드러운 전환을 위해
-      setTimeout(() => {
-        setLoading(false);
-      }, 300);
+      setLoading(false);
+    }
+  };
+
+  // 안 읽은 메시지 수 실시간 구독 설정 함수 추가
+  const setupUnreadCountSubscription = async (deviceId, department, role, isSecretMode) => {
+    // 기존 구독이 있으면 해제
+    if (unreadCountUnsubscribe) {
+      unreadCountUnsubscribe();
+    }
+    
+    try {
+      // 모든 채팅방에 대한 안 읽은 메시지 수 구독 설정
+      const unsubscribeFunc = await subscribeToUnreadCount(
+        deviceId, 
+        department, 
+        role,
+        (totalCount, roomsUnreadData) => {
+          // 채팅방별 안 읽은 메시지 수 업데이트
+          setChatRooms(prevRooms => 
+            prevRooms.map(room => ({
+              ...room,
+              unreadCount: roomsUnreadData[room.id] || 0
+            }))
+          );
+        }
+      );
+      
+      // 구독 해제 함수 저장
+      setUnreadCountUnsubscribe(() => unsubscribeFunc);
+    } catch (error) {
+      console.error("안 읽은 메시지 수 구독 설정 중 오류:", error);
     }
   };
 
@@ -1272,64 +1218,23 @@ const ChatWindow = () => {
   // 초기 발신자 설정 - 로그인 상태면 해당 사용자, 아니면 부서의 첫 번째 사용자
   useEffect(() => {
     const initSender = async () => {
-      try {
-        console.log("발신자 설정 시도:", userLevelData);
-
-        // 현재 사용자 설정
-        if (userLevelData?.uid || userLevelData?.name) {
-          const sender = {
-            id: userLevelData?.uid || `temp-${Date.now()}`,
-            name: userLevelData?.name || userLevelData?.displayName || "사용자",
-            role: currentUser?.role || "",
-            department: userLevelData?.department || "",
-          };
-
-          console.log("로그인 유저로 발신자 설정:", sender.name);
-          setSelectedSender(sender);
-
-          // 사용자 정보 저장 (로컬 스토리지)
-          try {
-            localStorage.setItem("lastSender", JSON.stringify(sender));
-          } catch (err) {
-            console.error("발신자 정보 저장 실패:", err);
-          }
-        } else if (userLevelData?.department) {
-          // 부서는 알지만 로그인은 안 된 상태
-          try {
-            const users = await getUsersFromDepartment(
-              userLevelData.department
-            );
-            if (users && users.length > 0) {
-              setDepartmentUsers(users);
-
-              // 이전에 저장된 발신자 정보 확인
-              try {
-                const savedSender = localStorage.getItem("lastSender");
-                if (savedSender) {
-                  const sender = JSON.parse(savedSender);
-                  console.log("저장된 발신자 정보 사용:", sender.name);
-                  setSelectedSender(sender);
-                } else {
-                  // 저장된 정보 없음 - 미설정
-                  setSelectedSender(null);
-                  console.log(
-                    "로그인 안된 상태로 발신자 미설정, 부서원 목록 로드됨:",
-                    users.length
-                  );
-                }
-              } catch (err) {
-                console.error("저장된 발신자 정보 복원 실패:", err);
-                setSelectedSender(null);
-              }
-            } else {
-              console.warn("부서에 사용자가 없습니다. 발신자를 선택해주세요.");
-            }
-          } catch (error) {
-            console.error("부서 사용자 목록 가져오기 오류:", error);
-          }
+      if (userLevelData?.uid && userLevelData?.name) {
+        // 로그인 상태
+        setSelectedSender({
+          id: userLevelData.uid,
+          name: userLevelData.name || userLevelData.displayName || "사용자",
+          department: userLevelData.department || "",
+        });
+      } else if (userLevelData?.department) {
+        // 부서는 알지만 로그인은 안 된 상태
+        try {
+          const users = await getUsersFromDepartment(userLevelData.department);
+          setDepartmentUsers(users);
+          // 자동 선택하지 않음 (첫 번째 사용자 자동 선택 제거)
+          setSelectedSender(null);
+        } catch (error) {
+          console.error("부서 사용자 목록 가져오기 오류:", error);
         }
-      } catch (error) {
-        console.error("발신자 초기화 중 오류 발생:", error);
       }
     };
 
@@ -1356,16 +1261,22 @@ const ChatWindow = () => {
     console.log("채팅방 타입:", room.type);
     console.log("유저 레벨 데이터:", userLevelData);
     console.log("사용자 부서:", userLevelData?.department);
-    console.log("현재 발신자:", selectedSender);
-
-    // 대표원장 여부 확인
-    const isDirector = isHospitalOwner(userLevelData, currentUser);
+    console.log("현재 사용자:", currentUser);
 
     // 메시지 전송 권한 설정 - 개선된 로직
-    if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL || isDirector) {
-      // 전체 채팅이거나 대표원장이면 항상 입력 권한 부여
-      setCanSend(true);
-      console.log("채팅 권한 설정: 허용 (전체 채팅 또는 대표원장)");
+    if (room.id === "global-chat" || room.type === CHAT_TYPES.GLOBAL) {
+      // 전체 채팅 여부를 ID와 타입 모두 확인 (더 안전한 접근)
+      const isManagementTeam = userLevelData?.department === "경영지원팀";
+      console.log("경영지원팀 여부:", isManagementTeam);
+
+      // 전체 채팅인 경우:
+      // 1. 경영지원팀이 아니면 권한 있음
+      // 2. 부서가 할당되지 않은 경우(빈 문자열)도 권한 있음
+      setCanSend(!isManagementTeam || !userLevelData?.department);
+      console.log(
+        "전체 채팅 권한 설정:",
+        !isManagementTeam || !userLevelData?.department
+      );
     } else {
       // 다른 채팅방은 기존 로직 유지
       setCanSend(room.canSend);
@@ -1384,37 +1295,33 @@ const ChatWindow = () => {
       // 채팅방 멤버를 발신자 선택 목록으로도 사용
       setDepartmentUsers(roomMembers);
 
-      // 아직 발신자가 설정되지 않았거나 로그인 상태에서만 발신자 재설정
-      if (!selectedSender) {
-        if (userLevelData?.uid) {
-          // 로그인 상태 - 사용자 정보로 설정
-          const currentUser = roomMembers.find(
-            (member) => member.id === userLevelData.uid
+      // 개선된 발신자 선택 로직: 로그인된 사용자와 이름이 일치하는 경우 자동 선택
+      if (userLevelData?.uid) {
+        // uid로 찾기
+        let currentUser = roomMembers.find(
+          (member) => member.id === userLevelData.uid
+        );
+        
+        // uid로 못 찾았으면 이름으로 찾기
+        if (!currentUser && userLevelData.name) {
+          currentUser = roomMembers.find(
+            (member) => member.name === userLevelData.name
           );
-          if (currentUser) {
-            console.log(
-              "채팅방 진입 시 로그인 사용자를 발신자로 설정:",
-              currentUser.name
-            );
-            setSelectedSender(currentUser);
-          } else if (roomMembers.length > 0) {
-            // 목록에 사용자가 없으면 첫 번째 멤버로 설정
-            console.log(
-              "사용자를 찾을 수 없어 첫 번째 멤버로 설정:",
-              roomMembers[0].name
-            );
-            setSelectedSender(roomMembers[0]);
-          }
+        }
+        
+        // 사용자 정보가 있으면 발신자로 설정
+        if (currentUser) {
+          console.log("발신자 자동 설정:", currentUser.name);
+          setSelectedSender(currentUser);
         } else if (roomMembers.length > 0) {
-          // 비로그인 상태 - 첫 번째 멤버로 설정
-          console.log(
-            "비로그인 상태에서 첫 번째 멤버로 설정:",
-            roomMembers[0].name
-          );
+          // 매칭되는 사용자가 없고, 멤버가 있으면 첫 번째 멤버로 설정
+          console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", roomMembers[0].name);
           setSelectedSender(roomMembers[0]);
         }
-      } else {
-        console.log("이미 발신자가 설정됨:", selectedSender.name);
+      } else if (roomMembers.length > 0) {
+        // 로그인하지 않은 경우 첫 번째 멤버로 설정
+        console.log("로그인하지 않아 첫 번째 멤버로 설정:", roomMembers[0].name);
+        setSelectedSender(roomMembers[0]);
       }
     } catch (error) {
       console.error("채팅방 멤버 가져오기 오류:", error);
@@ -1436,6 +1343,11 @@ const ChatWindow = () => {
           markMessageAsRead(msg.id, deviceId, room.id);
         }
       });
+      
+      // 메시지 로드 완료 후 즉시 스크롤을 맨 아래로 이동 (smooth 애니메이션 제거)
+      if (messageEndRef.current) {
+        messageEndRef.current.scrollIntoView({ behavior: "auto" });
+      }
     });
 
     setMessageUnsubscribe(() => unsubscribe);
@@ -1452,36 +1364,14 @@ const ChatWindow = () => {
   // 컴포넌트 언마운트 시 구독 정리
   useEffect(() => {
     return () => {
-      // 구독 해제
       if (messageUnsubscribe) {
-        console.log("채팅 메시지 구독 해제");
         messageUnsubscribe();
-        setMessageUnsubscribe(null);
+      }
+      if (unreadCountUnsubscribe) {
+        unreadCountUnsubscribe();
       }
     };
-  }, [messageUnsubscribe]);
-
-  // 라우팅 변경 감지(홈으로 이동 등)를 위한 추가 정리 함수
-  useEffect(() => {
-    const cleanupResources = () => {
-      console.log("리소스 정리 실행");
-      if (messageUnsubscribe) {
-        console.log("채팅 메시지 구독 해제 (navigation)");
-        messageUnsubscribe();
-        setMessageUnsubscribe(null);
-        setMessages([]); // 메시지 상태 초기화
-      }
-    };
-
-    window.addEventListener("beforeunload", cleanupResources);
-    window.addEventListener("popstate", cleanupResources);
-
-    return () => {
-      window.removeEventListener("beforeunload", cleanupResources);
-      window.removeEventListener("popstate", cleanupResources);
-      cleanupResources(); // 컴포넌트 언마운트 시에도 강제 정리
-    };
-  }, [messageUnsubscribe]);
+  }, [messageUnsubscribe, unreadCountUnsubscribe]);
 
   // 비밀번호 입력 처리
   const handlePasswordChange = (e) => {
@@ -1503,9 +1393,10 @@ const ChatWindow = () => {
     return (
       <ModalOverlay onClick={togglePasswordModal}>
         <ModalContent onClick={(e) => e.stopPropagation()}>
+          <ModalHeader>시크릿 모드 진입</ModalHeader>
           <PasswordInput
             type="password"
-            placeholder="모바일 채팅은 아직 지원하지 않습니다."
+            placeholder="비밀번호를 입력하세요"
             value={password}
             onChange={handlePasswordChange}
             onKeyDown={handlePasswordKeyDown}
@@ -1531,54 +1422,14 @@ const ChatWindow = () => {
 
   // 헤더에 시크릿 모드 아이콘 추가
   const renderSecretModeIcon = () => {
-    const isDirector = currentUser?.role === "대표원장";
-    //여기도 currentUser로
+    const isDirector = userLevelData?.role === "대표원장";
 
     console.log("isDirector", userLevelData);
 
     if (!isDirector) return null;
 
-    // 시크릿 모드일 때 아이콘 클릭 처리
-    const handleSecretModeIconClick = () => {
-      if (secretMode) {
-        // 시크릿 모드가 켜져 있을 때는 끄고 채팅 리스트로 돌아가기
-        setLoading(true);
-
-        setTimeout(() => {
-          // 구독 정리
-          if (messageUnsubscribe) {
-            messageUnsubscribe();
-            setMessageUnsubscribe(null);
-          }
-
-          // 채팅방 상태 초기화
-          setMessages([]);
-          setSelectedRoom(null);
-
-          // 답장 상태, 멘션 상태 등 초기화
-          setReplyToMessage(null);
-          setShowMentionSuggestions(false);
-          setShowMembers(false);
-
-          // 시크릿 모드 해제
-          setSecretMode(false);
-
-          // 채팅방 목록 다시 로드 (일반 모드로)
-          fetchChatRooms(false);
-
-          // 로딩 상태 해제
-          setTimeout(() => {
-            setLoading(false);
-          }, 500);
-        }, 50);
-      } else {
-        // 시크릿 모드가 꺼져 있을 때는 비밀번호 모달 표시
-        togglePasswordModal();
-      }
-    };
-
     return (
-      <SecretModeIcon onClick={handleSecretModeIconClick}>
+      <SecretModeIcon onClick={togglePasswordModal}>
         📶
         {secretMode && (
           <span
@@ -1609,80 +1460,60 @@ const ChatWindow = () => {
   // 메시지 입력 처리
   const handleInputChange = (e) => {
     const text = e.target.value;
-
-    // 이전 텍스트와 동일한 경우 중복 업데이트 방지
-    if (text === messageText) return;
-
-    // 이전 스크롤 위치 저장
-    const container = document.querySelector(".mention-input-container");
-    const prevScrollTop = container ? container.scrollTop : 0;
-    const isUserScrolled = prevScrollTop > 0;
-
+    
+    // 값을 설정
     setMessageText(text);
-
-    // 입력 영역 높이 조절
-    if (inputRef.current) {
-      // 먼저 높이를 초기화
-      inputRef.current.style.height = "40px";
-      // 실제 콘텐츠 높이 계산
-      const scrollHeight = inputRef.current.scrollHeight;
-      const newHeight = Math.min(120, scrollHeight); // 최대 높이 제한
-
-      // 높이 적용
-      inputRef.current.style.height = `${newHeight}px`;
-
-      // MentionInputContainer 높이도 조정
-      if (container) {
-        // 높이 설정 (padding 고려)
-        container.style.height = `${newHeight}px`;
-
-        // 스크롤 위치 조정
-        if (text.length === 0) {
-          // 텍스트가 없으면 스크롤 초기화
-          container.scrollTop = 0;
-        } else if (isUserScrolled) {
-          // 사용자가 스크롤 중이면 위치 유지
-          container.scrollTop = prevScrollTop;
-        } else {
-          // 아니면 자동 스크롤
-          container.scrollTop = container.scrollHeight;
-        }
-
-        // 스크롤 위치 ref에 저장
-        scrollPositionRef.current = container.scrollTop;
-      }
-    }
-
+    
     // 멘션 관련 코드
     if (!text) {
+      // 비어있으면 멘션 관련 상태 초기화
       setParsedMentions([]);
       setShowMentionSuggestions(false);
       return;
     }
+    
+    try {
+      // 멘션 파싱 시도
+      const mentionRegex = /@(\S+)/g;
+      const matches = [];
+      let match;
 
-    parseInputForMentions(text);
-
-    // 멘션 감지 (@다음에 텍스트 입력 중인지)
-    const lastAtSymbolIndex = text.lastIndexOf("@");
-    if (lastAtSymbolIndex !== -1 && lastAtSymbolIndex > text.lastIndexOf(" ")) {
-      const query = text.slice(lastAtSymbolIndex + 1);
-      setMentionQuery(query);
-
-      // 멘션 쿼리로 사용자 필터링
-      if (query) {
-        const filtered = mentionableUsers.filter((user) =>
-          user.name.toLowerCase().includes(query.toLowerCase())
-        );
-        setMentionSuggestions(filtered);
-        setShowMentionSuggestions(filtered.length > 0);
-        setActiveMentionIndex(0); // 첫 번째 항목 선택
-      } else {
-        setMentionSuggestions(mentionableUsers);
-        setShowMentionSuggestions(true);
-        setActiveMentionIndex(0);
+      while ((match = mentionRegex.exec(text)) !== null) {
+        matches.push({
+          text: match[0],
+          index: match.index,
+          length: match[0].length,
+        });
       }
-    } else {
-      setShowMentionSuggestions(false);
+
+      setParsedMentions(matches);
+      
+      // 멘션 감지 (@다음에 텍스트 입력 중인지)
+      const lastAtSymbolIndex = text.lastIndexOf("@");
+      if (lastAtSymbolIndex !== -1 && lastAtSymbolIndex > text.lastIndexOf(" ")) {
+        const query = text.slice(lastAtSymbolIndex + 1);
+        setMentionQuery(query);
+        
+        if (mentionableUsers && mentionableUsers.length > 0) {
+          // 멘션 쿼리로 사용자 필터링
+          if (query) {
+            const filtered = mentionableUsers.filter((user) =>
+              user.name.toLowerCase().includes(query.toLowerCase())
+            );
+            setMentionSuggestions(filtered);
+            setShowMentionSuggestions(filtered.length > 0);
+            setActiveMentionIndex(0); // 첫 번째 항목 선택
+          } else {
+            setMentionSuggestions(mentionableUsers);
+            setShowMentionSuggestions(true);
+            setActiveMentionIndex(0);
+          }
+        }
+      } else {
+        setShowMentionSuggestions(false);
+      }
+    } catch (error) {
+      console.error("메시지 입력 처리 중 오류:", error);
     }
   };
 
@@ -1780,12 +1611,17 @@ const ChatWindow = () => {
   // 반응 추가 - 반응 추가 후 컨텍스트 메뉴 닫기
   const handleAddReaction = async (message, reactionType) => {
     try {
+      // 사용자 ID 가져오기 (로그인된 경우 uid, 아니면 장치 ID 사용)
+      const userId = userLevelData?.uid || localStorage.getItem("deviceId") || `device-${Date.now()}`;
+      
       await addReaction(
         message.id,
-        userLevelData.uid,
+        userId,
         reactionType,
         selectedRoom.id
       );
+      
+      console.log(`반응 추가 성공: 메시지 ID-${message.id}, 사용자-${userId}, 반응-${reactionType}`);
     } catch (error) {
       console.error("반응 추가 오류:", error);
     } finally {
@@ -1924,168 +1760,43 @@ const ChatWindow = () => {
 
   // 메시지 전송 처리 - 선택한 발신자 정보 사용
   const handleSendMessage = async () => {
-    // 메시지가 비어있거나, 선택된 채팅방이 없거나, 권한이 없거나, 이미 전송 중이거나, 발신자가 선택되지 않았으면 무시
-    if (
-      !messageText.trim() ||
-      !selectedRoom ||
-      !canSend ||
-      isSending ||
-      !selectedSender
-    )
+    // 메시지가 비어있거나, 선택된 채팅방이 없거나, 권한이 없거나, 이미 전송 중이면 무시
+    if (!messageText.trim() || !selectedRoom || !canSend || isSending) {
       return;
-
-    // 메시지 전송 중 상태로 설정 (락 설정)
-    setIsSending(true);
-
-    // 전송할 메시지 텍스트 저장 (상태 변경 전에)
-    const textToSend = messageText.trim();
-
+    }
+    
     try {
-      // 상태 초기화 - 메시지를 먼저 비워서 UI에 즉시 반영되도록 함
-      setMessageText("");
-      setParsedMentions([]);
-      setShowMentionSuggestions(false);
-
-      // 입력창 높이 즉시 초기화
-      if (inputRef.current) {
-        inputRef.current.style.height = "40px";
-      }
-
-      const container = document.querySelector(".mention-input-container");
-      if (container) {
-        container.style.height = "40px"; // 초기 높이로 설정
-        container.scrollTop = 0; // 스크롤 위치 초기화
-      }
-
-      // 답장 정보 구성
-      const replyInfo = replyToMessage
-        ? {
-            id: replyToMessage.id,
-            text: replyToMessage.text,
-            senderName: replyToMessage.senderName,
-          }
-        : undefined;
-
-      // 메시지 객체 구성
+      // 전송 중 상태로 설정
+      setIsSending(true);
+      
+      // 메시지 정보 구성
+      const deviceId = localStorage.getItem("deviceId") || `device-${Date.now()}`;
       const messageData = {
-        text: textToSend,
-        replyTo: replyInfo,
+        text: messageText.trim(),
+        replyTo: replyToMessage
       };
-
-      // 디바이스 ID 가져오기 (또는 생성)
-      const deviceId =
-        localStorage.getItem("deviceId") || `device-${Date.now()}`;
-      if (!localStorage.getItem("deviceId")) {
-        localStorage.setItem("deviceId", deviceId);
-      }
-
-      // Firebase에 메시지 저장 - 선택한 발신자 정보 사용
-      await sendMessage(selectedRoom.id, messageData, {
-        uid: selectedSender.id,
-        name: selectedSender.name,
-        deviceId: deviceId,
-      });
-
-      // 멘션 감지 및 호출 알림 생성
-      const mentionRegex = /@(\S+)/g;
-      const mentions = textToSend.match(mentionRegex);
-
-      if (mentions && mentions.length > 0) {
-        // 중복 제거한 멘션 목록
-        const uniqueMentions = [...new Set(mentions)];
-
-        for (const mention of uniqueMentions) {
-          // 멘션된 사용자 이름 추출 (@제거)
-          const mentionedName = mention.slice(1);
-
-          // '@전체' 멘션은 제외 - 기능 숨김
-          if (mentionedName === "전체") {
-            console.log("전체 멘션은 현재 비활성화되어 있습니다.");
-            continue;
-          }
-
-          // 멘션된 사용자 찾기
-          const mentionedUser = mentionableUsers.find(
-            (user) =>
-              user.name === mentionedName ||
-              user.displayName === mentionedName ||
-              user.displayText?.includes(mentionedName)
-          );
-
-          if (mentionedUser && mentionedUser.department) {
-            const userDepartment = mentionedUser.department;
-            console.log(
-              `멘션된 사용자: ${mentionedName}, 부서: ${userDepartment}`
-            );
-
-            // 부서 이름 표준화 - 팀 접미사 추가
-            let departmentName = userDepartment;
-            if (!departmentName.includes("팀")) {
-              departmentName = `${departmentName}팀`;
-            }
-
-            // 현재 시간 포맷팅
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, "0");
-            const minutes = String(now.getMinutes()).padStart(2, "0");
-            const formattedTime = `${hours}:${minutes}`;
-
-            // 호출 알림 데이터 구성
-            const callData = {
-              message: `${selectedRoom.name}에서 ${selectedSender.name}님이 ${mentionedName}(${departmentName})님을 언급했습니다.`,
-              receiverId: departmentName, // 부서를 receiverId로 설정
-              senderId: selectedSender.name,
-              formattedTime,
-              createdAt: Date.now(),
-              createdAt2: serverTimestamp(),
-              type: "채팅",
-              department: departmentName,
-              senderInfo: selectedSender.name,
-            };
-
-            // Firestore에 호출 알림 저장
-            try {
-              const docRef = await addDoc(collection(db, "calls"), callData);
-              console.log(
-                `${mentionedName}(${departmentName}) 멘션 호출 생성 완료 - 문서 ID: ${docRef.id}`
-              );
-            } catch (error) {
-              console.error("멘션 호출 생성 오류:", error);
-            }
-          } else {
-            console.log(
-              `멘션된 사용자를 찾을 수 없거나 부서 정보가 없습니다: ${mentionedName}`
-            );
-          }
-        }
-      }
-
+      
+      // 발신자 정보 
+      const sender = {
+        uid: userLevelData?.uid || deviceId,
+        name: userLevelData?.name || "사용자",
+        deviceId
+      };
+      
+      // 메시지 전송
+      await sendMessage(selectedRoom.id, messageData, sender);
+      
+      // 입력 필드 초기화
+      setMessageText("");
+      
       // 답장 상태 초기화
       setReplyToMessage(null);
+      
     } catch (error) {
-      console.error("메시지 전송 오류:", error);
+      console.error("메시지 전송 중 오류 발생:", error);
     } finally {
-      // 메시지 전송 완료 후 전송 상태 해제 (락 해제)
+      // 전송 상태 해제
       setIsSending(false);
-
-      // 안정적인 초기화를 위해 setTimeout 사용
-      setTimeout(() => {
-        // 입력 필드가 깨끗하게 비워졌는지 한번 더 확인
-        if (inputRef.current && inputRef.current.value !== "") {
-          inputRef.current.value = "";
-        }
-
-        // 입력창 높이 한 번 더 초기화
-        if (inputRef.current) {
-          inputRef.current.style.height = "40px";
-        }
-
-        const container = document.querySelector(".mention-input-container");
-        if (container) {
-          container.style.height = "40px";
-          container.scrollTop = 0;
-        }
-      }, 100);
     }
   };
 
@@ -2096,9 +1807,11 @@ const ChatWindow = () => {
     }
   };
 
-  // 새 메시지가 추가될 때 스크롤 맨 아래로
+  // 새 메시지가 추가될 때 스크롤 맨 아래로 (애니메이션 없이)
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "auto" });
+    if (messageEndRef.current) {
+      messageEndRef.current.scrollIntoView({ behavior: "auto" });
+    }
   }, [messages]);
 
   // 입력 필드 상태 모니터링
@@ -2126,10 +1839,16 @@ const ChatWindow = () => {
     return teamName.charAt(0);
   };
 
-  const messageGroups = groupMessagesByDate(messages);
+  const messageGroups = useMemo(() => {
+    if (!messages || messages.length === 0) {
+      return [];
+    }
+    
+    return groupMessagesByDate(messages);
+  }, [messages]);
 
   // 현재 사용자가 원장님인지 확인
-  const isDirector = isHospitalOwner(userLevelData, currentUser);
+  const isDirector = userLevelData?.role === "대표원장";
 
   // 메시지 표시 부분에서 멘션된 텍스트 하이라이트
   const renderMessageText = (message) => {
@@ -2199,14 +1918,16 @@ const ChatWindow = () => {
     return result;
   };
 
-  // 우클릭 메뉴 클릭 이벤트 처리
+  // 우클릭 메뉴 클릭 핸들러
   const handleContextMenuClick = (e) => {
+    // 이벤트 전파 중지 - 클릭 이벤트가 외부로 전파되지 않도록 함
     e.stopPropagation();
   };
 
-  // 메뉴 터치 이벤트 처리 함수
+  // 메뉴 터치 이벤트 핸들러 (모바일 지원)
   const handleMenuTouch = (e) => {
-    e.stopPropagation(); // 이벤트 버블링 방지
+    // 이벤트 전파 중지 - 터치 이벤트가 외부로 전파되지 않도록 함
+    e.stopPropagation();
   };
 
   // 발신자 선택 토글 - 이벤트 버블링 중지
@@ -2259,13 +1980,6 @@ const ChatWindow = () => {
 
   return (
     <Container>
-      {/* 로딩 화면 - props 제거하고 항상 완전 불투명하게 표시 */}
-      {loading && (
-        <LoadingOverlay>
-          <LoadingSpinner />
-        </LoadingOverlay>
-      )}
-
       <Header>
         <BackButton visible={selectedRoom !== null} onClick={handleBack}>
           &lt;
@@ -2279,12 +1993,35 @@ const ChatWindow = () => {
             멤버 <MembersCount>{members.length}</MembersCount>
           </MembersButton>
         )}
+
+        {showMembers && selectedRoom && (
+          <MembersPanel>
+            <MembersPanelHeader>
+              {selectedRoom.type === "global"
+                ? "전체 채팅 멤버"
+                : `${selectedRoom.departmentName} 채팅 멤버`}
+            </MembersPanelHeader>
+            <MemberList>
+              {members.map((member) => (
+                <MemberItem key={member.id}>
+                  <MemberAvatar>{getUserInitials(member.name)}</MemberAvatar>
+                  <MemberInfo>
+                    <MemberName>{member.name}</MemberName>
+                    <MemberRole>{member.role || "사용자"}</MemberRole>
+                  </MemberInfo>
+                </MemberItem>
+              ))}
+            </MemberList>
+          </MembersPanel>
+        )}
       </Header>
 
       {!selectedRoom ? (
         // 채팅방 목록 화면
         <ChatRoomList>
-          {chatRooms.length > 0 ? (
+          {loading ? (
+            <div className="p-4 text-center">채팅방 목록을 불러오는 중...</div>
+          ) : chatRooms.length > 0 ? (
             chatRooms.map((room) => (
               <ChatRoomItem
                 key={room.id}
@@ -2314,11 +2051,7 @@ const ChatWindow = () => {
               </ChatRoomItem>
             ))
           ) : (
-            <div
-              style={{ padding: "20px", textAlign: "center", color: "#666" }}
-            >
-              표시할 채팅방이 없습니다
-            </div>
+            <div className="p-4 text-center">표시할 채팅방이 없습니다</div>
           )}
         </ChatRoomList>
       ) : (
@@ -2339,28 +2072,12 @@ const ChatWindow = () => {
                 <MessageDate>{formatDate(group.date)}</MessageDate>
 
                 {group.messages.map((message) => {
-                  // 로그인 상태에 따라 다른 방식으로 내 메시지 판단
-                  let isMe = false;
-
-                  if (isLoggedIn) {
-                    // 로그인 상태: userLevelData.uid로 판단
-                    isMe = message.senderId === userLevelData?.uid;
-                  } else {
-                    // 비로그인 상태: 오직 deviceId만으로 판단 (readBy 배열은 사용하지 않음)
-                    const deviceId = localStorage.getItem("deviceId");
-                    isMe = message.deviceId === deviceId;
-
-                    // 디버깅용 로그
-                    console.log(`메시지 ID: ${message.id}`);
-                    console.log(
-                      `메시지 발신자: ${message.senderName} (${message.senderId})`
-                    );
-                    console.log(`메시지 디바이스ID: ${message.deviceId}`);
-                    console.log(`내 디바이스ID: ${deviceId}`);
-                    console.log(`isMe: ${isMe}`);
-                  }
-
+                  // 내 메시지 판별 로직 사용
+                  const isMe = isMyMessage(message);
+                  
+                  // 멘션 처리
                   const isMentioned = isUserMentioned(message);
+                  
                   return (
                     <MessageItem key={message.id} isMe={isMe}>
                       {/* 내 메시지가 아닐 때만 좌측에 프로필 표시 */}

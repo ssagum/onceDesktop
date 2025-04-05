@@ -508,7 +508,7 @@ if (!gotTheLock) {
     );
 
     // 항상 개발 도구 열기
-    // chatWindow.webContents.openDevTools();
+    chatWindow.webContents.openDevTools();
 
     // 창이 닫힐 때 이벤트 처리
     chatWindow.on("closed", () => {
