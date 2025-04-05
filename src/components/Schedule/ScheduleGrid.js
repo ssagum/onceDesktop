@@ -345,8 +345,10 @@ const AppointmentForm = styled.div`
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   padding: 16px;
-  width: 280px;
+  width: 640px; /* 가로로 더 넓게 변경 */
   animation: ${slideDown} 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
 
   h3 {
     margin-top: 0;
@@ -357,6 +359,17 @@ const AppointmentForm = styled.div`
     padding-bottom: 8px;
     border-bottom: 1px solid #edf2f7;
   }
+`;
+
+const FormContent = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+`;
+
+const FormColumn = styled.div`
+  flex: 1;
+  min-width: 280px;
 `;
 
 const FormField = styled.div`
@@ -448,7 +461,7 @@ const FormActions = styled.div`
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 24px;
 `;
 
 const Button = styled.button`
@@ -1263,8 +1276,8 @@ const ScheduleGrid = ({
       // 화면 경계를 벗어나지 않도록 조정
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const formWidth = 300;
-      const formHeight = 400;
+      const formWidth = 640; // 300에서 640으로 변경
+      const formHeight = 350; // 400에서 350으로 변경
 
       if (left + formWidth > viewportWidth) {
         left = Math.max(10, left - formWidth - 20);
@@ -1288,14 +1301,14 @@ const ScheduleGrid = ({
         const viewportHeight = window.innerHeight;
 
         // 오른쪽에 충분한 공간이 있는지 확인, 없으면 왼쪽에 배치
-        const formWidth = 300;
+        const formWidth = 640; // 300에서 640으로 변경
         left =
           rect.right + 10 + formWidth > viewportWidth
             ? rect.left - formWidth - 10
             : rect.right + 10;
 
         // 화면 아래에 충분한 공간이 있는지 확인, 없으면 위에 배치
-        const formHeight = 400;
+        const formHeight = 350; // 400에서 350으로 변경
         top =
           rect.top + formHeight > viewportHeight
             ? Math.max(10, rect.top - formHeight + rect.height)
@@ -1334,8 +1347,8 @@ const ScheduleGrid = ({
     // 화면 경계를 벗어나지 않도록 조정
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const formWidth = 300;
-    const formHeight = 400;
+    const formWidth = 640; // 300에서 640으로 변경
+    const formHeight = 350; // 400에서 350으로 변경
 
     if (left + formWidth > viewportWidth) {
       left = Math.max(10, left - formWidth - 20);
@@ -1646,8 +1659,8 @@ const ScheduleGrid = ({
     // 화면 경계를 벗어나지 않도록 조정
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const formWidth = 300;
-    const formHeight = 400;
+    const formWidth = 640; // 300에서 640으로 변경
+    const formHeight = 350; // 400에서 350으로 변경
 
     if (left + formWidth > viewportWidth) {
       left = Math.max(10, left - formWidth - 20);
@@ -1686,18 +1699,18 @@ const ScheduleGrid = ({
       setCurrentCell(null); // 선택된 셀 초기화
       setSelectedAppointment(null); // 선택된 일정 초기화
       setIsEditing(false); // 편집 모드 비활성화
-      
+
       // 화면 갱신을 위해 강제로 상태 업데이트
-      setLocalAppointments(prev => [...prev]);
+      setLocalAppointments((prev) => [...prev]);
     }
 
     // 휴가 상세 정보 모달이 표시되어 있고, 클릭한 요소가 폼 내부가 아닌 경우에만 처리
     if (showVacationDetail && !e.target.closest(".appointment-form")) {
       setShowVacationDetail(false);
       setSelectedVacation(null);
-      
+
       // 화면 갱신을 위해 강제로 상태 업데이트
-      setVacations(prev => [...prev]);
+      setVacations((prev) => [...prev]);
     }
   };
 
@@ -2320,7 +2333,7 @@ const ScheduleGrid = ({
       const date = dates[dateIndex];
       const dayOfWeek = date.getDay(); // 0: 일요일, 6: 토요일
       const isWeekday = dayOfWeek > 0 && dayOfWeek < 6; // 월~금요일인지 확인
-      
+
       // 시작 시간에 가장 가까운 슬롯 찾기
       const startMinutes = timeToMinutes(appointment.startTime);
       let startTimeIndex = 0;
@@ -2373,7 +2386,7 @@ const ScheduleGrid = ({
       // 점심 시간 슬롯 인덱스는 9, 10 (timeIndex === 9, 10)
       // 14:00(인덱스 11) 이후 시간에는 2개 슬롯만큼 조정 필요
       const lunchTimeAdjustment = isWeekday ? 1 : 0; // 평일에는 점심시간 1개 슬롯 조정
-      
+
       // 점심 시간 슬롯 고려
       if (isWeekday) {
         // 시작 시간이 14:00(인덱스 11) 이후인 경우 보정
@@ -2381,16 +2394,18 @@ const ScheduleGrid = ({
           // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
           startTimeIndex += lunchTimeAdjustment;
         }
-        
+
         // 종료 시간이 14:00(인덱스 11) 이후인 경우 보정
         if (timeToMinutes(appointment.endTime) >= timeToMinutes("14:00")) {
           // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
           endTimeIndex += lunchTimeAdjustment;
         }
-        
+
         // 일정이 점심 시간을 포함하는 경우 (13:00-14:00 사이에 걸친 경우)
-        if (timeToMinutes(appointment.startTime) < timeToMinutes("13:00") && 
-            timeToMinutes(appointment.endTime) > timeToMinutes("14:00")) {
+        if (
+          timeToMinutes(appointment.startTime) < timeToMinutes("13:00") &&
+          timeToMinutes(appointment.endTime) > timeToMinutes("14:00")
+        ) {
           // 점심 시간을 포함하는 길이를 조정
           endTimeIndex += lunchTimeAdjustment;
         }
@@ -3379,8 +3394,8 @@ const ScheduleGrid = ({
     // 화면 경계를 벗어나지 않도록 조정
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const formWidth = 300;
-    const formHeight = 400;
+    const formWidth = 640; // 300에서 640으로 변경
+    const formHeight = 350; // 400에서 350으로 변경
 
     if (left + formWidth > viewportWidth) {
       left = Math.max(10, left - formWidth - 20);
@@ -3541,226 +3556,238 @@ const ScheduleGrid = ({
           {/* 선택된 일정이 있거나 편집 중이면 제목 변경 */}
           <h3>{selectedAppointment ? "일정 상세 정보" : "새 일정 생성"}</h3>
 
-          <FormField>
-            <label>제목</label>
-            <Input
-              type="text"
-              value={
-                isEditing
-                  ? formData.title
-                  : selectedAppointment
-                  ? selectedAppointment.title
-                  : formData.title
-              }
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              placeholder="일정 제목을 입력하세요"
-              disabled={!isEditing && selectedAppointment}
-            />
-          </FormField>
-
-          {/* 담당자 선택 드롭다운 추가 */}
-          <FormField>
-            <label>담당자</label>
-            <select
-              value={
-                isEditing
-                  ? formData.staffId
-                  : selectedAppointment
-                  ? selectedAppointment.staffId
-                  : formData.staffId
-              }
-              onChange={(e) => {
-                const selectedStaffId = e.target.value;
-                const selectedStaffMember = staff.find(
-                  (s) => s.id === selectedStaffId
-                );
-                setFormData({
-                  ...formData,
-                  staffId: selectedStaffId,
-                  staffName: selectedStaffMember
-                    ? selectedStaffMember.name
-                    : "",
-                });
-              }}
-              disabled={!isEditing && selectedAppointment}
-              className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                border: "1px solid #e2e8f0",
-                borderRadius: "6px",
-                fontSize: "14px",
-                backgroundColor: "#f8fafc",
-              }}
-            >
-              <option value="">담당자를 선택하세요</option>
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <TimeFieldContainer>
-            <div className="time-input-container">
-              <label>시작 시간</label>
-              <TimeInputWrapper
-                onClick={() => openTimePicker(startTimeInputRef)}
-              >
+          <FormContent>
+            <FormColumn>
+              <FormField>
+                <label>제목</label>
                 <Input
-                  ref={startTimeInputRef}
-                  type="time"
-                  step="900" // 15분 간격으로 조정 (기존 60 → 900초)
+                  type="text"
                   value={
                     isEditing
-                      ? formData.startTime
+                      ? formData.title
                       : selectedAppointment
-                      ? selectedAppointment.startTime
-                      : formData.startTime ||
-                        (selection
-                          ? effectiveTimeSlots[selection.startTimeIndex]
-                          : "")
+                      ? selectedAppointment.title
+                      : formData.title
                   }
-                  onChange={(e) => {
-                    handleTimeChange("startTime", e.target.value);
-                  }}
-                  onClick={(e) => {
-                    // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
-                    e.stopPropagation();
-                  }}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  placeholder="일정 제목을 입력하세요"
                   disabled={!isEditing && selectedAppointment}
                 />
-              </TimeInputWrapper>
-            </div>
-            <div className="time-input-container">
-              <label>종료 시간</label>
-              <TimeInputWrapper onClick={() => openTimePicker(endTimeInputRef)}>
-                <Input
-                  ref={endTimeInputRef}
-                  type="time"
-                  step="900" // 15분 간격으로 조정 (기존 60 → 900초)
+              </FormField>
+
+              {/* 담당자 선택 드롭다운 추가 */}
+              <FormField>
+                <label>담당자</label>
+                <select
                   value={
                     isEditing
-                      ? formData.endTime
+                      ? formData.staffId
                       : selectedAppointment
-                      ? selectedAppointment.endTime
-                      : formData.endTime ||
-                        (selection
-                          ? getEndTime(
-                              effectiveTimeSlots[selection.endTimeIndex]
-                            )
-                          : "")
+                      ? selectedAppointment.staffId
+                      : formData.staffId
                   }
                   onChange={(e) => {
-                    handleTimeChange("endTime", e.target.value);
-                  }}
-                  onClick={(e) => {
-                    // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
-                    e.stopPropagation();
+                    const selectedStaffId = e.target.value;
+                    const selectedStaffMember = staff.find(
+                      (s) => s.id === selectedStaffId
+                    );
+                    setFormData({
+                      ...formData,
+                      staffId: selectedStaffId,
+                      staffName: selectedStaffMember
+                        ? selectedStaffMember.name
+                        : "",
+                    });
                   }}
                   disabled={!isEditing && selectedAppointment}
-                />
-              </TimeInputWrapper>
-            </div>
-          </TimeFieldContainer>
-          <FormField>
-            <label>참고사항</label>
-            <TextArea
-              value={
-                isEditing
-                  ? formData.notes
-                  : selectedAppointment
-                  ? selectedAppointment.notes
-                  : formData.notes
-              }
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-              placeholder="참고사항을 입력하세요"
-              disabled={!isEditing && selectedAppointment}
-            />
-          </FormField>
-          <FormActions>
-            <Button
-              className="secondary"
-              onClick={() => {
-                setShowForm(false);
-                setFormData({
-                  title: "",
-                  notes: "",
-                  duration: "30",
-                  type: "예약",
-                  staffId: "",
-                  staffName: "",
-                });
-                setSelection(null); // 선택 영역 초기화
-                setCurrentCell(null); // 선택된 셀 초기화
-                setSelectedAppointment(null); // 선택된 일정 초기화
-                setIsEditing(false); // 편집 모드 비활성화
-                
-                // 화면 갱신을 위해 강제로 상태 업데이트
-                setLocalAppointments(prev => [...prev]);
-              }}
-            >
-              취소
-            </Button>
+                  className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    backgroundColor: "#f8fafc",
+                  }}
+                >
+                  <option value="">담당자를 선택하세요</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
 
-            {selectedAppointment && !isEditing ? (
-              // 선택된 일정이 있고 편집 모드가 아닐 때
-              <Button className="primary" onClick={handleEditAppointment}>
-                수정
-              </Button>
-            ) : (
-              // 새 일정 생성 또는 일정 편집 중
-              <Button
-                className="primary"
-                onClick={() => {
-                  if (isEditing && selectedAppointment) {
-                    // 일정 편집 처리
-                    handleAppointmentSubmit(new Event("submit"));
-                  } else if (selection) {
-                    // 새 일정 생성
-                    const startTimeIndex = selection.startTimeIndex;
-                    const endTimeIndex = selection.endTimeIndex;
-                    const dateIndex = selection.startDateIndex;
-                    const staffIndex = selection.startStaffIndex;
+              <TimeFieldContainer>
+                <div className="time-input-container">
+                  <label>시작 시간</label>
+                  <TimeInputWrapper
+                    onClick={() => openTimePicker(startTimeInputRef)}
+                  >
+                    <Input
+                      ref={startTimeInputRef}
+                      type="time"
+                      step="900" // 15분 간격으로 조정 (기존 60 → 900초)
+                      value={
+                        isEditing
+                          ? formData.startTime
+                          : selectedAppointment
+                          ? selectedAppointment.startTime
+                          : formData.startTime ||
+                            (selection
+                              ? effectiveTimeSlots[selection.startTimeIndex]
+                              : "")
+                      }
+                      onChange={(e) => {
+                        handleTimeChange("startTime", e.target.value);
+                      }}
+                      onClick={(e) => {
+                        // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
+                        e.stopPropagation();
+                      }}
+                      disabled={!isEditing && selectedAppointment}
+                    />
+                  </TimeInputWrapper>
+                </div>
+                <div className="time-input-container">
+                  <label>종료 시간</label>
+                  <TimeInputWrapper
+                    onClick={() => openTimePicker(endTimeInputRef)}
+                  >
+                    <Input
+                      ref={endTimeInputRef}
+                      type="time"
+                      step="900" // 15분 간격으로 조정 (기존 60 → 900초)
+                      value={
+                        isEditing
+                          ? formData.endTime
+                          : selectedAppointment
+                          ? selectedAppointment.endTime
+                          : formData.endTime ||
+                            (selection
+                              ? getEndTime(
+                                  effectiveTimeSlots[selection.endTimeIndex]
+                                )
+                              : "")
+                      }
+                      onChange={(e) => {
+                        handleTimeChange("endTime", e.target.value);
+                      }}
+                      onClick={(e) => {
+                        // 이벤트 전파 중지하여 두 번 호출되지 않도록 함
+                        e.stopPropagation();
+                      }}
+                      disabled={!isEditing && selectedAppointment}
+                    />
+                  </TimeInputWrapper>
+                </div>
+              </TimeFieldContainer>
+            </FormColumn>
 
-                    // 폼 데이터에서 변경된 시간 값을 우선으로 사용
-                    const startTime =
-                      formData.startTime || effectiveTimeSlots[startTimeIndex];
-                    const endTime =
-                      formData.endTime ||
-                      getEndTime(effectiveTimeSlots[endTimeIndex]);
-
-                    const appointmentData = {
-                      title: formData.title,
-                      notes: formData.notes,
-                      type: formData.type,
-                      dateIndex: dateIndex,
-                      staffId: formData.staffId || staff[staffIndex].id,
-                      staffName: formData.staffName || staff[staffIndex].name,
-                      date: dates[dateIndex],
-                      startTime: startTime,
-                      endTime: endTime,
-                    };
-
-                    createAppointment(appointmentData);
+            <FormColumn>
+              <FormField>
+                <label>참고사항</label>
+                <TextArea
+                  value={
+                    isEditing
+                      ? formData.notes
+                      : selectedAppointment
+                      ? selectedAppointment.notes
+                      : formData.notes
                   }
-                }}
-              >
-                {isEditing ? "저장" : "생성"}
-              </Button>
-            )}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  placeholder="참고사항을 입력하세요"
+                  disabled={!isEditing && selectedAppointment}
+                  style={{ height: "120px" }}
+                />
+              </FormField>
+              <FormActions>
+                <Button
+                  className="secondary"
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormData({
+                      title: "",
+                      notes: "",
+                      duration: "30",
+                      type: "예약",
+                      staffId: "",
+                      staffName: "",
+                    });
+                    setSelection(null); // 선택 영역 초기화
+                    setCurrentCell(null); // 선택된 셀 초기화
+                    setSelectedAppointment(null); // 선택된 일정 초기화
+                    setIsEditing(false); // 편집 모드 비활성화
 
-            {selectedAppointment && (
-              <Button className="danger" onClick={handleDeleteAppointment}>
-                삭제
-              </Button>
-            )}
-          </FormActions>
+                    // 화면 갱신을 위해 강제로 상태 업데이트
+                    setLocalAppointments((prev) => [...prev]);
+                  }}
+                >
+                  취소
+                </Button>
+
+                {selectedAppointment && !isEditing ? (
+                  // 선택된 일정이 있고 편집 모드가 아닐 때
+                  <Button className="primary" onClick={handleEditAppointment}>
+                    수정
+                  </Button>
+                ) : (
+                  // 새 일정 생성 또는 일정 편집 중
+                  <Button
+                    className="primary"
+                    onClick={() => {
+                      if (isEditing && selectedAppointment) {
+                        // 일정 편집 처리
+                        handleAppointmentSubmit(new Event("submit"));
+                      } else if (selection) {
+                        // 새 일정 생성
+                        const startTimeIndex = selection.startTimeIndex;
+                        const endTimeIndex = selection.endTimeIndex;
+                        const dateIndex = selection.startDateIndex;
+                        const staffIndex = selection.startStaffIndex;
+
+                        // 폼 데이터에서 변경된 시간 값을 우선으로 사용
+                        const startTime =
+                          formData.startTime ||
+                          effectiveTimeSlots[startTimeIndex];
+                        const endTime =
+                          formData.endTime ||
+                          getEndTime(effectiveTimeSlots[endTimeIndex]);
+
+                        const appointmentData = {
+                          title: formData.title,
+                          notes: formData.notes,
+                          type: formData.type,
+                          dateIndex: dateIndex,
+                          staffId: formData.staffId || staff[staffIndex].id,
+                          staffName:
+                            formData.staffName || staff[staffIndex].name,
+                          date: dates[dateIndex],
+                          startTime: startTime,
+                          endTime: endTime,
+                        };
+
+                        createAppointment(appointmentData);
+                      }
+                    }}
+                  >
+                    {isEditing ? "저장" : "생성"}
+                  </Button>
+                )}
+
+                {selectedAppointment && (
+                  <Button className="danger" onClick={handleDeleteAppointment}>
+                    삭제
+                  </Button>
+                )}
+              </FormActions>
+            </FormColumn>
+          </FormContent>
         </AppointmentForm>
       )}
 
@@ -3839,66 +3866,72 @@ const ScheduleGrid = ({
         >
           <h3>휴가 상세 정보</h3>
 
-          <TimeFieldContainer>
-            <div className="time-input-container">
-              <label>유형</label>
-              <Input
-                type="text"
-                value={selectedVacation.vacationType || "휴가"}
-                disabled={true}
-              />
-            </div>
-            <div className="time-input-container">
-              <label>휴가자</label>
-              <Input
-                type="text"
-                value={selectedVacation.staffName || "의료진"}
-                disabled={true}
-              />
-            </div>
-          </TimeFieldContainer>
+          <FormContent>
+            <FormColumn>
+              <TimeFieldContainer>
+                <div className="time-input-container">
+                  <label>유형</label>
+                  <Input
+                    type="text"
+                    value={selectedVacation.vacationType || "휴가"}
+                    disabled={true}
+                  />
+                </div>
+                <div className="time-input-container">
+                  <label>휴가자</label>
+                  <Input
+                    type="text"
+                    value={selectedVacation.staffName || "의료진"}
+                    disabled={true}
+                  />
+                </div>
+              </TimeFieldContainer>
 
-          <TimeFieldContainer>
-            <div className="time-input-container">
-              <label>날짜</label>
-              <Input
-                type="text"
-                value={format(
-                  new Date(selectedVacation.startDate),
-                  "yyyy-MM-dd"
-                )}
-                disabled={true}
-              />
-            </div>
-          </TimeFieldContainer>
+              <TimeFieldContainer>
+                <div className="time-input-container">
+                  <label>날짜</label>
+                  <Input
+                    type="text"
+                    value={format(
+                      new Date(selectedVacation.startDate),
+                      "yyyy-MM-dd"
+                    )}
+                    disabled={true}
+                  />
+                </div>
+              </TimeFieldContainer>
 
-          <TimeFieldContainer>
-            <div className="time-input-container">
-              <label>시작 시간</label>
-              <Input
-                type="text"
-                value={selectedVacation.startTime || ""}
-                disabled={true}
-              />
-            </div>
-            <div className="time-input-container">
-              <label>종료 시간</label>
-              <Input
-                type="text"
-                value={selectedVacation.endTime || ""}
-                disabled={true}
-              />
-            </div>
-          </TimeFieldContainer>
+              <TimeFieldContainer>
+                <div className="time-input-container">
+                  <label>시작 시간</label>
+                  <Input
+                    type="text"
+                    value={selectedVacation.startTime || ""}
+                    disabled={true}
+                  />
+                </div>
+                <div className="time-input-container">
+                  <label>종료 시간</label>
+                  <Input
+                    type="text"
+                    value={selectedVacation.endTime || ""}
+                    disabled={true}
+                  />
+                </div>
+              </TimeFieldContainer>
+            </FormColumn>
 
-          <FormField>
-            <label>사유</label>
-            <TextArea
-              value="개인정보 보호를 위해 표시되지 않습니다"
-              disabled={true}
-              style={{ color: "#777" }}
-            />
-          </FormField>
+            <FormColumn>
+              <FormField>
+                <label>사유</label>
+                <TextArea
+                  value="개인정보 보호를 위해 표시되지 않습니다"
+                  disabled={true}
+                  style={{ color: "#777", height: "120px" }}
+                />
+              </FormField>
+            </FormColumn>
+          </FormContent>
 
           <FormActions>
             <Button

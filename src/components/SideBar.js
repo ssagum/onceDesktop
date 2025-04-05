@@ -198,16 +198,19 @@ export default function SideBar() {
               nowURL={nowURL === "/parking" ? "주차등록" : nowURL}
             />
           </Link>
-          
-          <div className="w-full bg-[#162D66] h-[1px] rounded-2xl my-[20px]" />
+
+          {/* <div className="w-full bg-[#162D66] h-[1px] rounded-2xl my-[20px]" /> */}
           <div className="w-full">
-            <p className="text-[14px] color-[#888888] font-medium mb-[10px] text-center">
+            {/* <p className="text-[14px] color-[#888888] font-medium mb-[10px] text-center">
               알림 소리 설정
-            </p>
-            <AudioControl />
+            </p> */}
           </div>
         </IndexZone>
-        <div className="w-full h-[50px] absolute bottom-0 justify-center flex">
+
+        <div className="w-full flex flex-col h-[200px] absolute bottom-0 justify-evenly items-center">
+          <div className="w-[180px] flex flex-col items-center">
+            <AudioControl />
+          </div>
           <span className="text-onceGray text-once18">
             V.{packageJson.version}
           </span>
