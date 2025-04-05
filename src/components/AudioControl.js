@@ -8,6 +8,11 @@ const AudioControl = () => {
   const handleVolumeChange = (e) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
+    
+    // 볼륨이 0보다 크고 음소거 상태라면 자동으로 음소거 해제
+    if (newVolume > 0 && muted) {
+      toggleMute(false); // 음소거 해제
+    }
   };
 
   return (
@@ -40,7 +45,6 @@ const AudioControl = () => {
             volume * 100
           }%, #E5E7EB ${volume * 100}%, #E5E7EB 100%)`,
         }}
-        disabled={muted}
         aria-label="볼륨 조절"
       />
 

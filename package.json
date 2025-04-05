@@ -1,7 +1,7 @@
 {
   "name": "oncedesktop",
   "productName": "oncedesktop",
-  "version": "2.7.1",
+  "version": "2.9.3",
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {

@@ -1837,7 +1837,7 @@ const ChatWindow = () => {
       // 발신자 정보 
       const sender = {
         uid: userLevelData?.uid || deviceId,
-        name: userLevelData?.name || "사용자",
+        name: currentUser?.name || selectedSender?.name || "사용자",
         deviceId
       };
       
