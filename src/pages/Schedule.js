@@ -366,6 +366,15 @@ const WeekTab = styled.button`
 const generateTimeSlots = () => {
   const slots = [];
   for (let hour = 9; hour < 19; hour++) {
+    if (hour === 13) {
+      // 13:00 추가
+      slots.push(`${hour.toString().padStart(2, "0")}:00`);
+
+      // 13:30 추가 (원래 빠져있던 부분)
+      slots.push(`${hour.toString().padStart(2, "0")}:30`);
+      continue;
+    }
+
     slots.push(`${hour.toString().padStart(2, "0")}:00`);
     slots.push(`${hour.toString().padStart(2, "0")}:30`);
   }
@@ -387,9 +396,7 @@ const Schedule = () => {
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
   const [activeWeek, setActiveWeek] = useState(0);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
-  const [viewMode, setViewMode] = useState(
-    "물리치료" 
-  ); // 부서가 물리치료팀이면 물리치료 모드로 시작
+  const [viewMode, setViewMode] = useState("물리치료"); // 부서가 물리치료팀이면 물리치료 모드로 시작
   const [staffData, setStaffData] = useState({ 진료: [], 물리치료: [] }); // 의료진 데이터 상태 추가
   // 초기화 진행 상태 추가
   const [initialized, setInitialized] = useState(false);
@@ -1327,7 +1334,6 @@ const Schedule = () => {
                 </ToggleOption>
               </ToggleContainer>
 
-              
               <NaverReservationTrigger
                 onDataExtract={handleExtractedData}
                 buttonStyle={{
@@ -1347,9 +1353,7 @@ const Schedule = () => {
                     알림은 원장님의 개별 PC로 발송됩니다.
                   </span>
                 ) : (
-                  <span>
-                    물리치료팀 모든 PC에서 알림이 울립니다.
-                  </span>
+                  <span>물리치료팀 모든 PC에서 알림이 울립니다.</span>
                 )}
               </p>
             </div>

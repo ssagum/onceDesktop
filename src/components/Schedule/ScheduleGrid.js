@@ -1325,7 +1325,7 @@ const ScheduleGrid = ({
     setCurrentCell(null); // 현재 셀 초기화
   };
 
-  // handleMouseUp 함수 수정 - 담당자 정보는 유지하되 제목에는 포함시키지 않음
+  // handleMouseUp 함수 수정 - 레이블과 실제 시간 간의 매핑 처리
   const handleMouseUp = (e, dateIndex, staffIndex, timeIndex) => {
     // 선택 상태 종료
     setIsSelecting(false);
@@ -1365,14 +1365,39 @@ const ScheduleGrid = ({
     // 폼 위치 설정
     setFormPosition({ left, top });
 
+    // 요일 확인 (평일 여부)
+    const dayOfWeek = dates[dateIndex].getDay();
+    const isWeekday = dayOfWeek > 0 && dayOfWeek < 6; // 월~금요일인지 확인
+    const isSaturday = dayOfWeek === 6; // 토요일인지 확인
+
+    // 표시 레이블과 실제 시간 간의 매핑 처리
+    // 평일에만 적용, 토요일은 원래 시간대로 표시
+    let actualStartTime;
+
+    if (isWeekday && !isSaturday) {
+      if (timeIndex === 11) {
+        // 화면에 "14:00"으로 표시된 셀 (실제로는 14:30)
+        actualStartTime = "14:00";
+      } else if (timeIndex === 12) {
+        // 화면에 "14:30"으로 표시된 셀 (실제로는 15:00)
+        actualStartTime = "14:30";
+      } else {
+        // 다른 셀들은 실제 시간 슬롯 사용
+        actualStartTime = effectiveTimeSlots[timeIndex];
+      }
+    } else {
+      // 토요일 또는 다른 경우 실제 시간 슬롯 사용
+      actualStartTime = effectiveTimeSlots[timeIndex];
+    }
+
     // 빈 폼 데이터로 초기화 - 담당자 정보는 설정하지만 제목에는 포함하지 않음
     setFormData({
       title: "", // 제목은 빈 문자열로 설정
       notes: "",
       duration: "30",
       type: "예약",
-      startTime: effectiveTimeSlots[timeIndex],
-      endTime: getEndTime(effectiveTimeSlots[timeIndex]),
+      startTime: actualStartTime, // 매핑된 시간 사용
+      endTime: getEndTime(actualStartTime), // 매핑된 시간으로 종료 시간 계산
       date: format(dates[dateIndex], "yyyy-MM-dd"),
       staffId: selectedStaff ? selectedStaff.id : "",
       staffName: staffName,
@@ -1923,23 +1948,33 @@ const ScheduleGrid = ({
           dayOfWeekNumber !== 0 &&
           dayOfWeekNumber !== 6; // 일요일과 토요일 제외
 
-        // 특정 시간대 (21:30)인 경우 "메모" 대신 "21:30" 표시
+        // 표시 레이블 설정 - 실제 시간값은 유지
         let displayTime = time;
-        if (is2130) {
-          displayTime = "21:30"; // "메모" 대신 "21:30"으로 변경
-        } else if (timeIndex === 8) {
-          // 9번째 행 (0-based index)
-          displayTime = "13:00";
-        } else if (timeIndex === 11) {
-          // 12번째 행 (0-based index)
-          displayTime = "14:00";
-        } else if (
-          (timeIndex === 9 || timeIndex === 10) &&
-          dayOfWeekNumber !== 6 &&
-          dayOfWeekNumber !== 0
-        ) {
-          // 휴게시간 행 (10, 11번째) - 토요일과 일요일 제외
-          displayTime = timeIndex === 9 ? "점심" : "시간";
+
+        // 요일에 따라 다르게 표시 (토요일은 실제 시간 그대로, 평일은 특수 표시 가능)
+        if (dayOfWeekNumber === 6) {
+          // 토요일은 실제 시간 그대로 표시
+          displayTime = time;
+        } else if (dayOfWeekNumber !== 0) {
+          // 평일에 특정 시간은 특별히 표시
+          if (is2130) {
+            displayTime = "21:30";
+          } else if (timeIndex === 8) {
+            // 13:00
+            displayTime = "13:00";
+          } else if (timeIndex === 9) {
+            // 13:30
+            displayTime = "점심";
+          } else if (timeIndex === 10) {
+            // 14:00 - 레이블만 "시간"으로 표시하고 실제 시간값은 14:00 유지
+            displayTime = "시간";
+          } else if (timeIndex === 11) {
+            // 14:30 - 레이블만 "14:00"으로 표시하고 실제 시간값은 14:30 유지
+            displayTime = "14:00";
+          } else if (timeIndex === 12) {
+            // 15:00 - 레이블만 "14:30"으로 표시하고 실제 시간값은 15:00 유지
+            displayTime = "14:30";
+          }
         }
 
         // 영업 시간 내인지 확인 (근무시간 배경색 표시 용도)
@@ -1971,6 +2006,7 @@ const ScheduleGrid = ({
               overflow: "hidden",
             }}
           >
+            {/* 요일과 시간에 따라 다른 텍스트 표시 */}
             {shouldShowTime ? displayTime : displayTime}
           </Cell>
         );
@@ -2270,7 +2306,7 @@ const ScheduleGrid = ({
     }
   }, [dates, memoType]);
 
-  // 일정 렌더링 함수 수정 - 시간에 비례하여 표시
+  // 일정 렌더링 함수 수정 - 시간에 비례하여 표시하며 점심시간 고려하고 시간 매핑 적용
   const renderAppointments = () => {
     // 필터링 전 로그 출력
     console.log(
@@ -2333,83 +2369,106 @@ const ScheduleGrid = ({
       const date = dates[dateIndex];
       const dayOfWeek = date.getDay(); // 0: 일요일, 6: 토요일
       const isWeekday = dayOfWeek > 0 && dayOfWeek < 6; // 월~금요일인지 확인
+      const isSaturday = dayOfWeek === 6; // 토요일인지 확인
 
-      // 시작 시간에 가장 가까운 슬롯 찾기
+      // 시작 시간과 종료 시간을 분으로 변환하여 정확한 시간 차 계산
       const startMinutes = timeToMinutes(appointment.startTime);
+      const endMinutes = timeToMinutes(appointment.endTime);
+      const durationMinutes = endMinutes - startMinutes;
+
+      // 평일에 특정 시간대의 매핑 적용
+      const findTimeSlotIndex = (timeStr, isWeekday) => {
+        // 평일에 14:00과 14:30은 특별 매핑 적용
+        if (isWeekday && !isSaturday) {
+          if (timeStr === "14:00") {
+            // 14:00은 인덱스 11 (화면에 "14:00"으로 표시)에 매핑
+            return effectiveTimeSlots.findIndex((slot) => slot === "14:30");
+          } else if (timeStr === "14:30") {
+            // 14:30은 인덱스 12 (화면에 "14:30"으로 표시)에 매핑
+            return effectiveTimeSlots.findIndex((slot) => slot === "15:00");
+          }
+        }
+
+        // 그 외 케이스는 정상적으로 인덱스 찾기
+        return effectiveTimeSlots.findIndex((slot) => slot === timeStr);
+      };
+
+      // 시작 시간에 가장 가까운 슬롯 찾기 - 매핑 적용
       let startTimeIndex = 0;
       let startTimeOffset = 0;
 
-      for (let i = 0; i < effectiveTimeSlots.length; i++) {
-        const slotMinutes = timeToMinutes(effectiveTimeSlots[i]);
-        if (slotMinutes > startMinutes) {
-          startTimeIndex = Math.max(0, i - 1);
-          const prevSlotMinutes = timeToMinutes(
-            effectiveTimeSlots[startTimeIndex]
-          );
-          startTimeOffset = (startMinutes - prevSlotMinutes) / 30; // 30분을 1로 정규화
-          break;
-        } else if (i === effectiveTimeSlots.length - 1) {
-          // 마지막 슬롯보다 시작 시간이 나중이면
-          startTimeIndex = i;
-          startTimeOffset = (startMinutes - slotMinutes) / 30;
+      // 정확히 일치하는 시간이 있는지 먼저 확인 (매핑 적용)
+      const exactStartTimeIndex = findTimeSlotIndex(
+        appointment.startTime,
+        isWeekday
+      );
+
+      if (exactStartTimeIndex !== -1) {
+        // 정확히 일치하는 슬롯 있음
+        startTimeIndex = exactStartTimeIndex;
+        startTimeOffset = 0;
+      } else {
+        // 정확히 일치하는 슬롯 없음 - 가장 가까운 이전 슬롯 찾기
+        for (let i = 0; i < effectiveTimeSlots.length; i++) {
+          const slotMinutes = timeToMinutes(effectiveTimeSlots[i]);
+          if (slotMinutes > startMinutes) {
+            startTimeIndex = Math.max(0, i - 1);
+            const prevSlotMinutes = timeToMinutes(
+              effectiveTimeSlots[startTimeIndex]
+            );
+            startTimeOffset = (startMinutes - prevSlotMinutes) / 30; // 30분을 1로 정규화
+            break;
+          } else if (i === effectiveTimeSlots.length - 1) {
+            // 마지막 슬롯보다 시작 시간이 나중이면
+            startTimeIndex = i;
+            startTimeOffset = (startMinutes - slotMinutes) / 30;
+          }
         }
       }
 
-      // 종료 시간에 가장 가까운 슬롯 찾기
-      const endMinutes = timeToMinutes(appointment.endTime);
+      // 종료 시간에 가장 가까운 슬롯 찾기 - 매핑 적용
       let endTimeIndex = 0;
       let endTimeOffset = 0;
 
-      for (let i = 0; i < effectiveTimeSlots.length; i++) {
-        const slotMinutes = timeToMinutes(effectiveTimeSlots[i]);
-        if (slotMinutes >= endMinutes) {
-          endTimeIndex = i;
-          const prevSlotMinutes =
-            i > 0 ? timeToMinutes(effectiveTimeSlots[i - 1]) : 0;
-          endTimeOffset =
-            (endMinutes - prevSlotMinutes) / (slotMinutes - prevSlotMinutes);
-          break;
-        } else if (i === effectiveTimeSlots.length - 1) {
-          // 마지막 슬롯보다 종료 시간이 나중이면
-          endTimeIndex = i;
-          const nextSlotMinutes = timeToMinutes(
-            getEndTime(effectiveTimeSlots[i])
-          );
-          endTimeOffset = Math.min(
-            1,
-            (endMinutes - slotMinutes) / (nextSlotMinutes - slotMinutes)
-          );
+      // 정확히 일치하는 시간이 있는지 먼저 확인 (매핑 적용)
+      const exactEndTimeIndex = findTimeSlotIndex(
+        appointment.endTime,
+        isWeekday
+      );
+
+      if (exactEndTimeIndex !== -1) {
+        // 정확히 일치하는 슬롯 있음
+        endTimeIndex = exactEndTimeIndex;
+        endTimeOffset = 0;
+      } else {
+        // 정확히 일치하는 슬롯 없음 - 가장 가까운 슬롯 찾기
+        for (let i = 0; i < effectiveTimeSlots.length; i++) {
+          const slotMinutes = timeToMinutes(effectiveTimeSlots[i]);
+          if (slotMinutes >= endMinutes) {
+            endTimeIndex = i;
+            const prevSlotMinutes =
+              i > 0 ? timeToMinutes(effectiveTimeSlots[i - 1]) : 0;
+            endTimeOffset =
+              (endMinutes - prevSlotMinutes) / (slotMinutes - prevSlotMinutes);
+            break;
+          } else if (i === effectiveTimeSlots.length - 1) {
+            // 마지막 슬롯보다 종료 시간이 나중이면
+            endTimeIndex = i;
+            const nextSlotMinutes = timeToMinutes(
+              getEndTime(effectiveTimeSlots[i])
+            );
+            endTimeOffset = Math.min(
+              1,
+              (endMinutes - slotMinutes) / (nextSlotMinutes - slotMinutes)
+            );
+          }
         }
       }
 
       // 점심 시간 보정 (평일에만 적용)
       // 점심 시간 슬롯 인덱스는 9, 10 (timeIndex === 9, 10)
       // 14:00(인덱스 11) 이후 시간에는 2개 슬롯만큼 조정 필요
-      const lunchTimeAdjustment = isWeekday ? 1 : 0; // 평일에는 점심시간 1개 슬롯 조정
-
-      // 점심 시간 슬롯 고려
-      if (isWeekday) {
-        // 시작 시간이 14:00(인덱스 11) 이후인 경우 보정
-        if (timeToMinutes(appointment.startTime) >= timeToMinutes("14:00")) {
-          // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
-          startTimeIndex += lunchTimeAdjustment;
-        }
-
-        // 종료 시간이 14:00(인덱스 11) 이후인 경우 보정
-        if (timeToMinutes(appointment.endTime) >= timeToMinutes("14:00")) {
-          // 실제 시간이 14:00 이후인 경우, 그리드의 인덱스를 점심시간만큼 증가
-          endTimeIndex += lunchTimeAdjustment;
-        }
-
-        // 일정이 점심 시간을 포함하는 경우 (13:00-14:00 사이에 걸친 경우)
-        if (
-          timeToMinutes(appointment.startTime) < timeToMinutes("13:00") &&
-          timeToMinutes(appointment.endTime) > timeToMinutes("14:00")
-        ) {
-          // 점심 시간을 포함하는 길이를 조정
-          endTimeIndex += lunchTimeAdjustment;
-        }
-      }
+      const lunchTimeAdjustment = 2; // 점심시간 2칸 (13:00-14:00)
 
       // 컬럼 인덱스 계산 - 변수 이름 변경
       const appointmentColStart = dateIndex * (staff.length + 1) + 1; // 각 날짜 시작 컬럼
@@ -2429,13 +2488,14 @@ const ScheduleGrid = ({
       const cellHeight = startCellEl.getBoundingClientRect().height;
       const gridRect = gridRef.current.getBoundingClientRect();
 
-      // 정확한 시작 위치와 높이 계산
+      // 정확한 시작 위치와 높이 계산 (시간에 비례하여 조정)
       const top = startTimeIndex * cellHeight + startTimeOffset * cellHeight;
-      const bottom = endTimeIndex * cellHeight + endTimeOffset * cellHeight;
-      const height = bottom - top;
 
-      // 최소 높이 보장 (너무 작은 일정은 보이게)
-      const minHeight = Math.max(15, height);
+      // 높이 계산 개선 - 분 단위 비율로 더 정밀하게 계산
+      // 실제 시간 간격에 정확히 비례하는 높이 계산
+      const minutesPerCell = 30; // 각 셀은 30분 간격
+      const pixelsPerMinute = cellHeight / minutesPerCell;
+      const height = Math.max(15, durationMinutes * pixelsPerMinute);
 
       // 담당자 색상 가져오기 (있으면 사용, 없으면 기본 타입 색상)
       const appointmentColor =
@@ -2443,20 +2503,27 @@ const ScheduleGrid = ({
         appointmentTypeColors[appointment.type] ||
         "#64B5F6";
 
+      // 일정이 1칸만 차지하는지 확인 - 시작과 끝 시간의 차이가 30분 이하인 경우
+      const isSingleCell =
+        timeToMinutes(appointment.endTime) -
+          timeToMinutes(appointment.startTime) <=
+        30;
+
       return (
         <AppointmentBlock
           key={`appointment-${appointment.id}`}
           data-appointment-id={appointment.id}
           style={{
             gridColumn: colIndex,
-            gridRow: `${startTimeIndex + 1} / ${endTimeIndex + 1}`, // span 제거하고 직접 종료 셀 지정
+            gridRow: `${startTimeIndex + 1} / ${endTimeIndex + 2}`, // span으로 변경, 종료 슬롯까지 포함
             backgroundColor: appointmentColor,
             zIndex: 5,
             marginTop: `${startTimeOffset * cellHeight}px`,
-            height: `${minHeight}px`,
+            height: `${height}px`, // 실제 시간 간격에 비례하는 높이 적용
             maxHeight: `${
-              endTimeIndex * cellHeight - startTimeIndex * cellHeight - 4
-            }px`, // 여백 고려, 종료 시간 셀은 포함하지 않음
+              (endTimeIndex - startTimeIndex + 1) * cellHeight - 4
+            }px`, // 여백 고려
+            position: "relative", // absolute에서 relative로 변경하여 그리드 내에 위치하도록 수정
           }}
           onClick={(e) => handleAppointmentClick(appointment, e)}
         >
@@ -2474,10 +2541,12 @@ const ScheduleGrid = ({
 
           <div className="appointment-content">
             <div className="title">{appointment.title}</div>
-            <div className="time">
-              {formatTime(appointment.startTime)} -{" "}
-              {formatTime(appointment.endTime)}
-            </div>
+            {!isSingleCell && (
+              <div className="time">
+                {formatTime(appointment.startTime)} -{" "}
+                {formatTime(appointment.endTime)}
+              </div>
+            )}
           </div>
         </AppointmentBlock>
       );
@@ -2648,9 +2717,8 @@ const ScheduleGrid = ({
             overflow: "hidden",
           }}
         >
-          <div className="flex flex-col items-center">
+          <div className="flex items-center justify-center">
             <span>시간</span>
-            <span className="text-xs text-gray-500">{dayOfWeek}</span>
           </div>
         </HeaderCell>
       );
@@ -3343,6 +3411,10 @@ const ScheduleGrid = ({
         const finalStartTimeIndex = Math.min(startTimeIndex, endTimeIndex);
         const finalEndTimeIndex = Math.max(startTimeIndex, endTimeIndex);
 
+        // 휴가가 1칸만 차지하는지 확인 - 시작과 끝 시간의 차이가 30분 이하인 경우
+        const isSingleCell =
+          timeToMinutes(endTime) - timeToMinutes(startTime) <= 30;
+
         allVacationElements.push(
           <AppointmentBlock
             key={`vacation-${vacation.id}-${currentDateStr}`}
@@ -3364,15 +3436,19 @@ const ScheduleGrid = ({
                   {vacation.vacationType}
                 </span>
               </div>
-              <div className="time text-gray-600">
-                {startTime} - {endTime}
-              </div>
-              <div
-                className="staff-name text-sm mt-1 font-medium text-gray-700"
-                style={{ fontSize: "0.8em", marginTop: "2px" }}
-              >
-                {staffMember?.name || vacation.userName || "의료진"} 휴가중
-              </div>
+              {!isSingleCell && (
+                <div className="time text-gray-600">
+                  {startTime} - {endTime}
+                </div>
+              )}
+              {!isSingleCell && (
+                <div
+                  className="staff-name text-sm mt-1 font-medium text-gray-700"
+                  style={{ fontSize: "0.8em", marginTop: "2px" }}
+                >
+                  {staffMember?.name || vacation.userName || "의료진"} 휴가중
+                </div>
+              )}
             </div>
           </AppointmentBlock>
         );
