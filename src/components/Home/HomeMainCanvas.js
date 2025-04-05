@@ -59,11 +59,6 @@ import TaskRecordModal from "../Task/TaskRecordModal";
 import { useToast } from "../../contexts/ToastContext";
 import VacationModal from "../call/VacationModal";
 import StockRequestModal from "../Warehouse/StockRequestModal";
-import { 
-  getUnreadMessageCount, 
-  getChatRooms, 
-  subscribeToMessages 
-} from "../Chat/ChatService";
 import RequestStatusModal from "../Requests/RequestStatusModal";
 import {
   isHospitalOwner,
@@ -74,6 +69,7 @@ import ManagementModal from "../Management/ManagementModal";
 import TextEditorModal from "../TextEditorModal";
 import { filterHiddenDocuments } from "../../utils/filterUtils";
 import NaverReservationViewer from "../Reservation/NaverReservationViewer";
+import ChatSquare from "../Chat/ChatSquare";
 
 const TopZone = styled.div``;
 const BottomZone = styled.div``;
@@ -122,9 +118,6 @@ const Square = ({ title, unreadCount = 0 }) => {
         )}
         {title === "병원현황" && (
           <img src={board} alt="Logo" className="w-[36px]" />
-        )}
-        {title === "채팅" && (
-          <img src={chatting} alt="Logo" className="w-[40px]" />
         )}
         {title === "호출" && <img src={bell} alt="Logo" className="w-[40px]" />}
       </div>
@@ -526,7 +519,6 @@ export default function HomeMainCanvas() {
   const { showToast } = useToast();
   const [isMiniMode, setIsMiniMode] = useState(false);
   const [stockRequestModalOn, setStockRequestModalOn] = useState(false);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const navigate = useNavigate();
   const [requestStatusModalVisible, setRequestStatusModalVisible] =
     useState(false);
@@ -560,43 +552,6 @@ export default function HomeMainCanvas() {
       fetchTasks();
     }
   }, [userLevelData?.department, currentDate]);
-
-  useEffect(() => {
-    // 읽지 않은 메시지 수 가져오기
-    const fetchUnreadMessages = async () => {
-      try {
-        if (userLevelData?.uid) {
-          // 장치 ID 가져오기
-          const deviceId = localStorage.getItem("deviceId") || `device-${Date.now()}`;
-          if (!localStorage.getItem("deviceId")) {
-            localStorage.setItem("deviceId", deviceId);
-          }
-
-          // 사용자 정보 가져오기
-          const department = userLevelData?.department || "";
-          const role = currentUser?.role || "";
-
-          // ChatService의 getUnreadMessageCount 함수를 사용하여 안 읽은 메시지 수 가져오기
-          const count = await getUnreadMessageCount(deviceId, department, role);
-          console.log("안 읽은 메시지 수:", count);
-          setUnreadChatCount(count);
-        }
-      } catch (error) {
-        console.error("안 읽은 메시지 확인 중 오류:", error);
-      }
-    };
-
-    // 첫 로드 시 실행
-    fetchUnreadMessages();
-
-    // 주기적으로 업데이트 (30초마다)
-    const interval = setInterval(fetchUnreadMessages, 30000);
-    
-    // 컴포넌트 언마운트 시 interval 정리
-    return () => {
-      clearInterval(interval);
-    };
-  }, [userLevelData?.uid, userLevelData?.department, currentUser?.role]);
 
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
@@ -1357,9 +1312,7 @@ export default function HomeMainCanvas() {
                   </div>
                 </div>
                 <div className="w-[240px] flex flex-row justify-between">
-                  <div onClick={openChatWindow}>
-                    <Square title={"채팅"} unreadCount={unreadChatCount} />
-                  </div>
+                  <ChatSquare onClick={openChatWindow} />
                   <div
                     onClick={() =>
                       showToast("발신 번호 등록 절차 후 지원됩니다. 😊", "info")
@@ -1368,26 +1321,6 @@ export default function HomeMainCanvas() {
                     <Square title={"문자 발송"} />
                   </div>
                 </div>
-                <button
-                  onClick={openChatWindow}
-                  className="w-full flex flex-col bg-white h-full rounded-xl justify-center items-center relative"
-                >
-                  {unreadChatCount > 0 && (
-                    <div className="absolute top-2 right-2 bg-[#ff5050] text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-xs font-bold px-1.5">
-                      {unreadChatCount > 99
-                        ? "99+"
-                        : unreadChatCount > 9
-                        ? `${unreadChatCount}+`
-                        : unreadChatCount}
-                    </div>
-                  )}
-                  <img
-                    src={chatting}
-                    alt="Logo"
-                    className="w-[44px] mb-[10px]"
-                  />
-                  <span className="text-once18">채 팅</span>
-                </button>
               </div>
               <div className="w-[240px] h-[240px] flex-col flex justify-between">
                 {isHospitalOwner(userLevelData, currentUser) ? (

@@ -516,3 +516,62 @@ export const addReaction = async (messageId, userId, reactionType, roomId) => {
     return false;
   }
 };
+
+// 안 읽은 메시지 수 실시간 구독 함수
+export const subscribeToUnreadCount = async (deviceId, department, role, callback) => {
+  try {
+    console.log("안 읽은 메시지 수 실시간 구독 설정:", { deviceId, department, role });
+    
+    // 사용자의 채팅방 목록 가져오기
+    const chatRooms = await getChatRooms(deviceId, department, role);
+    
+    // 각 채팅방별 구독 관리
+    const unsubscribeFunctions = [];
+    
+    // 총 안 읽은 메시지 수
+    let totalUnreadCount = 0;
+    
+    // 각 채팅방별로 메시지 구독 설정
+    for (const room of chatRooms) {
+      const unsubscribe = subscribeToMessages(room.id, (messages) => {
+        // 현재 채팅방의 안 읽은 메시지 수 계산
+        const unreadMessages = messages.filter(msg => !msg.readBy || !msg.readBy.includes(deviceId));
+        const roomUnreadCount = unreadMessages.length;
+        
+        // 룸 ID와 안 읽은 메시지 수를 로컬 스토리지에 저장
+        try {
+          const roomsUnreadData = JSON.parse(localStorage.getItem('roomsUnreadData') || '{}');
+          roomsUnreadData[room.id] = roomUnreadCount;
+          localStorage.setItem('roomsUnreadData', JSON.stringify(roomsUnreadData));
+          
+          // 모든 채팅방의 총 안 읽은 메시지 수 계산
+          const totalCount = Object.values(roomsUnreadData).reduce((sum, count) => sum + count, 0);
+          
+          // 콜백 호출하여 상태 업데이트
+          if (totalCount !== totalUnreadCount) {
+            totalUnreadCount = totalCount;
+            callback(totalCount);
+          }
+        } catch (error) {
+          console.error("안 읽은 메시지 수 저장 중 오류:", error);
+        }
+      });
+      
+      unsubscribeFunctions.push(unsubscribe);
+    }
+    
+    // 초기 안 읽은 메시지 수 계산
+    const initialCount = await getUnreadMessageCount(deviceId, department, role);
+    callback(initialCount);
+    
+    // 구독 해제 함수 반환
+    return () => {
+      console.log("채팅 안 읽은 메시지 구독 해제");
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    };
+  } catch (error) {
+    console.error("안 읽은 메시지 구독 설정 중 오류:", error);
+    // 오류 발생 시 빈 함수 반환
+    return () => {};
+  }
+};
