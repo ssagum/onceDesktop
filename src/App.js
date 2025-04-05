@@ -137,16 +137,27 @@ const AppContent = () => {
               window.electron?.sendNotification
             );
 
-            // 알림음 재생 - 이전에 작동하던 방식으로 복원
+            // 알림음 재생 시도 (여러 방법 시도)
             try {
-              // 먼저 notification 객체 사용
+              // 1. AudioContext 방식으로 알림음 재생
               playNotificationSound(notification);
-              console.log("notification 객체로 알림음 재생 시도");
+              console.log("1차: AudioContext로 알림음 재생 시도");
               
-              // 백업으로 Base64 데이터 시도
+              // 백업 방식들 시도
               setTimeout(() => {
-                console.log("백업: Base64 데이터로 알림음 재생 시도");
+                // 2. Base64 데이터 시도
+                console.log("2차: Base64 데이터로 알림음 재생 시도");
                 playNotificationSound(NOTIFICATION_BASE64);
+                
+                // 3. 마지막으로 Electron IPC 통신 시도
+                setTimeout(() => {
+                  if (window.electron && window.electron.playNotificationSound) {
+                    console.log("3차: Electron IPC로 알림음 재생 시도");
+                    window.electron.playNotificationSound()
+                      .then(result => console.log("알림음 재생 결과:", result))
+                      .catch(err => console.error("알림음 재생 오류:", err));
+                  }
+                }, 300);
               }, 300);
             } catch (error) {
               console.error("알림음 재생 오류:", error);

@@ -10,6 +10,7 @@ module.exports = {
       "./src/assets/icons/icon.png",
       "./public/icon.ico",
       "./public/icon.png",
+      "./public/notification.mp3",
     ],
   },
   rebuildConfig: {},

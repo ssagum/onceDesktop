@@ -132,41 +132,25 @@ if (!gotTheLock) {
       iconPath = path.join(app.getAppPath(), "src/assets/icons", "icon.ico");
       console.log("개발 환경 아이콘 경로:", iconPath);
     } else {
-      // 빌드 환경 - 여러 가능한 경로 시도
-      const possiblePaths = [
-        // 기존 경로
-        path.join(
-          process.resourcesPath,
-          "app.asar",
-          "src/assets/icons",
-          "icon.ico"
-        ),
-        // public 폴더에서 시도
-        path.join(process.resourcesPath, "app.asar", "public", "icon.ico"),
-        // 최상위 리소스 디렉토리에서 시도
-        path.join(process.resourcesPath, "icon.ico"),
-        // 실행 파일 경로 기준
-        path.join(app.getPath("exe"), "..", "resources", "icon.ico"),
-      ];
+      // 빌드 환경 - 리소스 디렉토리에서 아이콘 찾기
+      iconPath = path.join(process.resourcesPath, "icon.ico");
+      
+      // 아이콘이 없으면 대체 경로 시도
+      if (!fs.existsSync(iconPath)) {
+        const possiblePaths = [
+          // 리소스 경로
+          path.join(process.resourcesPath, "icon.ico"),
+          // 기존 경로들
+          path.join(process.resourcesPath, "app.asar", "src/assets/icons", "icon.ico"),
+          path.join(process.resourcesPath, "app.asar", "public", "icon.ico"),
+          path.join(app.getPath("exe"), "..", "resources", "icon.ico"),
+        ];
 
-      // 존재하는 첫 번째 경로 사용
-      const fs = require("fs");
-      iconPath = possiblePaths.find((p) => {
-        const exists = fs.existsSync(p);
-        console.log(`경로 확인: ${p} - ${exists ? "존재함" : "존재하지 않음"}`);
-        return exists;
-      });
-
-      // 모든 경로가 실패하면 기본 경로 사용
-      if (!iconPath) {
-        console.warn("어떤 아이콘 경로도 존재하지 않음, 기본 경로 사용");
-        iconPath = path.join(
-          process.resourcesPath,
-          "app.asar",
-          "src/assets/icons",
-          "icon.ico"
-        );
+        // 존재하는 첫 번째 경로 사용
+        iconPath = possiblePaths.find(p => fs.existsSync(p)) || iconPath;
       }
+      
+      console.log("빌드 환경 사용 아이콘 경로:", iconPath);
     }
 
     try {
@@ -262,7 +246,7 @@ if (!gotTheLock) {
           body: message,
           icon: isDevelopment
             ? path.join(app.getAppPath(), "src/assets/icons", "icon.png")
-            : path.join(process.resourcesPath, "app.asar", "src/assets/icons", "icon.png"),
+            : path.join(process.resourcesPath, "icon.png"),
           silent: audioSettings.muted // 음소거 설정이면 시스템 알림음 끄기
         };
 
@@ -508,7 +492,7 @@ if (!gotTheLock) {
     );
 
     // 항상 개발 도구 열기
-    chatWindow.webContents.openDevTools();
+    // chatWindow.webContents.openDevTools();
 
     // 창이 닫힐 때 이벤트 처리
     chatWindow.on("closed", () => {
@@ -632,6 +616,16 @@ if (!gotTheLock) {
       });
     } catch (error) {
       console.error("앱 아이콘 설정 실패:", error);
+    }
+  } else {
+    // 프로덕션 환경에서도 아이콘 설정
+    try {
+      app.whenReady().then(() => {
+        const iconPath = path.join(process.resourcesPath, "icon.ico");
+        app.dock && app.dock.setIcon(iconPath); // macOS용
+      });
+    } catch (error) {
+      console.error("프로덕션 앱 아이콘 설정 실패:", error);
     }
   }
 }

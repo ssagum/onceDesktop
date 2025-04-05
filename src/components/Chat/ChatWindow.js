@@ -850,9 +850,6 @@ const formatDate = (date) => {
   return date.toLocaleDateString("ko-KR", options);
 };
 
-// 내가 보낸 메시지 판별 로직 (컴포넌트 내부에 정의)
-
-
 // 더미 메시지 데이터
 const DUMMY_MESSAGES = {
   "global-chat": [
@@ -1012,7 +1009,7 @@ const ChatWindow = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
-  
+
   // 멤버 관련 상태
   const [showMembers, setShowMembers] = useState(false);
   const [members, setMembers] = useState([]);
@@ -1286,42 +1283,103 @@ const ChatWindow = () => {
     // 채팅방 멤버 가져오기
     try {
       const roomMembers = await getChatRoomMembers(room.id);
-      setMembers(roomMembers);
+      
+      // 대표원장 확인
+      const isDirector = userLevelData?.role === "대표원장";
+      
+      // 대표원장이고 멤버에 없는 경우 현재 사용자를 멤버 목록에 추가
+      let updatedMembers = [...roomMembers];
+      if (isDirector && currentUser) {
+        // 이미 멤버 목록에 있는지 확인
+        const directorExists = roomMembers.some(member => 
+          member.id === currentUser.uid || member.name === currentUser.name
+        );
+        
+        // 멤버 목록에 없으면 추가
+        if (!directorExists) {
+          updatedMembers.push({
+            id: currentUser.uid || `director-${Date.now()}`,
+            name: currentUser.name || "대표원장",
+            role: "대표원장",
+            department: userLevelData?.department || ""
+          });
+          console.log("대표원장을 멤버 목록에 추가했습니다.");
+        }
+      }
+      
+      setMembers(updatedMembers);
 
       // 멘션 가능한 사용자 목록
       const mentionable = await getMentionableUsers(room.id);
       setMentionableUsers(mentionable);
 
       // 채팅방 멤버를 발신자 선택 목록으로도 사용
-      setDepartmentUsers(roomMembers);
+      setDepartmentUsers(updatedMembers);
 
-      // 개선된 발신자 선택 로직: 로그인된 사용자와 이름이 일치하는 경우 자동 선택
-      if (userLevelData?.uid) {
+      // 개선된 발신자 선택 로직: 먼저 currentUser.name과 일치하는 사용자를 찾음
+      if (currentUser?.name) {
+        // 현재 로그인한 사용자 이름으로 먼저 찾기
+        let senderUser = updatedMembers.find(
+          (member) => member.name === currentUser.name
+        );
+        
+        if (senderUser) {
+          console.log("현재 로그인 사용자로 발신자 설정:", senderUser.name);
+          setSelectedSender(senderUser);
+        } else if (userLevelData?.uid) {
+          // uid로 찾기
+          let currentUserByUid = updatedMembers.find(
+            (member) => member.id === userLevelData.uid
+          );
+          
+          // uid로 못 찾았으면 이름으로 찾기
+          if (!currentUserByUid && userLevelData.name) {
+            currentUserByUid = updatedMembers.find(
+              (member) => member.name === userLevelData.name
+            );
+          }
+          
+          // 사용자 정보가 있으면 발신자로 설정
+          if (currentUserByUid) {
+            console.log("발신자 자동 설정:", currentUserByUid.name);
+            setSelectedSender(currentUserByUid);
+          } else if (updatedMembers.length > 0) {
+            // 매칭되는 사용자가 없고, 멤버가 있으면 첫 번째 멤버로 설정
+            console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", updatedMembers[0].name);
+            setSelectedSender(updatedMembers[0]);
+          }
+        } else if (updatedMembers.length > 0) {
+          // 로그인하지 않은 경우 첫 번째 멤버로 설정
+          console.log("로그인하지 않아 첫 번째 멤버로 설정:", updatedMembers[0].name);
+          setSelectedSender(updatedMembers[0]);
+        }
+      } else if (userLevelData?.uid) {
+        // currentUser가 없는 경우 기존 로직 실행
         // uid로 찾기
-        let currentUser = roomMembers.find(
+        let currentUserByUid = updatedMembers.find(
           (member) => member.id === userLevelData.uid
         );
         
         // uid로 못 찾았으면 이름으로 찾기
-        if (!currentUser && userLevelData.name) {
-          currentUser = roomMembers.find(
+        if (!currentUserByUid && userLevelData.name) {
+          currentUserByUid = updatedMembers.find(
             (member) => member.name === userLevelData.name
           );
         }
         
         // 사용자 정보가 있으면 발신자로 설정
-        if (currentUser) {
-          console.log("발신자 자동 설정:", currentUser.name);
-          setSelectedSender(currentUser);
-        } else if (roomMembers.length > 0) {
+        if (currentUserByUid) {
+          console.log("발신자 자동 설정:", currentUserByUid.name);
+          setSelectedSender(currentUserByUid);
+        } else if (updatedMembers.length > 0) {
           // 매칭되는 사용자가 없고, 멤버가 있으면 첫 번째 멤버로 설정
-          console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", roomMembers[0].name);
-          setSelectedSender(roomMembers[0]);
+          console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", updatedMembers[0].name);
+          setSelectedSender(updatedMembers[0]);
         }
-      } else if (roomMembers.length > 0) {
+      } else if (updatedMembers.length > 0) {
         // 로그인하지 않은 경우 첫 번째 멤버로 설정
-        console.log("로그인하지 않아 첫 번째 멤버로 설정:", roomMembers[0].name);
-        setSelectedSender(roomMembers[0]);
+        console.log("로그인하지 않아 첫 번째 멤버로 설정:", updatedMembers[0].name);
+        setSelectedSender(updatedMembers[0]);
       }
     } catch (error) {
       console.error("채팅방 멤버 가져오기 오류:", error);
@@ -1976,6 +2034,23 @@ const ChatWindow = () => {
     // 클릭 위치에 가장 가까운 텍스트 위치 계산
     // (정확한 구현은 복잡하므로 간단히 처리)
     // textarea의 내부 요소이므로 입력 필드 클릭만으로도 적절한 위치에 커서가 위치함
+
+    
+  };
+
+  const isMyMessage = (message) => {
+    if (!message) return false;
+    
+    // 로그인한 상태면 uid로 비교
+    if (message.senderName && currentUser?.name) {
+      return message.senderName === currentUser.name;
+    }
+  
+    console.log('채팅체크', message.senderName, currentUser?.name);
+    
+    // 장치 ID로 비교 (비로그인 상태)
+    const deviceId = localStorage.getItem("deviceId");
+    return message.deviceId === deviceId;
   };
 
   return (

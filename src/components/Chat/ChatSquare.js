@@ -177,11 +177,7 @@ const ChatSquare = ({ onClick }) => {
 
   return (
     <SquareContainer onClick={onClick}>
-      {/* 로딩 인디케이터 */}
-      {isLoading && <LoadingIndicator />}
-      
-      {/* 메시지 존재 여부 표시 (로딩 완료 후만) */}
-      {!isLoading && <MessageStatusBadge hasMessages={hasMessages} title={hasMessages ? "채팅 메시지가 있습니다" : "채팅 메시지가 없습니다"} />}
+
       
       {/* 안 읽은 메시지 수 배지 */}
       {unreadCount > 0 && (
