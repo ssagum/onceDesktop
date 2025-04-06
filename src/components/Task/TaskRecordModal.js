@@ -376,6 +376,19 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
     }
   };
 
+  // 이름에서 언더스코어 제거하는 함수
+  const formatActorName = (name) => {
+    if (!name || typeof name !== "string") return name;
+
+    // 언더스코어가 있으면 앞부분만 반환
+    const underscoreIndex = name.indexOf("_");
+    if (underscoreIndex > 0) {
+      return name.substring(0, underscoreIndex);
+    }
+
+    return name;
+  };
+
   // 특정 날짜의 완료 상태 확인 및, 완료자 정보 (actors) 반환
   const getCompletionStatus = (dateStr) => {
     if (!taskHistory || taskHistory.length === 0) return { status: "미완료" };
@@ -427,14 +440,14 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
       if (typeof actor === "object" && actor !== null) {
         return {
           id: actor.id || actor.userId || actor,
-          name: actor.name || actor.userName || actor,
+          name: formatActorName(actor.name || actor.userName || actor),
           ...actor,
         };
       }
       // 문자열인 경우 객체로 변환
       return {
         id: actor,
-        name: actor,
+        name: formatActorName(actor),
       };
     });
 

@@ -88,21 +88,13 @@ function NoticeMainCanvas({ onCreatePost, onEditPost }) {
   // 게시글 삭제 함수 (소프트 삭제 방식으로 변경)
   const handleDeleteNotice = async (noticeId) => {
     try {
-      console.log("[Delete Handler] 게시글 숨김 처리 시작:", noticeId); // 디버깅용 로그
       const noticeRef = doc(db, "notices", noticeId);
-
-      // 문서가 존재하는지 먼저 확인 (디버깅)
-      console.log("[Delete Handler] 문서 참조 생성:", noticeRef.path);
 
       // 실제 삭제 대신 isHidden 필드를 true로 설정
       await updateDoc(noticeRef, {
         isHidden: true,
         updatedAt: Date.now(),
       });
-
-      console.log(
-        "[Delete Handler] 게시글 숨김 처리 완료 - isHidden=true로 설정됨"
-      ); // 디버깅용 로그
 
       // 댓글은 유지 (필요시 댓글도 숨김 처리 가능)
 

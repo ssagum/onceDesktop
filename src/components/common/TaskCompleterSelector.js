@@ -16,6 +16,19 @@ const CompletedIndicator = styled.div`
   padding: 0 10px;
 `;
 
+// 이름에서 언더스코어 제거하는 함수
+const formatActorName = (name) => {
+  if (!name || typeof name !== "string") return name;
+
+  // 언더스코어가 있으면 앞부분만 반환
+  const underscoreIndex = name.indexOf("_");
+  if (underscoreIndex > 0) {
+    return name.substring(0, underscoreIndex);
+  }
+
+  return name;
+};
+
 export default function TaskCompleterSelector({
   selectedPeople = [],
   onPeopleChange,
@@ -47,9 +60,10 @@ export default function TaskCompleterSelector({
 
           if (docSnap.exists()) {
             const userData = docSnap.data();
+            const name = formatActorName(userData.name || "이름 없음");
             data.push({
               id: staffId,
-              name: userData.name || "이름 없음",
+              name: name,
               department: userData.department || "",
               role: userData.role || "",
             });

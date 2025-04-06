@@ -141,6 +141,13 @@ const GridContainer = styled.div`
   width: 100%;
   display: flex;
   flex-direction: column;
+
+  /* 스크롤바 숨김 스타일 적용 */
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 `;
 
 // 모드 토글 스위치 컴포넌트 - 스타일드 컴포넌트로 정의
@@ -1305,7 +1312,7 @@ const Schedule = () => {
       <div className="w-[250px] h-full flex flex-col">
         <SideBar />
       </div>
-      <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground px-[20px] h-screen overflow-hidden">
+      <MainZone className="w-full flex flex-col justify-evenly items-center bg-onceBackground p-[20px] h-screen overflow-hidden">
         <section className="flex flex-col items-center w-full justify-between h-full bg-white rounded-2xl px-[40px] py-[30px]">
           <GridContainer>
             <div className="w-full flex justify-between mb-4">
