@@ -7,6 +7,7 @@ import NameCoin from "./NameCoin";
 import { db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useToast } from "../../contexts/ToastContext";
+import { format, isPast, isToday } from "date-fns";
 
 const CompletedIndicator = styled.div`
   display: flex;
@@ -20,6 +21,7 @@ export default function TaskCompleterSelector({
   onPeopleChange,
   isCurrentDate = false,
   isCompleted = false,
+  taskDate,
 }) {
   const [staffSelectionModalOpen, setStaffSelectionModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -87,6 +89,27 @@ export default function TaskCompleterSelector({
     setConfirmModalOpen(false);
   };
 
+  // 날짜 상태에 따른 텍스트 결정 함수
+  const getStatusText = () => {
+    if (selectedPeople.length > 0) return ""; // 완료자가 있으면 텍스트 없음
+
+    // 날짜가 없으면 기본값
+    if (!taskDate) return "미완료";
+
+    const taskDateObj =
+      typeof taskDate === "string"
+        ? new Date(taskDate.replace(/\//g, "-"))
+        : taskDate;
+
+    // 오늘이거나 과거인 경우
+    if (isToday(taskDateObj) || isPast(taskDateObj)) {
+      return "미완료";
+    } else {
+      // 미래인 경우
+      return "예정";
+    }
+  };
+
   // 완료자 클릭 핸들러
   const handleSelectorClick = () => {
     if (!isCurrentDate) {
@@ -113,29 +136,29 @@ export default function TaskCompleterSelector({
         onClick={handleSelectorClick}
       >
         {selectedPeople.length === 0 ? (
-          <span className="text-onceGray">미완료</span>
+          <span className="text-onceGray">{getStatusText()}</span>
         ) : (
           <div className="flex items-center gap-2">
             {staffData.length > 0 ? (
               staffData.length <= 2 ? (
                 staffData.map((staff) => (
-                  <NameCoin 
-                    key={staff.id} 
+                  <NameCoin
+                    key={staff.id}
                     item={{
                       id: staff.id,
                       name: staff.name, // 강제로 이름만 사용
-                      department: staff.department
-                    }} 
+                      department: staff.department,
+                    }}
                   />
                 ))
               ) : (
                 <>
-                  <NameCoin 
+                  <NameCoin
                     item={{
                       id: staffData[0].id,
                       name: staffData[0].name, // 강제로 이름만 사용
-                      department: staffData[0].department
-                    }} 
+                      department: staffData[0].department,
+                    }}
                   />
                   <NameCoin extraCount={staffData.length - 1} />
                 </>

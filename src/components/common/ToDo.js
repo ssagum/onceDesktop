@@ -156,7 +156,7 @@ function SingleTodoItem({
 
           // 이력 가져오기
           const history = await getTaskHistory(id, dateToQuery);
-          
+
           // history가 없거나 빈 배열인 경우
           if (!history || history.length === 0) {
             setTaskHistory([]);
@@ -457,6 +457,7 @@ function SingleTodoItem({
                 }}
                 isCurrentDate={isToday()}
                 isCompleted={isCompletedForCurrentDate()}
+                taskDate={currentDate}
               />
             )}
           </div>
