@@ -239,26 +239,12 @@ export default function CallModal({ isVisible, setIsVisible }) {
     // 상태 업데이트
     setPresets(updatedPresets);
 
-    // 로그 출력 (실제 구현에서는 제거할 수 있음)
-    console.log(
-      `프리셋 ${currentPresetIndex}를 다음과 같이 설정했습니다:
-      수신: ${editPresetReceiver}
-      메시지: ${editPresetMessage || `${editPresetReceiver} 호출`}`
-    );
-
     showToast(`프리셋이 저장되었습니다.`, "success");
     closePresetModal();
   };
 
   // 호출 메시지 전송 함수
   const sendCallMessage = async () => {
-    console.log("호출 시작:", {
-      receiverId,
-      senderId: userLevelData.location,
-      message: message || `${receiverId} 호출`,
-      type: "호출",
-    });
-
     if (!receiverId) {
       console.log("receiverId가 없음:", receiverId);
       showToast("수신 부서를 선택해주세요.", "error");
@@ -283,10 +269,7 @@ export default function CallModal({ isVisible, setIsVisible }) {
         [userLevelData.location]: true,
       };
 
-      console.log("저장할 데이터:", callData);
-
       const docRef = await addDoc(collection(db, "calls"), callData);
-      console.log("호출 메시지 저장 성공:", docRef.id);
 
       setIsVisible(false);
       setMessage("");

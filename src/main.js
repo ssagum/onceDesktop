@@ -130,38 +130,37 @@ if (!gotTheLock) {
     if (isDevelopment) {
       // 개발 환경
       iconPath = path.join(app.getAppPath(), "src/assets/icons", "icon.ico");
-      console.log("개발 환경 아이콘 경로:", iconPath);
     } else {
       // 빌드 환경 - 리소스 디렉토리에서 아이콘 찾기
       iconPath = path.join(process.resourcesPath, "icon.ico");
-      
+
       // 아이콘이 없으면 대체 경로 시도
       if (!fs.existsSync(iconPath)) {
         const possiblePaths = [
           // 리소스 경로
           path.join(process.resourcesPath, "icon.ico"),
           // 기존 경로들
-          path.join(process.resourcesPath, "app.asar", "src/assets/icons", "icon.ico"),
+          path.join(
+            process.resourcesPath,
+            "app.asar",
+            "src/assets/icons",
+            "icon.ico"
+          ),
           path.join(process.resourcesPath, "app.asar", "public", "icon.ico"),
           path.join(app.getPath("exe"), "..", "resources", "icon.ico"),
         ];
 
         // 존재하는 첫 번째 경로 사용
-        iconPath = possiblePaths.find(p => fs.existsSync(p)) || iconPath;
+        iconPath = possiblePaths.find((p) => fs.existsSync(p)) || iconPath;
       }
-      
-      console.log("빌드 환경 사용 아이콘 경로:", iconPath);
     }
 
     try {
-      console.log("최종 트레이 아이콘 경로:", iconPath);
       const icon = nativeImage.createFromPath(iconPath);
 
       if (icon.isEmpty()) {
-        console.error("생성된 nativeImage가 비어 있습니다!");
         // 대체 아이콘 시도 (PNG 파일)
         const pngPath = iconPath.replace(".ico", ".png");
-        console.log("PNG 아이콘 시도:", pngPath);
         if (require("fs").existsSync(pngPath)) {
           const pngIcon = nativeImage.createFromPath(pngPath);
           if (!pngIcon.isEmpty()) {
@@ -221,13 +220,11 @@ if (!gotTheLock) {
   // 오디오 설정 저장 (기본값)
   let audioSettings = {
     volume: 0.7,
-    muted: false
+    muted: false,
   };
 
   // Firebase 알림 처리를 위한 IPC 통신
   ipcMain.on("show-notification", (event, message) => {
-    console.log("알림 요청 받음:", message);
-
     // 중복 실행 방지 (500ms 이내 재실행 방지)
     const now = Date.now();
     if (now - lastNotificationTime < 500) {
@@ -247,23 +244,22 @@ if (!gotTheLock) {
           icon: isDevelopment
             ? path.join(app.getAppPath(), "src/assets/icons", "icon.png")
             : path.join(process.resourcesPath, "icon.png"),
-          silent: audioSettings.muted // 음소거 설정이면 시스템 알림음 끄기
+          silent: audioSettings.muted, // 음소거 설정이면 시스템 알림음 끄기
         };
 
         const notification = new Notification(notificationOptions);
-        
+
         // 클릭 시 메인 윈도우 표시
-        notification.on('click', () => {
+        notification.on("click", () => {
           if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
             mainWindow.focus();
           }
         });
-        
+
         notification.show();
-        console.log("토스트 알림 표시됨");
-        
+
         // 알림음 재생 여부를 메인 창에 알림 (음소거 상태에 따라)
         event.reply("notification-displayed", { muted: audioSettings.muted });
       } else {
@@ -274,7 +270,6 @@ if (!gotTheLock) {
           message: message,
           buttons: ["확인"],
         });
-        console.log("대체 알림 표시됨 (dialog 사용)");
         event.reply("notification-displayed", { muted: audioSettings.muted });
       }
     } catch (error) {
@@ -292,11 +287,10 @@ if (!gotTheLock) {
 
   // 오디오 볼륨 설정 IPC 핸들러
   ipcMain.on("set-audio-volume", (event, volume) => {
-    console.log("오디오 볼륨 설정:", volume);
     audioSettings.volume = volume;
-    
+
     // 모든 창에 볼륨 변경 알림
-    BrowserWindow.getAllWindows().forEach(window => {
+    BrowserWindow.getAllWindows().forEach((window) => {
       if (!window.isDestroyed()) {
         window.webContents.send("volume-changed", volume);
       }
@@ -305,11 +299,10 @@ if (!gotTheLock) {
 
   // 오디오 음소거 설정 IPC 핸들러
   ipcMain.on("set-audio-muted", (event, muted) => {
-    console.log("오디오 음소거 설정:", muted);
     audioSettings.muted = muted;
-    
+
     // 모든 창에 음소거 상태 변경 알림
-    BrowserWindow.getAllWindows().forEach(window => {
+    BrowserWindow.getAllWindows().forEach((window) => {
       if (!window.isDestroyed()) {
         window.webContents.send("mute-changed", muted);
       }
@@ -471,7 +464,6 @@ if (!gotTheLock) {
       backgroundColor: "#f5f6f8",
     });
 
-    console.log("채팅 창 URL:", CHAT_WINDOW_WEBPACK_ENTRY);
     chatWindow.loadURL(CHAT_WINDOW_WEBPACK_ENTRY);
 
     // CSP 설정 - 개발 환경과 프로덕션 환경에 따라 다른 정책 적용
@@ -496,13 +488,11 @@ if (!gotTheLock) {
 
     // 창이 닫힐 때 이벤트 처리
     chatWindow.on("closed", () => {
-      console.log("채팅 창이 닫혔습니다.");
       chatWindow = null;
     });
 
     // 콘솔 로그 출력
     chatWindow.webContents.on("did-finish-load", () => {
-      console.log("채팅 창이 로드되었습니다.");
       // 로딩 완료 후 창 크기 및 위치 재조정
       chatWindow.setSize(450, 700);
       chatWindow.center();
@@ -520,7 +510,6 @@ if (!gotTheLock) {
 
   // 테스트용 IPC 통신 추가
   ipcMain.on("test-ipc", (event, message) => {
-    console.log("테스트 IPC 메시지 수신:", message);
     event.reply("test-ipc-reply", "메인 프로세스에서 응답: " + message);
 
     // 알림 테스트
@@ -535,7 +524,6 @@ if (!gotTheLock) {
   // IPC 통신 설정
   ipcMain.on("open-timer-window", () => {
     try {
-      console.log("타이머 창 열기 요청 받음");
       createTimerWindow();
     } catch (error) {
       console.error("타이머 창 생성 중 오류 발생:", error);
@@ -544,7 +532,6 @@ if (!gotTheLock) {
 
   ipcMain.on("open-chat-window", () => {
     try {
-      console.log("채팅 창 열기 요청 받음");
       createChatWindow();
     } catch (error) {
       console.error("채팅 창 생성 중 오류 발생:", error);
@@ -554,15 +541,16 @@ if (!gotTheLock) {
   // 알림음 재생 요청 처리
   ipcMain.on("play-notification-sound", (event) => {
     try {
-      console.log("메인 프로세스에서 알림음 재생 요청 받음");
-      
       // 알림음 재생 성공 시 응답
       event.reply("notification-sound-played", { success: true });
-      
+
       // 알림음은 렌더러에서 처리하므로 여기서는 성공 응답만 보냄
     } catch (error) {
       console.error("알림음 재생 요청 처리 오류:", error);
-      event.reply("notification-sound-played", { success: false, error: error.message });
+      event.reply("notification-sound-played", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -585,7 +573,7 @@ if (!gotTheLock) {
     app.setLoginItemSettings({
       openAtLogin: true,
       // 시스템 시작 시 창 표시
-      openAsHidden: false
+      openAsHidden: false,
     });
   });
 

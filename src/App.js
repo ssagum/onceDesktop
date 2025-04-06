@@ -35,7 +35,6 @@ import { AudioProvider, useAudio } from "./contexts/AudioContext";
 
 // 앱 시작 시간 기록 (처음 실행 시 이전 메시지 알림 방지용)
 const APP_START_TIME = Date.now();
-console.log("앱 시작 시간:", new Date(APP_START_TIME).toLocaleTimeString());
 
 // 처리된 알림 메시지 ID를 추적하기 위한 Set
 const processedNotifications = new Set();
@@ -49,20 +48,18 @@ const AppContent = () => {
     // HTML Media Element 기본 볼륨 정책 설정
     // 이는 새로 생성되는 모든 Audio 객체의 기본 볼륨에 영향을 줍니다
     try {
-      const mediaElements = document.querySelectorAll('audio, video');
-      mediaElements.forEach(element => {
+      const mediaElements = document.querySelectorAll("audio, video");
+      mediaElements.forEach((element) => {
         // 볼륨 속성을 직접 조작
         element.defaultMuted = false;
-        
+
         // 모든 오디오 요소에 볼륨 변경 이벤트 리스너 추가
-        element.addEventListener('volumechange', (e) => {
-          console.log('미디어 요소 볼륨 변경됨:', e.target.volume);
+        element.addEventListener("volumechange", (e) => {
+          console.log("미디어 요소 볼륨 변경됨:", e.target.volume);
         });
       });
-      
-      console.log('미디어 요소 기본 설정 적용 완료');
     } catch (error) {
-      console.error('미디어 요소 설정 오류:', error);
+      console.error("미디어 요소 설정 오류:", error);
     }
   }, []);
 
@@ -72,13 +69,6 @@ const AppContent = () => {
       (!userLevelData.location && !userLevelData.department)
     )
       return;
-
-    console.log(
-      "호출 리스너 설정됨, 위치:",
-      userLevelData.location,
-      "부서:",
-      userLevelData.department
-    );
 
     // 현재 사용자의 location이나 department를 대상으로 하는 호출 필터링
     const q = query(
@@ -92,8 +82,6 @@ const AppContent = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log("호출 데이터 변경 감지:", snapshot.docChanges().length);
-
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
@@ -108,8 +96,6 @@ const AppContent = () => {
           // 처리된 알림으로 표시
           processedNotifications.add(docId);
 
-          console.log("새로운 호출 데이터:", data);
-
           // 메시지 시간 확인
           const currentTime = Date.now();
           const messageTime = data.createdAt;
@@ -117,45 +103,30 @@ const AppContent = () => {
             (messageTime - APP_START_TIME) / 1000
           );
 
-          console.log("현재 시간:", new Date(currentTime).toLocaleTimeString());
-          console.log(
-            "메시지 시간:",
-            new Date(messageTime).toLocaleTimeString()
-          );
-          console.log("앱 시작 후 경과 시간(초):", timeSinceAppStart);
-
           // 앱 시작 이후에 생성된 메시지만 알림 표시 (음수면 앱 시작 전 메시지)
           if (messageTime > APP_START_TIME) {
-            console.log(
-              "앱 시작 이후 메시지 - 알림음 재생 및 토스트 알림 표시"
-            );
-
-            // 디버깅: electron API 확인
-            console.log("window.electron 확인:", window.electron);
-            console.log(
-              "sendNotification 함수 확인:",
-              window.electron?.sendNotification
-            );
-
             // 알림음 재생 시도 (여러 방법 시도)
             try {
               // 1. AudioContext 방식으로 알림음 재생
               playNotificationSound(notification);
-              console.log("1차: AudioContext로 알림음 재생 시도");
-              
+
               // 백업 방식들 시도
               setTimeout(() => {
                 // 2. Base64 데이터 시도
-                console.log("2차: Base64 데이터로 알림음 재생 시도");
                 playNotificationSound(NOTIFICATION_BASE64);
-                
+
                 // 3. 마지막으로 Electron IPC 통신 시도
                 setTimeout(() => {
-                  if (window.electron && window.electron.playNotificationSound) {
-                    console.log("3차: Electron IPC로 알림음 재생 시도");
-                    window.electron.playNotificationSound()
-                      .then(result => console.log("알림음 재생 결과:", result))
-                      .catch(err => console.error("알림음 재생 오류:", err));
+                  if (
+                    window.electron &&
+                    window.electron.playNotificationSound
+                  ) {
+                    window.electron
+                      .playNotificationSound()
+                      .then((result) =>
+                        console.log("알림음 재생 결과:", result)
+                      )
+                      .catch((err) => console.error("알림음 재생 오류:", err));
                   }
                 }, 300);
               }, 300);
@@ -187,10 +158,8 @@ const AppContent = () => {
               }
 
               const notificationMsg = `${typePrefix}${data.senderId}: ${data.message}`;
-              console.log("알림 메시지:", notificationMsg);
               try {
                 window.electron.sendNotification(notificationMsg);
-                console.log("sendNotification 함수 호출 완료");
               } catch (error) {
                 console.error("sendNotification 호출 실패:", error);
               }
@@ -222,35 +191,31 @@ const AppContent = () => {
 
   // 알림음 테스트 함수 (개발 환경에서만 사용)
   const testNotificationSound = () => {
-    console.log("알림음 테스트 시작");
-    
     // 직접 재생 방식으로 변경
     try {
       // 다양한 방법 시도
-      console.log("1. notification 객체로 재생 시도");
       playNotificationSound(notification);
-      
+
       // 300ms 후에 백업 방식 시도
       setTimeout(() => {
-        console.log("2. Base64 데이터로 재생 시도");
         playNotificationSound(NOTIFICATION_BASE64);
       }, 300);
     } catch (error) {
       console.error("알림음 테스트 오류:", error);
     }
   };
-  
+
   // 개발 환경에서 키보드 단축키를 통한 알림음 테스트
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Ctrl+Shift+T를 누르면 알림음 테스트
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+      if (e.ctrlKey && e.shiftKey && e.key === "T") {
         testNotificationSound();
       }
     };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [playNotificationSound]);
 
   return (

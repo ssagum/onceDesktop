@@ -2,7 +2,12 @@ import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { chatting } from "../../assets";
 import { useUserLevel } from "../../utils/UserLevelContext";
-import { getChatRooms, getUnreadMessageCount, subscribeToUnreadCount, getChatMessages } from "./ChatService";
+import {
+  getChatRooms,
+  getUnreadMessageCount,
+  subscribeToUnreadCount,
+  getChatMessages,
+} from "./ChatService";
 
 // 로딩 인디케이터를 위한 스타일 컴포넌트 추가
 const LoadingIndicator = styled.div`
@@ -14,7 +19,7 @@ const LoadingIndicator = styled.div`
   border-radius: 50%;
   background-color: #304ffd;
   animation: pulse 1.5s infinite;
-  
+
   @keyframes pulse {
     0% {
       transform: scale(0.8);
@@ -36,7 +41,7 @@ const MessageStatusBadge = styled.div`
   position: absolute;
   top: 8px;
   left: 8px;
-  background-color: ${props => props.hasMessages ? '#4CAF50' : '#BDBDBD'};
+  background-color: ${(props) => (props.hasMessages ? "#4CAF50" : "#BDBDBD")};
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -98,9 +103,10 @@ const ChatSquare = ({ onClick }) => {
     const initializeChat = async () => {
       try {
         setIsLoading(true);
-        
+
         // 장치 ID 가져오기 (또는 생성)
-        const deviceId = localStorage.getItem("deviceId") || `device-${Date.now()}`;
+        const deviceId =
+          localStorage.getItem("deviceId") || `device-${Date.now()}`;
         if (!localStorage.getItem("deviceId")) {
           localStorage.setItem("deviceId", deviceId);
         }
@@ -111,10 +117,10 @@ const ChatSquare = ({ onClick }) => {
 
         // 채팅방 목록 가져오기
         const rooms = await getChatRooms(deviceId, department, role);
-        
+
         // 최소 한 개의 채팅방이라도 메시지가 있는지 확인
         let foundMessages = false;
-        
+
         for (const room of rooms) {
           const messages = await getChatMessages(room.id);
           if (messages.length > 0) {
@@ -122,17 +128,21 @@ const ChatSquare = ({ onClick }) => {
             break;
           }
         }
-        
+
         setHasMessages(foundMessages);
-        
+
         // 초기 안 읽은 메시지 수 가져오기
-        const initialCount = await getUnreadMessageCount(deviceId, department, role);
+        const initialCount = await getUnreadMessageCount(
+          deviceId,
+          department,
+          role
+        );
         setUnreadCount(initialCount);
 
         // 실시간 구독 설정
         const unsubscribeFunc = await subscribeToUnreadCount(
-          deviceId, 
-          department, 
+          deviceId,
+          department,
           role,
           (count) => {
             console.log("실시간 안 읽은 메시지 수 업데이트:", count);
@@ -145,7 +155,7 @@ const ChatSquare = ({ onClick }) => {
 
         // 구독 함수 저장
         setUnsubscribe(() => unsubscribeFunc);
-        
+
         setIsLoading(false);
       } catch (error) {
         console.error("채팅 초기화 중 오류 발생:", error);
@@ -169,23 +179,18 @@ const ChatSquare = ({ onClick }) => {
   }, [userLevelData?.uid, userLevelData?.department, currentUser?.role]);
 
   // 포맷팅된 안 읽은 메시지 수 표시
-  const formattedUnreadCount = unreadCount > 99 
-    ? "99+" 
-    : unreadCount > 9 
-      ? `${unreadCount}+` 
+  const formattedUnreadCount =
+    unreadCount > 99
+      ? "99+"
+      : unreadCount > 9
+      ? `${unreadCount}+`
       : unreadCount;
 
   return (
     <SquareContainer onClick={onClick}>
-
-      
       {/* 안 읽은 메시지 수 배지 */}
-      {unreadCount > 0 && (
-        <UnreadBadge>
-          {formattedUnreadCount}
-        </UnreadBadge>
-      )}
-      
+      {unreadCount > 0 && <UnreadBadge>{formattedUnreadCount}</UnreadBadge>}
+
       <IconContainer>
         <img src={chatting} alt="채팅" className="w-[40px]" />
       </IconContainer>
@@ -194,4 +199,4 @@ const ChatSquare = ({ onClick }) => {
   );
 };
 
-export default ChatSquare; 
+export default ChatSquare;

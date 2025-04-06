@@ -3270,7 +3270,6 @@ const RequestStatusModal = ({
         ...doc.data(),
         timestamp: doc.data().createdAt || new Date().getTime(),
       }));
-      console.log("요청 데이터 불러옴:", requests.length, "건");
       setGeneralRequests(requests);
     });
 
@@ -3413,13 +3412,6 @@ const RequestStatusModal = ({
         });
       }
 
-      // Firestore에 데이터 저장
-      console.log("생성 중인 테스트 데이터:", {
-        요청: testRequests.length,
-        휴가: testVacations.length,
-        비품: testStockRequests.length,
-      });
-
       // 요청 데이터 저장
       for (const request of testRequests) {
         await addDoc(collection(db, "requests"), request);
@@ -3476,7 +3468,6 @@ const RequestStatusModal = ({
   // RequestStatusModal 컴포넌트 시작 부분
   useEffect(() => {
     if (isVisible) {
-      console.log("모달이 열렸을 때 데이터 로딩 시작");
       loadRealData();
     }
   }, [isVisible]);
@@ -3618,8 +3609,10 @@ const RequestStatusModal = ({
                 </span>
               ) : (
                 <span>
-                  신청 상태에 따라 자동으로 분류됩니다. 
-                  <br />반려된 사안과 승인된 사안(비품의 경우 주문완료)은 일주일 후 목록에서 사라집니다.
+                  신청 상태에 따라 자동으로 분류됩니다.
+                  <br />
+                  반려된 사안과 승인된 사안(비품의 경우 주문완료)은 일주일 후
+                  목록에서 사라집니다.
                 </span>
               )}
             </div>
@@ -3671,7 +3664,7 @@ const RequestStatusModal = ({
                 {STATUS_FLOW[activeTab]?.map((status) => {
                   const itemsByStatus = getItemsByStatus();
                   const items = itemsByStatus[status] || [];
-                  //임의 값(arbitrary value) 클래스를 사용하여 scrollbar-hide 스타일 적용 
+                  //임의 값(arbitrary value) 클래스를 사용하여 scrollbar-hide 스타일 적용
                   return (
                     <DropArea
                       key={status}

@@ -128,14 +128,6 @@ export const isLeaderOrHigher = (userLevelData, currentUser) => {
   const departmentLeader =
     currentUser?.departmentLeader || userLevelData?.departmentLeader || false;
 
-  console.log(
-    "팀장급 이상 권한 확인 - 전체 데이터:",
-    JSON.stringify(userLevelData, null, 2)
-  );
-  console.log("팀장급 이상 권한 확인 - 역할:", role);
-  console.log("팀장급 이상 권한 확인 - 부서:", department);
-  console.log("팀장급 이상 권한 확인 - 팀장여부:", departmentLeader);
-
   // 대표원장이나 원장은 무조건 true
   if (role === "원장" || role === "대표원장") {
     console.log("원장급 권한 확인됨");
@@ -293,27 +285,16 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
   const departmentLeader =
     currentUser?.departmentLeader || userLevelData?.departmentLeader || false;
 
-  console.log(
-    "권한 체크 - 사용자 정보 전체:",
-    JSON.stringify(userLevelData, null, 2)
-  );
-  console.log("권한 체크 - 역할:", role);
-  console.log("권한 체크 - 부서:", department);
-  console.log("권한 체크 - 팀장여부:", departmentLeader);
-
   // 팀장급 권한 여부 확인
   const isLeader = isLeaderOrHigher(userLevelData, currentUser);
-  console.log("팀장급 이상 권한 여부:", isLeader);
 
   // 팀장급이 아닌 경우 (일반 팀원인 경우)
   if (!isLeader) {
-    console.log("일반 팀원 권한 - 업무분장 폴더 접근 제한");
     return [];
   }
 
   // 대표원장은 모든 폴더를 볼 수 있음
   if (role === "대표원장" || role === "원장") {
-    console.log("대표원장/원장 권한 확인됨 - 모든 폴더 접근 허용");
     return [
       "미배정",
       "대표원장",
@@ -333,15 +314,11 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
   // 기본적으로 모든 팀장은 미배정 폴더를 볼 수 있음
   const folders = ["미배정"];
 
-  console.log("역할명 확인:", role);
-  console.log("부서명 확인:", department);
-
   // 원무과장 특별 처리 - 원무과장은 영상의학 관련 폴더도 봐야 함
   if (
     role === "원무과장" ||
     (role.includes("과장") && department.includes("원무"))
   ) {
-    console.log("원무과장 권한 확인 - 원무 및 영상의학 폴더 접근 허용");
     folders.push("원무과장", "원무팀", "영상의학팀장", "영상의학팀");
     return folders;
   }
@@ -353,7 +330,6 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
 
   // 간호 관련
   if (checkDepartment("간호")) {
-    console.log("간호 관련 권한 확인");
     folders.push("간호팀장", "간호팀");
   }
 
@@ -375,16 +351,13 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
     role !== "원무과장" &&
     !role.includes("과장")
   ) {
-    console.log("원무 관련 권한 확인 (과장 제외)");
     folders.push("원무과장", "원무팀");
   }
 
   // 경영지원 관련
   if (checkDepartment("경영지원")) {
-    console.log("경영지원 관련 권한 확인");
     folders.push("경영지원팀", "경영지원팀장");
   }
 
-  console.log("접근 가능한 폴더 목록:", folders);
   return folders;
 };

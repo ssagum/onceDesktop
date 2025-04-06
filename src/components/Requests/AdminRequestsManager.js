@@ -304,16 +304,9 @@ const AdminRequestsManager = () => {
   // 권한 설정
   useEffect(() => {
     if (userLevelData) {
-      console.log("현재 사용자 역할:", userLevelData.role);
-      console.log("현재 사용자 부서:", userLevelData.department);
-
       const isOwner = isHospitalOwner(userLevelData);
       const isAdminManager = isAdministrativeManager(userLevelData);
       const canManageReq = canManageRequest(userLevelData);
-
-      console.log("대표원장 여부:", isOwner);
-      console.log("원무과장 여부:", isAdminManager);
-      console.log("요청 관리 권한:", canManageReq);
 
       setUserPermissions({
         canApproveVacation: canApproveVacation(userLevelData),
@@ -362,12 +355,8 @@ const AdminRequestsManager = () => {
   const fetchVacationRequests = async () => {
     let q;
 
-    console.log("휴가 데이터 조회 - 권한 확인");
-    console.log("대표원장 여부:", userPermissions.isOwner);
-
     // 대표원장은 모든 부서의 휴가 신청을 볼 수 있음
     if (userPermissions.isOwner) {
-      console.log("대표원장 권한으로 모든 휴가 조회");
       if (statusFilter === "all") {
         q = query(collection(db, "vacations"), orderBy("createdAt", "desc"));
       } else {
@@ -379,7 +368,6 @@ const AdminRequestsManager = () => {
       }
     } else {
       // 다른 사용자는 자신의 부서에 해당하는 휴가 신청만 볼 수 있음
-      console.log("일반 사용자 권한으로 부서 휴가만 조회:", userDepartment);
       if (statusFilter === "all") {
         q = query(
           collection(db, "vacations"),
@@ -403,20 +391,14 @@ const AdminRequestsManager = () => {
       timestamp: doc.data().createdAt?.toDate?.() || new Date(),
     }));
 
-    console.log(`조회된 휴가 개수: ${requests.length}건`);
     setVacationRequests(requests);
   };
 
   const fetchStockRequests = async () => {
     let q;
 
-    console.log("비품 데이터 조회 - 권한 확인");
-    console.log("대표원장 여부:", userPermissions.isOwner);
-    console.log("원무과장 여부:", userPermissions.isAdminManager);
-
     // 대표원장과 원무과장은 모든 부서의 비품 신청을 볼 수 있음
     if (userPermissions.isOwner || userPermissions.isAdminManager) {
-      console.log("대표원장/원무과장 권한으로 모든 비품 조회");
       if (statusFilter === "all") {
         q = query(
           collection(db, "stockRequests"),
@@ -431,7 +413,6 @@ const AdminRequestsManager = () => {
       }
     } else {
       // 다른 사용자는 자신의 부서에 해당하는 비품 신청만 볼 수 있음
-      console.log("일반 사용자 권한으로 부서 비품만 조회:", userDepartment);
       if (statusFilter === "all") {
         q = query(
           collection(db, "stockRequests"),
@@ -454,21 +435,14 @@ const AdminRequestsManager = () => {
       ...doc.data(),
       timestamp: doc.data().createdAt || new Date().getTime(),
     }));
-
-    console.log(`조회된 비품 개수: ${requests.length}건`);
     setStockRequests(requests);
   };
 
   const fetchGeneralRequests = async () => {
     let q;
 
-    console.log("요청 데이터 조회 - 권한 확인");
-    console.log("대표원장 여부:", userPermissions.isOwner);
-    console.log("요청 관리 권한:", userPermissions.canManageRequest);
-
     // 대표원장은 모든 요청을 볼 수 있음
     if (userPermissions.isOwner) {
-      console.log("대표원장 권한으로 모든 요청 조회");
       if (statusFilter === "all") {
         q = query(collection(db, "requests"), orderBy("createdAt2", "desc"));
       } else {
@@ -481,7 +455,6 @@ const AdminRequestsManager = () => {
     }
     // 팀장급 이상은 요청 관리 가능
     else if (userPermissions.canManageRequest) {
-      console.log("팀장급 권한으로 요청 조회");
       if (statusFilter === "all") {
         q = query(collection(db, "requests"), orderBy("createdAt2", "desc"));
       } else {
@@ -494,7 +467,6 @@ const AdminRequestsManager = () => {
     }
     // 일반 사용자는 자신의 부서 요청만 볼 수 있음
     else {
-      console.log("일반 사용자 권한으로 부서 요청만 조회:", userDepartment);
       if (statusFilter === "all") {
         q = query(
           collection(db, "requests"),
@@ -518,7 +490,6 @@ const AdminRequestsManager = () => {
       timestamp: doc.data().createdAt || new Date().getTime(),
     }));
 
-    console.log(`조회된 요청 개수: ${requests.length}건`);
     setGeneralRequests(requests);
   };
 

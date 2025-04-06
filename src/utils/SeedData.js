@@ -59,11 +59,8 @@ export const seedUsers = async () => {
 
 // 관리자 콘솔에서 사용하기 위한 함수
 export const initSeedData = async () => {
-  console.log("테스트 데이터 초기화 중...");
-
   try {
     const userResults = await seedUsers();
-    console.log("사용자 데이터 초기화 결과:", userResults);
 
     return {
       success: true,

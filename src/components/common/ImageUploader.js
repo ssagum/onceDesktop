@@ -25,17 +25,9 @@ const ImageUploader = ({ value, onChange, readOnly = false }) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    console.log("File selected:", {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-    });
-
     const reader = new FileReader();
     reader.onloadend = () => {
       const imageData = reader.result;
-      console.log("FileReader loaded image successfully");
-      console.log("Image data type:", typeof imageData);
       setPreview(imageData); // 미리보기용 data URL 설정
       onChange(file); // 부모 컴포넌트에는 File 객체 전달
     };
@@ -62,18 +54,10 @@ const ImageUploader = ({ value, onChange, readOnly = false }) => {
 
   // 삭제 핸들러
   const handleDelete = () => {
-    console.log("Image deleted");
     setPreview(null);
     onChange(null); // 부모 컴포넌트에 null 전달
     setIsModalOpen(false);
   };
-
-  // preview 값의 타입을 확인하고 적절히 로깅
-  console.log("Current preview:", {
-    type: typeof preview,
-    value: preview,
-    isString: typeof preview === "string",
-  });
 
   return (
     <div>

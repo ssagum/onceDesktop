@@ -5,8 +5,6 @@ import App from "./App.js";
 import { HashRouter } from "react-router-dom";
 import { UserLevelProvider } from "./utils/UserLevelContext.js";
 
-console.log("✅ React 시작됨!");
-
 // DOM이 모두 로드된 후 실행합니다.
 document.addEventListener("DOMContentLoaded", () => {
   // HTML 내에 id가 "root"인 요소를 찾습니다.
@@ -30,6 +28,4 @@ document.addEventListener("DOMContentLoaded", () => {
       </UserLevelProvider>
     </React.StrictMode>
   );
-
-  console.log("✅ React 렌더링 완료!");
 });

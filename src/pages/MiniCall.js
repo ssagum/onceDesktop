@@ -41,7 +41,6 @@ const MiniCall = () => {
       if (querySnapshot.empty) {
         setRecentCalls([]);
         setLatestCall(null);
-        console.log("No recent calls found");
         return;
       }
 
@@ -58,21 +57,14 @@ const MiniCall = () => {
       );
 
       if (!thisTimeLatestReceivedCall) {
-        console.log("No matching call found");
         return;
       }
 
       if (firstTime === true) {
         setLatestCall(thisTimeLatestReceivedCall);
         setFirstTime(false);
-        console.log("First time");
       } else {
         if (thisTimeLatestReceivedCall.docId !== latestCall?.docId) {
-          console.log(
-            "step3",
-            thisTimeLatestReceivedCall.docId,
-            latestCall?.docId
-          );
           setLatestCall(thisTimeLatestReceivedCall);
           playNotificationSound("/notification.mp3");
         } else {

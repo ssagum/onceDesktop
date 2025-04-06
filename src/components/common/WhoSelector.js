@@ -84,10 +84,6 @@ export default function WhoSelector({
     if (onPeopleChange) {
       // 중복 제거
       const uniqueStaffIds = [...new Set(selectedStaffIds)];
-      console.log("WhoSelector: 중복된 직원 ID가 제거됨", {
-        before: selectedStaffIds,
-        after: uniqueStaffIds,
-      });
 
       onPeopleChange(uniqueStaffIds);
       // 모달 닫기

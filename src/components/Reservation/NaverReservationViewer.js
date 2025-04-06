@@ -888,7 +888,7 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
   // 외부 브라우저에서 네이버 예약 페이지 열기
   const openInExternalBrowser = () => {
     if (window.electron) {
-      // window.electron.shell은 더 이상 사용할 수 없으므로 
+      // window.electron.shell은 더 이상 사용할 수 없으므로
       // 새 탭에서 열도록 변경
       window.open(naverReservationUrl, "_blank");
     } else {
@@ -899,8 +899,6 @@ const NaverReservationViewer = ({ isVisible, setIsVisible, onDataExtract }) => {
 
   // Electron 웹뷰 로드 완료 핸들러
   const handleWebViewLoaded = () => {
-    console.log("네이버 예약 웹뷰 로드 완료");
-
     // webview에 접근하여 사용자 에이전트 변경 및 스크립트 실행 (로그인 문제 해결 시도)
     if (webviewRef.current && window.electron) {
       try {

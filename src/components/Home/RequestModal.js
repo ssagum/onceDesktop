@@ -154,8 +154,6 @@ export default function RequestModal({ isVisible, setIsVisible }) {
         senderId: userLevelData.id || "",
       };
 
-      console.log("저장할 요청 데이터:", requestData);
-
       // Firestore에 요청 데이터 저장
       const requestDocRef = await addDoc(
         collection(db, "requests"),
@@ -176,8 +174,6 @@ export default function RequestModal({ isVisible, setIsVisible }) {
         [receiverDepartment]: true, // 수신 부서 필드 설정
         [senderDepartment]: true, // 발신 부서 필드 설정
       };
-
-      console.log("저장할 호출 데이터:", callData);
 
       // Firestore에 호출 데이터 저장
       await addDoc(collection(db, "calls"), callData);

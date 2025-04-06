@@ -86,13 +86,11 @@ const LoginPCModal = ({
     }
 
     const newData = { department, role, location, departmentLeader };
-    console.log("PC 할당 시도:", newData);
 
     // 비동기 작업으로 처리하고 await 추가
     const success = await onPCAllocationSubmit(newData, adminPasswordInput);
 
     if (success) {
-      console.log("PC 할당 완료:", newData);
       setMessage("PC 할당 완료");
       // 즉시 모달 닫기
       onClose();

@@ -648,11 +648,6 @@ const Schedule = () => {
     if (!initialized && weeks.length > 0) {
       const today = new Date();
 
-      // 디버깅용 로그
-      console.log(`오늘 날짜: ${format(today, "yyyy-MM-dd")}`);
-      console.log(`선택된 월/연도: ${selectedYear}년 ${selectedMonth + 1}월`);
-      console.log(`계산된 주차 개수: ${weeks.length}개`);
-
       weeks.forEach((week, idx) => {
         const startDate = new Date(week.start);
         const endDate = new Date(week.end);

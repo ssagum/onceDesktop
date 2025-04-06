@@ -217,11 +217,8 @@ const TextEditorModal = ({
       // 작성자 초기화 로직
       const initAuthor = async () => {
         try {
-          console.log("TextEditorModal 작성자 설정 시도:", userLevelData);
-
           // 수정 모드이고 기존 게시글 데이터가 있으면 해당 작성자 사용
           if (isEditing && editingPost?.authorId) {
-            console.log("수정 모드: 기존 작성자 정보 사용");
             const authorData = {
               id: editingPost.authorId,
               name: editingPost.author || "",
@@ -242,8 +239,6 @@ const TextEditorModal = ({
           }
           // 로그인 상태인 경우 현재 사용자를 작성자로 설정
           else if (userLevelData?.uid || userLevelData?.name) {
-            console.log("로그인 상태: 현재 사용자로 작성자 설정");
-
             const authorData = {
               id: userLevelData?.uid || `temp-${Date.now()}`,
               name:
@@ -253,10 +248,6 @@ const TextEditorModal = ({
             };
 
             setSelectedAuthor(authorData);
-            console.log(
-              "작성자가 현재 로그인 사용자로 설정됨:",
-              authorData.name
-            );
 
             // 로컬 스토리지에 작성자 정보 저장
             try {
@@ -268,16 +259,11 @@ const TextEditorModal = ({
               console.error("작성자 정보 저장 실패:", err);
             }
           } else {
-            console.log(
-              "로그인되지 않은 상태: 작성자 복원 또는 수동 선택 필요"
-            );
-
             // 로컬 스토리지에서 이전 작성자 정보 복원 시도
             try {
               const savedAuthor = localStorage.getItem("lastPostAuthor");
               if (savedAuthor) {
                 const authorData = JSON.parse(savedAuthor);
-                console.log("저장된 작성자 정복 복원:", authorData.name);
                 setSelectedAuthor(authorData);
               } else {
                 setSelectedAuthor(null);
@@ -292,7 +278,6 @@ const TextEditorModal = ({
           const users = await getAllUsers();
           if (users && users.length > 0) {
             setDepartmentUsers(users);
-            console.log(`사용자 목록 ${users.length}명 로드 완료`);
           } else {
             console.warn("사용자 목록이 비어 있습니다");
           }
@@ -585,7 +570,6 @@ const TextEditorModal = ({
                 editorRef.current.focus();
               }
             } catch (err) {
-              console.log("커서 복구 실패, 에디터에 포커스만 설정:", err);
               editorRef.current.focus();
             }
           }
@@ -908,7 +892,6 @@ const TextEditorModal = ({
     // 선택된 작성자 정보 저장
     try {
       localStorage.setItem("lastPostAuthor", JSON.stringify(user));
-      console.log("선택된 작성자 정보 저장:", user.name);
     } catch (err) {
       console.error("작성자 정보 저장 실패:", err);
     }

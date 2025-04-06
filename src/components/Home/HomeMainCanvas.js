@@ -85,7 +85,11 @@ const Square = ({ title, unreadCount = 0 }) => {
     <div className="w-[110px] h-[110px] flex flex-col justify-center items-center bg-white rounded-xl pt-[8px] cursor-pointer relative">
       {unreadCount > 0 && (
         <div className="absolute top-2 right-2 bg-[#ff5050] text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-xs font-bold px-1.5">
-          {unreadCount > 99 ? "99+" : unreadCount > 9 ? `${unreadCount}+` : unreadCount}
+          {unreadCount > 99
+            ? "99+"
+            : unreadCount > 9
+            ? `${unreadCount}+`
+            : unreadCount}
         </div>
       )}
       <div className="w-[40px] h-[50px]">
@@ -170,10 +174,6 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
     // 구독 해제할 함수들 배열
     const unsubscribes = [];
 
-    console.log("===== StatusBar 데이터 로딩 시작 =====");
-    console.log("현재 사용자 권한:", userPermissions);
-    console.log("현재 사용자 부서:", userLevelData?.department);
-
     // 오늘 날짜 범위 계산 (시작: 오늘 00:00:00, 종료: 오늘 23:59:59)
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0)).getTime();
@@ -195,8 +195,6 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
         ...doc.data(),
         timestamp: doc.data().createdAt?.toDate?.() || new Date(),
       }));
-
-      console.log("StatusBar - 전체 휴가 데이터:", vacations.length, "건");
 
       // 오늘 날짜에 해당하는 승인된 휴가만 필터링
       const approvedVacations = vacations.filter((vacation) => {
@@ -231,18 +229,10 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
         }
       });
 
-      console.log(
-        "StatusBar - 오늘 승인된 휴가:",
-        approvedVacations.length,
-        "건"
-      );
-
       // 대기중인 휴가 항목도 찾아서 결제 대기 건수 계산에 사용
       const waitingVacations = vacations.filter((v) => v.status === "대기중");
-      console.log("StatusBar - 대기중인 휴가:", waitingVacations.length, "건");
 
       // 디버깅: 대기중인 휴가 항목 상세 정보 출력
-      console.log("휴가 대기중 필터링 조건:", "status === '대기중'");
       if (waitingVacations.length > 0) {
         console.log("대기중 휴가 첫 번째 항목 예시:", {
           id: waitingVacations[0].id,
@@ -274,20 +264,11 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
         timestamp: doc.data().createdAt || new Date().getTime(),
       }));
 
-      console.log("StatusBar - 전체 요청 데이터:", requests.length, "건");
-
       // 먼저 대기중 상태인 요청만 필터링
       const waitingRequests = requests.filter((req) => req.status === "대기중");
-      console.log(
-        "StatusBar - 상태가 대기중인 요청:",
-        waitingRequests.length,
-        "건"
-      );
 
       // 사용자의 부서 가져오기
       const userDepartment = userLevelData?.department || "";
-      console.log("StatusBar - 현재 사용자 부서:", userDepartment);
-
       // 권한에 따라 필터링 로직 적용
       let filteredRequests = waitingRequests;
 
@@ -298,34 +279,11 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
           const senderMatch = req.senderDepartment === userDepartment;
           const receiverMatch = req.receiverDepartment === userDepartment;
 
-          if (senderMatch || receiverMatch) {
-            console.log(
-              `StatusBar - 부서 일치 요청: ID=${req.id}, 제목=${req.title}, 발신=${req.senderDepartment}, 수신=${req.receiverDepartment}`
-            );
-          }
-
           return senderMatch || receiverMatch;
         });
-
-        console.log(
-          `StatusBar - 부서(${userDepartment}) 필터링 후 대기중 요청:`,
-          filteredRequests.length,
-          "건"
-        );
       } else {
         console.log("StatusBar - 관리자 권한으로 모든 대기중 요청 표시");
       }
-
-      // 필터링된 요청 목록 로깅
-      console.log(
-        "StatusBar - 최종 필터링된 요청 목록:",
-        filteredRequests.map((req) => ({
-          id: req.id,
-          title: req.title,
-          sender: req.senderDepartment,
-          receiver: req.receiverDepartment,
-        }))
-      );
 
       // 상태변수 업데이트
       setPendingRequests(filteredRequests);
@@ -346,20 +304,14 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
         timestamp: doc.data().createdAt || new Date().getTime(),
       }));
 
-      console.log("StatusBar - 전체 비품 데이터:", stocks.length, "건");
-
       // 승인됨 상태인 비품만 필터링
       const approvedStocks = stocks.filter(
         (stock) => stock.status === "승인됨"
       );
-      console.log("StatusBar - 승인됨 비품:", approvedStocks.length, "건");
 
       // 대기중인 비품 항목도 찾아서 결제 대기 건수 계산에 사용
       const waitingStocks = stocks.filter((s) => s.status === "대기중");
-      console.log("StatusBar - 대기중인 비품:", waitingStocks.length, "건");
 
-      // 디버깅: 대기중인 비품 항목 상세 정보 출력
-      console.log("비품 대기중 필터링 조건:", "status === '대기중'");
       if (waitingStocks.length > 0) {
         console.log("대기중 비품 첫 번째 항목 예시:", {
           id: waitingStocks[0].id,
@@ -389,17 +341,6 @@ const StatusBar = ({ currentDate, onOpenRequestModal }) => {
   useEffect(() => {
     const totalPending =
       pendingVacations.length + pendingStocks.length + pendingRequests.length;
-
-    // 상세 디버깅 로그 추가
-    console.log("==== 결재 필요 건수 디버깅 정보 ====");
-    console.log("휴가 대기중 항목:", pendingVacations);
-    console.log("비품 대기중 항목:", pendingStocks);
-    console.log("요청 대기중 항목:", pendingRequests);
-    console.log("총 결재 필요 건수:", totalPending);
-    console.log("휴가 대기중:", pendingVacations.length, "건");
-    console.log("비품 대기중:", pendingStocks.length, "건");
-    console.log("요청 대기중 (필터링 후):", pendingRequests.length, "건");
-    console.log("=================================");
 
     setApprovalCount(totalPending);
   }, [pendingVacations, pendingStocks, pendingRequests]);
@@ -536,11 +477,6 @@ export default function HomeMainCanvas() {
           date: currentDate,
           ignoreSchedule: false,
         });
-
-        console.log(
-          `사용자 업무 조회 결과: ${userTasksResult.length}개`,
-          userTasksResult
-        );
         setAllUserTasks(userTasksResult);
         setFilteredTasks(userTasksResult);
       } catch (error) {
@@ -556,19 +492,14 @@ export default function HomeMainCanvas() {
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
       setFilteredTasks([]);
-      console.log("필터링할 업무가 없습니다.");
       return;
     }
-
-    console.log("필터링 전 모든 업무:", tasks);
 
     const currentDateOnly = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
       currentDate.getDate()
     );
-
-    console.log("현재 선택된 날짜:", currentDateOnly);
 
     let filteredByDate = tasks.filter((task) => {
       let taskStartDate, taskEndDate;
@@ -600,9 +531,6 @@ export default function HomeMainCanvas() {
 
         const isInDateRange =
           taskStartDate <= currentDateOnly && currentDateOnly <= taskEndDate;
-        console.log(
-          `업무 [${task.title}]: ${taskStartDate} ~ ${taskEndDate}, 현재: ${currentDateOnly}, 포함여부: ${isInDateRange}`
-        );
 
         return isInDateRange;
       } catch (error) {
@@ -610,31 +538,17 @@ export default function HomeMainCanvas() {
           `업무 [${task.title || task.id}] 날짜 처리 중 오류:`,
           error
         );
-        console.log("문제의 업무 데이터:", task);
         return false;
       }
     });
-
-    console.log(
-      `총 ${tasks.length}개 업무 중 ${filteredByDate.length}개가 날짜 필터 통과`
-    );
 
     const dayOfWeek = currentDateOnly.getDay();
     const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
     const todayName = dayNames[dayOfWeek];
 
     const finalFiltered = filteredByDate.filter((task) => {
-      // 디버깅: 요일/주기 필터링 상세 로그
-      console.log(`업무 [${task.title}] 주기 필터링 체크:`, {
-        cycle: task.cycle,
-        days: task.days,
-        todayName,
-        포함여부: task.days?.includes(todayName),
-      });
-
       // 매일 실행되는 업무
       if (task.cycle === "daily" || task.cycle === "매일") {
-        console.log(`업무 [${task.title}]: 매일 수행 업무로 통과`);
         return true;
       }
 
@@ -649,9 +563,6 @@ export default function HomeMainCanvas() {
         Array.isArray(task.days)
       ) {
         const dayMatches = task.days.includes(todayName);
-        console.log(
-          `업무 [${task.title}]: ${task.cycle} 업무, 요일 일치: ${dayMatches}`
-        );
 
         // 주간 업무는 요일만 확인
         if (task.cycle === "weekly" || task.cycle === "매주") {
@@ -690,9 +601,6 @@ export default function HomeMainCanvas() {
 
             // 짝수 주차(0, 2, 4...)인지 홀수 주차(1, 3, 5...)인지 확인
             const isEvenWeek = weeksFromStart % 2 === 0;
-            console.log(
-              `업무 [${task.title}]: 격주 업무, 시작일로부터 ${diffDays}일, ${weeksFromStart}주차, 표시여부: ${isEvenWeek}`
-            );
 
             // 0, 2, 4... 주차에 업무 표시 (첫 주 포함, 다음 주 제외, 다다음 주 포함...)
             return isEvenWeek;
@@ -708,16 +616,12 @@ export default function HomeMainCanvas() {
 
       // 월간 업무
       if (task.cycle === "monthly" || task.cycle === "매월") {
-        console.log(`업무 [${task.title}]: 월간 업무로 통과`);
         return true;
       }
 
       // 기타 주기 유형
-      console.log(`업무 [${task.title}]: 기타 업무 유형으로 통과`);
       return true;
     });
-
-    console.log(`요일/주기 필터링 후 최종 업무: ${finalFiltered.length}개`);
 
     finalFiltered.sort((a, b) => {
       const dateA = a.startDate?.seconds
@@ -778,8 +682,6 @@ export default function HomeMainCanvas() {
     }
 
     try {
-      console.log("원본 task 객체:", task);
-
       const formatSafeDate = (dateValue) => {
         try {
           if (!dateValue) return format(new Date(), "yyyy/MM/dd");
@@ -801,9 +703,6 @@ export default function HomeMainCanvas() {
           }
 
           if (isNaN(dateObj.getTime())) {
-            console.log(
-              `유효하지 않은 날짜 값: ${dateValue}, 현재 날짜로 대체`
-            );
             dateObj = new Date();
           }
 
@@ -816,13 +715,6 @@ export default function HomeMainCanvas() {
 
       let safeStartDate = formatSafeDate(task.startDate);
       let safeEndDate = formatSafeDate(task.endDate);
-
-      console.log("변환된 날짜:", {
-        원본시작일: task.startDate,
-        안전시작일: safeStartDate,
-        원본종료일: task.endDate,
-        안전종료일: safeEndDate,
-      });
 
       const safeTask = {
         ...task,
@@ -909,7 +801,6 @@ export default function HomeMainCanvas() {
   useEffect(() => {
     const checkFirestoreTasks = async () => {
       try {
-        console.log("Firestore 업무 데이터 확인 중...");
         await debugShowAllTasks();
       } catch (error) {
         console.error("Firestore 데이터 확인 오류:", error);
@@ -936,8 +827,6 @@ export default function HomeMainCanvas() {
     try {
       // 데이터가 isMultiple 속성을 가진 배열 형태인지 확인
       if (data.isMultiple && Array.isArray(data.reservations)) {
-        console.log(`${data.count}개의 네이버 예약 일괄 저장 시작`);
-
         // 모든 예약을 비동기로 저장
         const saveAllReservations = async () => {
           const reservationsRef = collection(db, "reservations");
@@ -1054,7 +943,6 @@ export default function HomeMainCanvas() {
             // 데이터 저장 (merge: true로 기존 데이터와 병합)
             await setDoc(docRef, reservationData, { merge: true });
 
-            console.log(`예약이 성공적으로 저장됨 (ID: ${finalId})`);
             showToast(
               "네이버 예약이 데이터베이스에 저장되었습니다.",
               "success"
@@ -1072,7 +960,6 @@ export default function HomeMainCanvas() {
                 isHidden: false,
               });
 
-              console.log(`예약이 자동 ID로 저장됨 (ID: ${autoDocRef.id})`);
               showToast(
                 "네이버 예약이 데이터베이스에 저장되었습니다.",
                 "success"
@@ -1295,7 +1182,6 @@ export default function HomeMainCanvas() {
                   setSelectedRequestId={(id) => {
                     // 선택된 요청 ID를 저장
                     // 필요한 경우 이 ID로 요청 상세 정보를 불러올 수 있음
-                    console.log("선택된 요청 ID:", id);
                     // 여기에 추가적인 요청 ID 처리 로직 추가 가능
                   }}
                 />

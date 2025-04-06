@@ -6,7 +6,6 @@ const ImageUploaderLegacy = ({ value, onChange }) => {
 
   // value prop 변경 추적
   useEffect(() => {
-    console.log("ImageUploader value changed:", value);
     if (value instanceof File) {
       // value가 File 객체인 경우 URL 생성
       const reader = new FileReader();
@@ -34,8 +33,6 @@ const ImageUploaderLegacy = ({ value, onChange }) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const imageData = reader.result;
-      console.log("FileReader loaded image successfully");
-      console.log("Image data type:", typeof imageData);
       setPreview(imageData); // 미리보기용 data URL 설정
       onChange(file); // 부모 컴포넌트에는 File 객체 전달
     };
@@ -62,7 +59,6 @@ const ImageUploaderLegacy = ({ value, onChange }) => {
 
   // 삭제 핸들러
   const handleDelete = () => {
-    console.log("Image deleted");
     setPreview(null);
     onChange(null);
     setIsModalOpen(false);

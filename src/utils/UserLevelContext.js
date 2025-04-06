@@ -91,7 +91,6 @@ export function UserLevelProvider({ children }) {
 
   // 로그아웃 처리 (내부 함수)
   const handleLogout = (keepLoginStatus = false) => {
-    console.log("로그아웃 처리 - 상태 유지:", keepLoginStatus);
     logoutUser(keepLoginStatus); // 로컬 스토리지에서 현재 사용자 정보 제거
     setCurrentUser(null);
 
@@ -116,16 +115,13 @@ export function UserLevelProvider({ children }) {
       if (autoLoginEnabled || isLoggedInStatus) {
         const user = getCurrentUser();
         if (user) {
-          console.log("로그인 상태 복원: ", user);
           setCurrentUser(user);
         } else {
           // 사용자 정보가 없으면 로그아웃 처리
-          console.log("사용자 정보 없음, 로그아웃 처리");
           handleLogout(autoLoginEnabled);
         }
       } else {
         // 자동 로그인이 비활성화되어 있으면 로그아웃
-        console.log("자동 로그인 비활성화 상태, 로그아웃 처리");
         handleLogout(autoLoginEnabled);
       }
 
@@ -228,9 +224,6 @@ export function UserLevelProvider({ children }) {
       // 로그인 상태 저장 (항상 true로 설정)
       setLoginStatus(true);
 
-      console.log("로그인 전 userLevelData:", userLevelData);
-      console.log("Firebase에서 가져온 사용자 정보:", result.user);
-
       // PC 정보 보존하면서 사용자 정보 업데이트
       // 사용자 식별 정보와 역할 정보는 Firebase에서 가져온 정보로 업데이트
       // 로컬 환경 설정(department, location)은 기존 값 유지
@@ -257,9 +250,6 @@ export function UserLevelProvider({ children }) {
         "userLevelData",
         JSON.stringify(updatedUserLevelData)
       );
-
-      console.log("로그인 성공:", result.user.name, "자동 로그인:", rememberMe);
-      console.log("업데이트된 userLevelData:", updatedUserLevelData);
     }
 
     return result;
@@ -267,7 +257,6 @@ export function UserLevelProvider({ children }) {
 
   // 로그아웃 기능
   const logout = () => {
-    console.log("로그아웃 요청");
     handleLogout(false); // 로그인 상태 초기화
   };
 
@@ -290,7 +279,6 @@ export function UserLevelProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem("userLevelData", JSON.stringify(userLevelData));
-      console.log("userLevelData 변경됨:", userLevelData);
     } catch (e) {
       console.error("로컬 스토리지에 userLevelData 저장 실패", e);
     }
@@ -299,7 +287,6 @@ export function UserLevelProvider({ children }) {
   // currentUser 상태가 변경될 때마다 로그인 상태 업데이트
   useEffect(() => {
     const isLoggedIn = !!currentUser;
-    console.log("로그인 상태 변경:", isLoggedIn);
     setLoginStatus(isLoggedIn);
   }, [currentUser]);
 

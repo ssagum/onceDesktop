@@ -158,24 +158,10 @@ export default function SideBar() {
             />
           </Link> */}
           {(() => {
-            console.log(
-              "사이드바 - 사용자 권한 정보 전체:",
-              JSON.stringify(userLevelData, null, 2)
-            );
-            console.log("사이드바 - 현재 사용자:", currentUser);
-            console.log("사이드바 - 역할:", currentUser?.role);
-            console.log("사이드바 - PC 부서:", userLevelData?.department);
-            console.log("사이드바 - Firebase 부서:", currentUser?.department);
-            console.log(
-              "사이드바 - 팀장여부:",
-              userLevelData?.departmentLeader
-            );
-
             const canAccess = canAccessTaskManagement(
               userLevelData,
               currentUser
             );
-            console.log("사이드바 - 업무분장 접근 권한:", canAccess);
 
             return canAccess ? (
               <Link to="/task">
