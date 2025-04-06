@@ -70,6 +70,14 @@ export default function SideBar() {
   const correctCode = "240550"; // 이곳에 실제 인증번호를 설정하세요
   const { userLevelData, isLoggedIn, currentUser } = useUserLevel();
 
+  console.log(
+    "사이드바",
+    "userLevelData",
+    userLevelData,
+    "currentUser",
+    currentUser
+  );
+
   const handleCodeInputChange = (e) => {
     setVerificationCode(e.target.value);
   };

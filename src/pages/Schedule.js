@@ -749,14 +749,21 @@ const Schedule = () => {
       );
 
       const querySnapshot = await getDocs(q);
+      console.log(`Firestore에서 가져온 총 문서 수: ${querySnapshot.size}개`);
 
       // 중복 방지를 위한 Map 사용
       const appointmentsMap = new Map();
+      let hiddenCount = 0;
+      let visibleCount = 0;
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         // id 필드와 함께 데이터 저장, isHidden이 true가 아닌 것만 저장
-        if (data.isHidden !== true) {
+        if (data.isHidden === true) {
+          hiddenCount++;
+          console.log(`숨김 처리된 일정 제외 (ID: ${doc.id})`);
+        } else {
+          visibleCount++;
           // date가 문자열인지 확인하고 필요시 변환
           const dateStr =
             typeof data.date === "string"
@@ -797,6 +804,8 @@ const Schedule = () => {
           appointmentsMap.set(doc.id, appointmentWithDateIndex);
         }
       });
+
+      console.log(`표시 일정: ${visibleCount}개, 숨김 일정: ${hiddenCount}개`);
 
       // 휴가 데이터 가져오기
       const [vacationsData, vacationsError] = await fetchVacationData(
@@ -1198,26 +1207,74 @@ const Schedule = () => {
   };
 
   // 일정 삭제 핸들러
-  const handleAppointmentDelete = async (appointmentId) => {
+  const handleAppointmentDelete = async (appointmentData) => {
     try {
-      // Firestore 문서 업데이트 (isHidden 처리)
+      console.log("삭제 처리 시작:", appointmentData);
+
+      // 객체 또는 ID만 받을 수 있도록 처리
+      let appointmentId;
+      let appointmentToUpdate;
+
+      if (typeof appointmentData === "string") {
+        // ID만 전달받은 경우
+        appointmentId = appointmentData;
+        console.log(`ID만 전달받음: ${appointmentId}`);
+      } else if (appointmentData && appointmentData.id) {
+        // 객체로 전달받은 경우
+        appointmentId = appointmentData.id;
+        appointmentToUpdate = appointmentData;
+        console.log(`객체로 전달받음: ${appointmentId}`);
+      } else {
+        console.error("유효하지 않은 일정 데이터:", appointmentData);
+        showToast("삭제할 일정 정보가 유효하지 않습니다.", "error");
+        return false;
+      }
+
+      // 문서 참조 가져오기
       const appointmentRef = doc(db, "reservations", appointmentId);
-      await updateDoc(appointmentRef, {
+
+      // 문서 존재 여부 확인
+      const appointmentDoc = await getDoc(appointmentRef);
+      if (!appointmentDoc.exists()) {
+        console.error(`ID '${appointmentId}'에 해당하는 문서가 존재하지 않음`);
+        showToast("삭제할 일정을 찾을 수 없습니다.", "error");
+        return false;
+      }
+
+      // 업데이트할 데이터 구성 - isHidden: true 설정
+      const updateData = {
         isHidden: true,
         hiddenAt: new Date(),
         updatedAt: new Date(),
-      });
+      };
 
-      // 로컬 상태 업데이트
-      setAppointments((prevAppointments) =>
-        prevAppointments.filter((app) => app.id !== appointmentId)
+      console.log(
+        `Firestore 문서(${appointmentId}) 업데이트 - isHidden=true 설정`
       );
 
-      // 데이터 갱신
+      // Firestore 업데이트
+      await updateDoc(appointmentRef, updateData);
+
+      // 상태 업데이트 - 수정 핸들러와 동일한 패턴 사용
+      const updatedAppointments = appointments.filter(
+        (app) => app.id !== appointmentId
+      );
+
+      setAppointments(updatedAppointments);
+      console.log(
+        `상태 업데이트 완료: ${appointments.length}개 → ${updatedAppointments.length}개`
+      );
+
+      // 데이터 새로고침 (수정 핸들러와 동일한 패턴)
       await fetchAppointments();
+
+      showToast("일정이 삭제되었습니다.", "success");
+      return true;
     } catch (error) {
       console.error("일정 삭제 중 오류 발생:", error);
-      showToast("일정 삭제 중 오류가 발생했습니다.", "error");
+      console.error("오류 세부 정보:", error.stack);
+      showToast("일정 삭제에 실패했습니다.", "error");
+      return false;
     }
   };
 

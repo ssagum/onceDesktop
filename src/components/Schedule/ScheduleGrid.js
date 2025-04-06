@@ -962,32 +962,6 @@ const processAppointmentSubmit = async (formData) => {
   console.log("일정 작업 완료, 결과:", result);
 };
 
-// confirmDeleteAppointment 함수 수정 - 삭제 시 알림 전송 추가
-const confirmDeleteAppointment = async () => {
-  try {
-    if (!selectedAppointment) return;
-
-    // 상위 컴포넌트의 delete 함수 호출
-    if (onAppointmentDelete) {
-      await onAppointmentDelete(selectedAppointment.id);
-
-      // 일정 삭제 알림 전송
-      await sendScheduleNotification("delete", selectedAppointment);
-
-      showToast("일정이 삭제되었습니다.", "success");
-    }
-
-    // 모달 닫기 및 상태 초기화
-    setShowDeleteModal(false);
-    setShowForm(false);
-    setSelectedAppointment(null);
-    setIsEditing(false);
-  } catch (error) {
-    console.error("일정 삭제 중 오류 발생:", error);
-    showToast("일정 삭제 중 오류가 발생했습니다.", "error");
-  }
-};
-
 const ScheduleGrid = ({
   dates,
   timeSlots = [],
@@ -1630,12 +1604,30 @@ const ScheduleGrid = ({
     setVacationConflictData(null);
   };
 
-  const handleDeleteAppointment = async () => {
+  // 일정 삭제 핸들러 수정
+  const handleDeleteAppointment = async (e) => {
+    // 이벤트 전파 중지 추가
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     try {
       if (!selectedAppointment) return;
 
-      // window.confirm 대신 모달 표시
+      console.log("삭제 모달 표시");
+      // 삭제 모달 표시 전에 폼 정보 저장 및 폼 숨기기
+      const tempAppointment = { ...selectedAppointment };
+      const wasFormVisible = showForm;
+      setShowForm(false); // 일시적으로 AppointmentForm 숨기기
       setShowDeleteModal(true);
+
+      // 모달이 닫힐 때 복원할 상태 데이터 저장
+      setPendingAction({
+        type: "delete",
+        data: tempAppointment,
+        restoreForm: wasFormVisible,
+      });
     } catch (error) {
       console.error("일정 삭제 중 오류 발생:", error);
       showToast("일정 삭제 중 오류가 발생했습니다.", "error");
@@ -1643,34 +1635,102 @@ const ScheduleGrid = ({
   };
 
   // 일정 삭제 확인 처리 함수 추가
-  const confirmDeleteAppointment = async () => {
-    try {
-      if (!selectedAppointment) return;
+  const confirmDeleteAppointment = async (e) => {
+    // 이벤트 전파 중지 추가
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
-      // 상위 컴포넌트의 delete 함수 호출
-      if (onAppointmentDelete) {
-        await onAppointmentDelete(selectedAppointment.id);
-
-        // 일정 삭제 알림 전송
-        await sendScheduleNotification("delete", selectedAppointment);
-
-        showToast("일정이 삭제되었습니다.", "success");
-      }
-
-      // 모달 닫기 및 상태 초기화
+    if (!selectedAppointment) {
       setShowDeleteModal(false);
-      setShowForm(false);
-      setSelectedAppointment(null);
-      setIsEditing(false);
+      return;
+    }
+
+    console.log("삭제하려는 일정 객체:", selectedAppointment);
+
+    try {
+      // 수정 핸들러와 동일한 방식으로 객체 전체를 전달
+      if (onAppointmentDelete) {
+        console.log("onAppointmentDelete 함수 호출 - 객체 전체 전달");
+        // ID 대신 객체 전체 전달
+        const result = await onAppointmentDelete(selectedAppointment);
+        console.log("삭제 작업 결과:", result);
+
+        // 성공하면 알림 전송 및 상태 초기화
+        if (result !== false) {
+          try {
+            await sendScheduleNotification("delete", selectedAppointment);
+            console.log("삭제 알림 전송 완료");
+          } catch (notifyError) {
+            console.error("알림 전송 실패:", notifyError);
+            // 알림 전송 실패는 무시
+          }
+
+          // 성공한 경우에만 모달 닫기 및 상태 초기화
+          setShowDeleteModal(false);
+          setShowForm(false);
+
+          // 로컬 상태 업데이트
+          setLocalAppointments((prev) => {
+            const filtered = prev.filter(
+              (item) => item.id !== selectedAppointment.id
+            );
+            console.log(
+              `로컬 상태 업데이트: ${prev.length}개 → ${filtered.length}개`
+            );
+            return filtered;
+          });
+
+          // 선택 상태 초기화
+          setSelectedAppointment(null);
+          setIsEditing(false);
+        } else {
+          // 삭제 실패 시 모달 유지 (닫지 않음)
+          console.error("삭제 작업 결과가 실패를 반환했습니다.");
+          if (showToast) {
+            showToast("일정 삭제에 실패했습니다. 다시 시도해주세요.", "error");
+          }
+        }
+      } else {
+        console.error("onAppointmentDelete 함수가 제공되지 않았습니다.");
+        if (showToast) {
+          showToast("삭제 기능을 사용할 수 없습니다.", "error");
+        }
+      }
     } catch (error) {
-      console.error("일정 삭제 중 오류 발생:", error);
-      showToast("일정 삭제 중 오류가 발생했습니다.", "error");
+      console.error("일정 삭제 처리 중 오류:", error);
+      if (showToast) {
+        showToast(
+          "일정 삭제 중 오류가 발생했습니다: " +
+            (error.message || "알 수 없는 오류"),
+          "error"
+        );
+      }
+      // 오류 발생 시 모달 유지 (닫지 않음)
     }
   };
 
   // 일정 삭제 취소 함수 추가
-  const cancelDeleteAppointment = () => {
+  const cancelDeleteAppointment = (e) => {
+    // 이벤트 전파 중지 추가
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     setShowDeleteModal(false);
+
+    // 모달 표시 전 상태 복원
+    if (pendingAction && pendingAction.type === "delete") {
+      // 폼이 표시되어 있었으면 다시 표시
+      if (pendingAction.restoreForm) {
+        setShowForm(true);
+      }
+    }
+
+    // 보류 중인 액션 초기화
+    setPendingAction(null);
   };
 
   // 일정 클릭 핸들러도 비슷하게 수정
@@ -3182,13 +3242,8 @@ const ScheduleGrid = ({
   // 휴가 표시 렌더링 함수 개선
   const renderVacations = () => {
     if (!vacations || vacations.length === 0) {
-      console.log("휴가 데이터가 없거나 비어 있습니다.");
       return null;
     }
-
-    console.log(
-      `renderVacations 함수 호출됨 - ${vacations.length}개 휴가 데이터`
-    );
 
     // 휴가 데이터의 userId 또는 staffId를 출력
     vacations.forEach((vacation) => {
@@ -3548,7 +3603,7 @@ const ScheduleGrid = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1100,
+    zIndex: 1500,
   };
 
   const confirmModalStyle = {
@@ -3785,7 +3840,8 @@ const ScheduleGrid = ({
               <FormActions>
                 <Button
                   className="secondary"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation(); // 이벤트 전파 방지
                     setShowForm(false);
                     setFormData({
                       title: "",
@@ -3809,14 +3865,21 @@ const ScheduleGrid = ({
 
                 {selectedAppointment && !isEditing ? (
                   // 선택된 일정이 있고 편집 모드가 아닐 때
-                  <Button className="primary" onClick={handleEditAppointment}>
+                  <Button
+                    className="primary"
+                    onClick={(e) => {
+                      e.stopPropagation(); // 이벤트 전파 방지
+                      handleEditAppointment();
+                    }}
+                  >
                     수정
                   </Button>
                 ) : (
                   // 새 일정 생성 또는 일정 편집 중
                   <Button
                     className="primary"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation(); // 이벤트 전파 방지
                       if (isEditing && selectedAppointment) {
                         // 일정 편집 처리
                         handleAppointmentSubmit(new Event("submit"));
@@ -3857,7 +3920,13 @@ const ScheduleGrid = ({
                 )}
 
                 {selectedAppointment && (
-                  <Button className="danger" onClick={handleDeleteAppointment}>
+                  <Button
+                    className="danger"
+                    onClick={(e) => {
+                      e.stopPropagation(); // 이벤트 전파 방지
+                      handleDeleteAppointment(e);
+                    }}
+                  >
                     삭제
                   </Button>
                 )}
@@ -3865,35 +3934,6 @@ const ScheduleGrid = ({
             </FormColumn>
           </FormContent>
         </AppointmentForm>
-      )}
-
-      {/* 삭제 확인 모달 */}
-      {showDeleteModal && (
-        <div className="confirm-modal-overlay" style={confirmOverlayStyle}>
-          <div className="confirm-modal" style={confirmModalStyle}>
-            <div style={confirmHeaderStyle}>
-              <div style={{ color: "#f44336", marginRight: "10px" }}>⚠️</div>
-              <h3 style={confirmTitleStyle}>일정 삭제 확인</h3>
-            </div>
-            <div style={confirmContentStyle}>
-              <p>정말로 이 일정을 삭제하시겠습니까?</p>
-            </div>
-            <div style={confirmButtonsStyle}>
-              <button
-                onClick={cancelDeleteAppointment}
-                style={confirmCancelButtonStyle}
-              >
-                취소
-              </button>
-              <button
-                onClick={confirmDeleteAppointment}
-                style={confirmDeleteButtonStyle}
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* 휴가 충돌 확인 모달 */}
@@ -4033,6 +4073,59 @@ const ScheduleGrid = ({
             </Button>
           </FormActions>
         </AppointmentForm>
+      )}
+      {showDeleteModal && (
+        <div
+          className="confirm-modal-overlay"
+          style={confirmOverlayStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            // 배경 영역 클릭 시 모달 닫기(취소 동작)
+            if (e.target === e.currentTarget) {
+              cancelDeleteAppointment(e);
+            }
+          }}
+        >
+          <div
+            className="confirm-modal"
+            style={confirmModalStyle}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            <div style={confirmHeaderStyle}>
+              <div style={{ color: "#f44336", marginRight: "10px" }}>⚠️</div>
+              <h3 style={confirmTitleStyle}>일정 삭제 확인</h3>
+            </div>
+            <div style={confirmContentStyle}>
+              <p>정말로 이 일정을 삭제하시겠습니까?</p>
+            </div>
+            <div style={confirmButtonsStyle}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  cancelDeleteAppointment(e);
+                }}
+                style={confirmCancelButtonStyle}
+              >
+                취소
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  confirmDeleteAppointment(e);
+                }}
+                style={confirmDeleteButtonStyle}
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </GridContainer>
   );

@@ -2442,11 +2442,51 @@ const RequestStatusModal = ({
       console.log("데이터 샘플 (첫 번째 항목):", data[0]);
     }
 
+    // PC의 부서 정보 가져오기
+    const pcDepartment = userLevelData?.department || "";
+    console.log("PC 부서 정보:", pcDepartment);
+
+    // 장바구니의 경우 모든 사용자(대표원장 포함)가 자기 부서의 것만 볼 수 있도록 설정
+    if (activeTab === "stock" && pcDepartment) {
+      // 장바구니 상태인 항목은 부서 기준으로 필터링
+      const cartItems = data.filter((item) => item.status === "장바구니");
+      if (cartItems.length > 0) {
+        // 장바구니 항목은 항상 부서 필터링 적용
+        const filteredCartItems = cartItems.filter((item) =>
+          isDepartmentMatch(item.department, pcDepartment)
+        );
+
+        // 장바구니가 아닌 다른 항목들
+        const nonCartItems = data.filter((item) => item.status !== "장바구니");
+
+        // 대표원장 여부 확인
+        const isOwner = isHospitalOwner(userLevelData, currentUser);
+        // 원무과장 여부 확인
+        const isAdminManager = isAdministrativeManager(
+          userLevelData,
+          currentUser
+        );
+
+        if (isOwner || isAdminManager) {
+          // 대표원장이나 원무과장의 경우 장바구니 항목은 부서 필터링, 다른 항목은 모두 표시
+          return [...filteredCartItems, ...nonCartItems];
+        } else {
+          // 일반 사용자는 모든 항목에 부서 필터링 적용 (기존 로직)
+          return [
+            ...filteredCartItems,
+            ...nonCartItems.filter((item) =>
+              isDepartmentMatch(item.department, pcDepartment)
+            ),
+          ];
+        }
+      }
+    }
+
     // 대표원장 여부 확인 - 로그인 여부와 상관없이 role 정보만 사용
     const isOwner = isHospitalOwner(userLevelData, currentUser);
     console.log("대표원장 여부 (isHospitalOwner):", isOwner);
 
-    // 대표원장인 경우 모든 데이터를 볼 수 있음
+    // 대표원장인 경우 모든 데이터를 볼 수 있음 (장바구니는 위에서 처리됨)
     if (isOwner) {
       console.log("대표원장 권한으로 모든 데이터 조회 - 필터링 없음");
       return data;
@@ -2461,10 +2501,6 @@ const RequestStatusModal = ({
       console.log("원무과장 권한으로 모든 비품 데이터 조회");
       return data;
     }
-
-    // PC의 부서 정보 가져오기
-    const pcDepartment = userLevelData?.department || "";
-    console.log("PC 부서 정보:", pcDepartment);
 
     // 부서 정보가 있으면 해당 부서 데이터만 필터링 (로그인 여부와 상관없이)
     if (pcDepartment) {
@@ -2848,12 +2884,29 @@ const RequestStatusModal = ({
           "success"
         );
 
-        // 요청 탭이고 상태가 승인됨 또는 반려됨인 경우 발신자에게 알림(call) 전송
+        // 알림 전송 처리 - 각 탭별로 처리
         if (
           activeTab === "request" &&
           (toStatus === "승인됨" || toStatus === "반려됨")
         ) {
+          // 기존 요청 알림 로직 유지
           await sendCallNotification(currentItem, toStatus, reason);
+        }
+        // 휴가 신청 알림 추가
+        else if (
+          activeTab === "vacation" &&
+          (toStatus === "승인됨" || toStatus === "반려됨")
+        ) {
+          await sendVacationNotification(currentItem, toStatus, reason);
+        }
+        // 비품 신청 알림 추가
+        else if (
+          activeTab === "stock" &&
+          (toStatus === "승인됨" ||
+            toStatus === "반려됨" ||
+            toStatus === "주문완료")
+        ) {
+          await sendStockNotification(currentItem, toStatus, reason);
         }
 
         // 데이터 리프레시
@@ -2918,6 +2971,122 @@ const RequestStatusModal = ({
     } catch (error) {
       console.error("상태 변경 알림 전송 오류:", error);
       // 알림 전송 오류는 사용자에게 표시하지 않음 (주요 기능에 영향 없음)
+      return false;
+    }
+  };
+
+  // 휴가 신청 알림 전송 함수 추가
+  const sendVacationNotification = async (vacationItem, newStatus, reason) => {
+    try {
+      // 필요한 정보가 있는지 확인
+      if (!vacationItem.department || !vacationItem.userName) {
+        console.warn(
+          "휴가 항목에 부서 또는 사용자 정보가 없습니다:",
+          vacationItem
+        );
+        return;
+      }
+
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const formattedTime = `${hours}:${minutes}`;
+
+      // 상태에 따른 메시지 내용 생성
+      const statusText = newStatus === "승인됨" ? "승인" : "반려";
+
+      // 휴가 정보 표시
+      const vacationInfo =
+        vacationItem.vacationType === "휴가"
+          ? `${vacationItem.vacationType} (${vacationItem.days}일)`
+          : vacationItem.vacationType;
+
+      const message = `${vacationItem.userName}님의 ${vacationInfo} 신청이 ${statusText}되었습니다.`;
+
+      // 호출(call) 데이터 생성
+      const callData = {
+        message: message,
+        receiverId: vacationItem.department, // 부서를 receiverId로 설정
+        senderId: userLevelData?.department || "관리자", // 현재 처리자 부서
+        formattedTime,
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
+        type: "휴가", // 호출 타입을 '휴가'로 설정
+        vacationId: vacationItem.id, // 휴가 ID 저장
+        approvalReason: reason, // 승인/반려 사유 추가
+        newStatus: newStatus, // 변경된 상태 정보 추가
+        [vacationItem.department]: true, // 부서 필드 설정
+      };
+
+      console.log("휴가 상태 변경 알림 데이터:", callData);
+
+      // Firestore에 호출 데이터 저장
+      await addDoc(collection(db, "calls"), callData);
+      console.log("휴가 상태 변경 알림 전송 완료:", newStatus);
+
+      return true;
+    } catch (error) {
+      console.error("휴가 상태 변경 알림 전송 오류:", error);
+      return false;
+    }
+  };
+
+  // 비품 신청 알림 전송 함수 추가
+  const sendStockNotification = async (stockItem, newStatus, reason) => {
+    try {
+      // 필요한 정보가 있는지 확인
+      if (!stockItem.department) {
+        console.warn("비품 항목에 부서 정보가 없습니다:", stockItem);
+        return;
+      }
+
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const formattedTime = `${hours}:${minutes}`;
+
+      // 상태에 따른 메시지 내용 생성
+      let statusText;
+      if (newStatus === "승인됨") statusText = "승인";
+      else if (newStatus === "반려됨") statusText = "반려";
+      else if (newStatus === "주문완료") statusText = "주문 완료";
+      else statusText = newStatus;
+
+      // 신청자 이름 또는 기본값
+      const requesterName =
+        stockItem.requestedByName || stockItem.writer || "사용자";
+
+      // 비품 정보
+      const stockInfo = `${stockItem.itemName} (${stockItem.quantity}${
+        stockItem.measure || "개"
+      })`;
+
+      const message = `${requesterName}님의 비품 신청 [${stockInfo}]이(가) ${statusText}되었습니다.`;
+
+      // 호출(call) 데이터 생성
+      const callData = {
+        message: message,
+        receiverId: stockItem.department, // 부서를 receiverId로 설정
+        senderId: userLevelData?.department || "관리자", // 현재 처리자 부서
+        formattedTime,
+        createdAt: Date.now(),
+        createdAt2: serverTimestamp(),
+        type: "비품", // 호출 타입을 '비품'으로 설정
+        stockId: stockItem.id, // 비품 ID 저장
+        approvalReason: reason, // 승인/반려 사유 추가
+        newStatus: newStatus, // 변경된 상태 정보 추가
+        [stockItem.department]: true, // 부서 필드 설정
+      };
+
+      console.log("비품 상태 변경 알림 데이터:", callData);
+
+      // Firestore에 호출 데이터 저장
+      await addDoc(collection(db, "calls"), callData);
+      console.log("비품 상태 변경 알림 전송 완료:", newStatus);
+
+      return true;
+    } catch (error) {
+      console.error("비품 상태 변경 알림 전송 오류:", error);
       return false;
     }
   };
@@ -3168,7 +3337,10 @@ const RequestStatusModal = ({
     if (activeTab !== "stock") return;
 
     try {
-      const cartItems = stockRequests.filter(
+      // 현재 사용자에게 보이는 데이터만 가져옴 (getCurrentData 사용)
+      const currentItems = getCurrentData();
+      // 현재 보이는 항목 중 장바구니 상태인 항목만 필터링
+      const cartItems = currentItems.filter(
         (item) => item.status === "장바구니"
       );
 

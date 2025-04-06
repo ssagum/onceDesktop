@@ -114,8 +114,21 @@ export function UserLevelProvider({ children }) {
 
       if (autoLoginEnabled || isLoggedInStatus) {
         const user = getCurrentUser();
+        console.log("초기화 시 현재 로그인된 사용자 확인", user);
         if (user) {
           setCurrentUser(user);
+
+          // 사용자 정보를 userLevelData에도 반영
+          setUserLevelData((prevData) => ({
+            ...prevData,
+            id: user.id,
+            uid: user.uid,
+            email: user.email,
+            name: user.name,
+            displayName: user.displayName || user.name,
+            role: user.role || "",
+            departmentLeader: user.departmentLeader || false,
+          }));
         } else {
           // 사용자 정보가 없으면 로그아웃 처리
           handleLogout(autoLoginEnabled);
@@ -225,8 +238,6 @@ export function UserLevelProvider({ children }) {
       setLoginStatus(true);
 
       // PC 정보 보존하면서 사용자 정보 업데이트
-      // 사용자 식별 정보와 역할 정보는 Firebase에서 가져온 정보로 업데이트
-      // 로컬 환경 설정(department, location)은 기존 값 유지
       const updatedUserLevelData = {
         // PC의 위치 정보는 유지
         department: userLevelData.department || "",
@@ -234,10 +245,10 @@ export function UserLevelProvider({ children }) {
 
         // 사용자 식별 정보 업데이트 (Firebase에서 가져옴)
         id: result.user.id,
-        uid: result.user.uid,
+        uid: result.user.uid || "",
         email: result.user.email,
         name: result.user.name,
-        displayName: result.user.displayName,
+        displayName: result.user.displayName || result.user.name,
 
         // 역할 정보 업데이트 (Firebase에서 가져옴)
         role: result.user.role || "",

@@ -118,6 +118,8 @@ const ChatSquare = ({ onClick }) => {
         // 채팅방 목록 가져오기
         const rooms = await getChatRooms(deviceId, department, role);
 
+        console.log("채팅방 목록:", rooms);
+
         // 최소 한 개의 채팅방이라도 메시지가 있는지 확인
         let foundMessages = false;
 

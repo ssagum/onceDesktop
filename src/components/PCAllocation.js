@@ -32,6 +32,14 @@ function PCAllocation() {
   const [activeTab, setActiveTab] = useState("login"); // 초기 탭 상태
   const [userRoleLevel, setUserRoleLevel] = useState("guest"); // 권한 레벨 정보
 
+  console.log(
+    "PC할당",
+    "userLevelData",
+    userLevelData,
+    "currentUser",
+    currentUser
+  );
+
   // PC 할당이 필요한 상태인지 확인하는 함수
   const needsSetup =
     !userLevelData.department && !userLevelData.role && !userLevelData.location;

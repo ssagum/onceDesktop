@@ -15,6 +15,7 @@ import {
   initializeChatRooms,
   CHAT_TYPES,
   subscribeToUnreadCount,
+  getUsersFromDepartment,
 } from "./ChatService";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import { IoPaperPlaneSharp } from "react-icons/io5";
@@ -1003,6 +1004,7 @@ const ChatWindow = () => {
   const [loading, setLoading] = useState(true);
   const [canSend, setCanSend] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false); // 메시지 로딩 상태 추가
 
   // 시크릿 모드 관련 상태
   const [secretMode, setSecretMode] = useState(false);
@@ -1121,19 +1123,17 @@ const ChatWindow = () => {
       const isDirector = role === "대표원장";
 
       console.log("현재 사용자 정보:", {
-        department,
-        role,
-        userLevelData,
-        isSecretMode,
+        userLevelData: userLevelData,
+        currentUser: currentUser,
       });
 
       // 대표원장이고 시크릿 모드인 경우에만 모든 채팅방 가져오기
-      if (isDirector && isSecretMode) {
+      if (isDirector) {
         // 모든 채팅방 가져오기 (시크릿 모드)
         const rooms = await getChatRooms(deviceId, department, role, true);
         console.log("시크릿 모드: 모든 채팅방 목록:", rooms);
         setChatRooms(rooms);
-        
+
         // 안 읽은 메시지 수 실시간 구독 설정
         setupUnreadCountSubscription(deviceId, department, role, true);
       } else if (department) {
@@ -1144,9 +1144,14 @@ const ChatWindow = () => {
         const rooms = await getChatRooms(deviceId, department, effectiveRole);
         console.log("일반 모드: 가져온 채팅방 목록:", rooms);
         setChatRooms(rooms);
-        
+
         // 안 읽은 메시지 수 실시간 구독 설정
-        setupUnreadCountSubscription(deviceId, department, effectiveRole, false);
+        setupUnreadCountSubscription(
+          deviceId,
+          department,
+          effectiveRole,
+          false
+        );
       } else {
         // 부서가 없는 경우 전체 채팅방만 표시
         const globalRoomId = "global-chat";
@@ -1168,29 +1173,34 @@ const ChatWindow = () => {
   };
 
   // 안 읽은 메시지 수 실시간 구독 설정 함수 추가
-  const setupUnreadCountSubscription = async (deviceId, department, role, isSecretMode) => {
+  const setupUnreadCountSubscription = async (
+    deviceId,
+    department,
+    role,
+    isSecretMode
+  ) => {
     // 기존 구독이 있으면 해제
     if (unreadCountUnsubscribe) {
       unreadCountUnsubscribe();
     }
-    
+
     try {
       // 모든 채팅방에 대한 안 읽은 메시지 수 구독 설정
       const unsubscribeFunc = await subscribeToUnreadCount(
-        deviceId, 
-        department, 
+        deviceId,
+        department,
         role,
         (totalCount, roomsUnreadData) => {
           // 채팅방별 안 읽은 메시지 수 업데이트
-          setChatRooms(prevRooms => 
-            prevRooms.map(room => ({
+          setChatRooms((prevRooms) =>
+            prevRooms.map((room) => ({
               ...room,
-              unreadCount: roomsUnreadData[room.id] || 0
+              unreadCount: roomsUnreadData[room.id] || 0,
             }))
           );
         }
       );
-      
+
       // 구독 해제 함수 저장
       setUnreadCountUnsubscribe(() => unsubscribeFunc);
     } catch (error) {
@@ -1215,11 +1225,11 @@ const ChatWindow = () => {
   // 초기 발신자 설정 - 로그인 상태면 해당 사용자, 아니면 부서의 첫 번째 사용자
   useEffect(() => {
     const initSender = async () => {
-      if (userLevelData?.uid && userLevelData?.name) {
+      if (currentUser?.name) {
         // 로그인 상태
         setSelectedSender({
-          id: userLevelData.uid,
-          name: userLevelData.name || userLevelData.displayName || "사용자",
+          id: currentUser.uid,
+          name: currentUser.name || userLevelData.displayName || "사용자",
           department: userLevelData.department || "",
         });
       } else if (userLevelData?.department) {
@@ -1252,6 +1262,7 @@ const ChatWindow = () => {
 
     setSelectedRoom(room);
     setMessages([]);
+    setMessageLoading(true); // 메시지 로딩 상태 활성화
 
     // 디버깅 로그 추가
     console.log("선택된 채팅방:", room);
@@ -1283,30 +1294,31 @@ const ChatWindow = () => {
     // 채팅방 멤버 가져오기
     try {
       const roomMembers = await getChatRoomMembers(room.id);
-      
+
       // 대표원장 확인
       const isDirector = userLevelData?.role === "대표원장";
-      
+
       // 대표원장이고 멤버에 없는 경우 현재 사용자를 멤버 목록에 추가
       let updatedMembers = [...roomMembers];
       if (isDirector && currentUser) {
         // 이미 멤버 목록에 있는지 확인
-        const directorExists = roomMembers.some(member => 
-          member.id === currentUser.uid || member.name === currentUser.name
+        const directorExists = roomMembers.some(
+          (member) =>
+            member.id === currentUser.uid || member.name === currentUser.name
         );
-        
+
         // 멤버 목록에 없으면 추가
         if (!directorExists) {
           updatedMembers.push({
             id: currentUser.uid || `director-${Date.now()}`,
             name: currentUser.name || "대표원장",
             role: "대표원장",
-            department: userLevelData?.department || ""
+            department: userLevelData?.department || "",
           });
           console.log("대표원장을 멤버 목록에 추가했습니다.");
         }
       }
-      
+
       setMembers(updatedMembers);
 
       // 멘션 가능한 사용자 목록
@@ -1322,7 +1334,7 @@ const ChatWindow = () => {
         let senderUser = updatedMembers.find(
           (member) => member.name === currentUser.name
         );
-        
+
         if (senderUser) {
           console.log("현재 로그인 사용자로 발신자 설정:", senderUser.name);
           setSelectedSender(senderUser);
@@ -1331,27 +1343,27 @@ const ChatWindow = () => {
           let currentUserByUid = updatedMembers.find(
             (member) => member.id === userLevelData.uid
           );
-          
+
           // uid로 못 찾았으면 이름으로 찾기
           if (!currentUserByUid && userLevelData.name) {
             currentUserByUid = updatedMembers.find(
               (member) => member.name === userLevelData.name
             );
           }
-          
+
           // 사용자 정보가 있으면 발신자로 설정
           if (currentUserByUid) {
             console.log("발신자 자동 설정:", currentUserByUid.name);
             setSelectedSender(currentUserByUid);
-          } else if (updatedMembers.length > 0) {
-            // 매칭되는 사용자가 없고, 멤버가 있으면 첫 번째 멤버로 설정
-            console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", updatedMembers[0].name);
-            setSelectedSender(updatedMembers[0]);
+          } else {
+            // 매칭되는 사용자가 없으면 null로 설정 (자동 선택 안함)
+            console.log("매칭되는 사용자가 없어 발신자 자동 선택하지 않음");
+            setSelectedSender(null);
           }
-        } else if (updatedMembers.length > 0) {
-          // 로그인하지 않은 경우 첫 번째 멤버로 설정
-          console.log("로그인하지 않아 첫 번째 멤버로 설정:", updatedMembers[0].name);
-          setSelectedSender(updatedMembers[0]);
+        } else {
+          // 로그인하지 않은 경우 자동 선택하지 않음
+          console.log("로그인하지 않아 발신자 자동 선택하지 않음");
+          setSelectedSender(null);
         }
       } else if (userLevelData?.uid) {
         // currentUser가 없는 경우 기존 로직 실행
@@ -1359,27 +1371,27 @@ const ChatWindow = () => {
         let currentUserByUid = updatedMembers.find(
           (member) => member.id === userLevelData.uid
         );
-        
+
         // uid로 못 찾았으면 이름으로 찾기
         if (!currentUserByUid && userLevelData.name) {
           currentUserByUid = updatedMembers.find(
             (member) => member.name === userLevelData.name
           );
         }
-        
+
         // 사용자 정보가 있으면 발신자로 설정
         if (currentUserByUid) {
           console.log("발신자 자동 설정:", currentUserByUid.name);
           setSelectedSender(currentUserByUid);
-        } else if (updatedMembers.length > 0) {
-          // 매칭되는 사용자가 없고, 멤버가 있으면 첫 번째 멤버로 설정
-          console.log("매칭되는 사용자가 없어 첫 번째 멤버로 설정:", updatedMembers[0].name);
-          setSelectedSender(updatedMembers[0]);
+        } else {
+          // 매칭되는 사용자가 없으면 null로 설정 (자동 선택 안함)
+          console.log("매칭되는 사용자가 없어 발신자 자동 선택하지 않음");
+          setSelectedSender(null);
         }
-      } else if (updatedMembers.length > 0) {
-        // 로그인하지 않은 경우 첫 번째 멤버로 설정
-        console.log("로그인하지 않아 첫 번째 멤버로 설정:", updatedMembers[0].name);
-        setSelectedSender(updatedMembers[0]);
+      } else {
+        // 로그인하지 않은 경우 자동 선택하지 않음
+        console.log("로그인하지 않아 발신자 자동 선택하지 않음");
+        setSelectedSender(null);
       }
     } catch (error) {
       console.error("채팅방 멤버 가져오기 오류:", error);
@@ -1388,6 +1400,7 @@ const ChatWindow = () => {
     // 선택한 채팅방의 메시지를 실시간으로 구독
     const unsubscribe = subscribeToMessages(room.id, (updatedMessages) => {
       setMessages(updatedMessages);
+      setMessageLoading(false); // 메시지 로딩 완료
 
       // 수신한 메시지 중 안 읽은 메시지를 읽음으로 표시 - 컴퓨터 기준으로 변경
       const deviceId =
@@ -1401,7 +1414,7 @@ const ChatWindow = () => {
           markMessageAsRead(msg.id, deviceId, room.id);
         }
       });
-      
+
       // 메시지 로드 완료 후 즉시 스크롤을 맨 아래로 이동 (smooth 애니메이션 제거)
       if (messageEndRef.current) {
         messageEndRef.current.scrollIntoView({ behavior: "auto" });
@@ -1482,8 +1495,6 @@ const ChatWindow = () => {
   const renderSecretModeIcon = () => {
     const isDirector = userLevelData?.role === "대표원장";
 
-    console.log("isDirector", userLevelData);
-
     if (!isDirector) return null;
 
     return (
@@ -1518,10 +1529,10 @@ const ChatWindow = () => {
   // 메시지 입력 처리
   const handleInputChange = (e) => {
     const text = e.target.value;
-    
+
     // 값을 설정
     setMessageText(text);
-    
+
     // 멘션 관련 코드
     if (!text) {
       // 비어있으면 멘션 관련 상태 초기화
@@ -1529,7 +1540,7 @@ const ChatWindow = () => {
       setShowMentionSuggestions(false);
       return;
     }
-    
+
     try {
       // 멘션 파싱 시도
       const mentionRegex = /@(\S+)/g;
@@ -1545,13 +1556,16 @@ const ChatWindow = () => {
       }
 
       setParsedMentions(matches);
-      
+
       // 멘션 감지 (@다음에 텍스트 입력 중인지)
       const lastAtSymbolIndex = text.lastIndexOf("@");
-      if (lastAtSymbolIndex !== -1 && lastAtSymbolIndex > text.lastIndexOf(" ")) {
+      if (
+        lastAtSymbolIndex !== -1 &&
+        lastAtSymbolIndex > text.lastIndexOf(" ")
+      ) {
         const query = text.slice(lastAtSymbolIndex + 1);
         setMentionQuery(query);
-        
+
         if (mentionableUsers && mentionableUsers.length > 0) {
           // 멘션 쿼리로 사용자 필터링
           if (query) {
@@ -1670,16 +1684,16 @@ const ChatWindow = () => {
   const handleAddReaction = async (message, reactionType) => {
     try {
       // 사용자 ID 가져오기 (로그인된 경우 uid, 아니면 장치 ID 사용)
-      const userId = userLevelData?.uid || localStorage.getItem("deviceId") || `device-${Date.now()}`;
-      
-      await addReaction(
-        message.id,
-        userId,
-        reactionType,
-        selectedRoom.id
+      const userId =
+        userLevelData?.uid ||
+        localStorage.getItem("deviceId") ||
+        `device-${Date.now()}`;
+
+      await addReaction(message.id, userId, reactionType, selectedRoom.id);
+
+      console.log(
+        `반응 추가 성공: 메시지 ID-${message.id}, 사용자-${userId}, 반응-${reactionType}`
       );
-      
-      console.log(`반응 추가 성공: 메시지 ID-${message.id}, 사용자-${userId}, 반응-${reactionType}`);
     } catch (error) {
       console.error("반응 추가 오류:", error);
     } finally {
@@ -1822,34 +1836,34 @@ const ChatWindow = () => {
     if (!messageText.trim() || !selectedRoom || !canSend || isSending) {
       return;
     }
-    
+
     try {
       // 전송 중 상태로 설정
       setIsSending(true);
-      
+
       // 메시지 정보 구성
-      const deviceId = localStorage.getItem("deviceId") || `device-${Date.now()}`;
+      const deviceId =
+        localStorage.getItem("deviceId") || `device-${Date.now()}`;
       const messageData = {
         text: messageText.trim(),
-        replyTo: replyToMessage
+        replyTo: replyToMessage,
       };
-      
-      // 발신자 정보 
+
+      // 발신자 정보
       const sender = {
         uid: userLevelData?.uid || deviceId,
         name: currentUser?.name || selectedSender?.name || "사용자",
-        deviceId
+        deviceId,
       };
-      
+
       // 메시지 전송
       await sendMessage(selectedRoom.id, messageData, sender);
-      
+
       // 입력 필드 초기화
       setMessageText("");
-      
+
       // 답장 상태 초기화
       setReplyToMessage(null);
-      
     } catch (error) {
       console.error("메시지 전송 중 오류 발생:", error);
     } finally {
@@ -1901,7 +1915,7 @@ const ChatWindow = () => {
     if (!messages || messages.length === 0) {
       return [];
     }
-    
+
     return groupMessagesByDate(messages);
   }, [messages]);
 
@@ -2034,20 +2048,18 @@ const ChatWindow = () => {
     // 클릭 위치에 가장 가까운 텍스트 위치 계산
     // (정확한 구현은 복잡하므로 간단히 처리)
     // textarea의 내부 요소이므로 입력 필드 클릭만으로도 적절한 위치에 커서가 위치함
-
-    
   };
 
   const isMyMessage = (message) => {
     if (!message) return false;
-    
+
     // 로그인한 상태면 uid로 비교
     if (message.senderName && currentUser?.name) {
       return message.senderName === currentUser.name;
     }
-  
-    console.log('채팅체크', message.senderName, currentUser?.name);
-    
+
+    console.log("채팅체크", message.senderName, currentUser?.name);
+
     // 장치 ID로 비교 (비로그인 상태)
     const deviceId = localStorage.getItem("deviceId");
     return message.deviceId === deviceId;
@@ -2142,78 +2154,106 @@ const ChatWindow = () => {
                 </ReadOnlyBanner>
               )}
 
-            {messageGroups.map((group, groupIndex) => (
-              <MessageGroup key={groupIndex}>
-                <MessageDate>{formatDate(group.date)}</MessageDate>
+            {messageLoading ? (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: "100%",
+                  color: "#666",
+                }}
+              >
+                채팅 내용을 불러오는 중입니다...
+              </div>
+            ) : messageGroups.length > 0 ? (
+              // 메시지가 있을 때 메시지 그룹 표시
+              messageGroups.map((group, groupIndex) => (
+                <MessageGroup key={groupIndex}>
+                  <MessageDate>{formatDate(group.date)}</MessageDate>
 
-                {group.messages.map((message) => {
-                  // 내 메시지 판별 로직 사용
-                  const isMe = isMyMessage(message);
-                  
-                  // 멘션 처리
-                  const isMentioned = isUserMentioned(message);
-                  
-                  return (
-                    <MessageItem key={message.id} isMe={isMe}>
-                      {/* 내 메시지가 아닐 때만 좌측에 프로필 표시 */}
-                      {!isMe && (
-                        <MessageProfile isMe={isMe}>
-                          {getUserInitials(message.senderName)}
-                        </MessageProfile>
-                      )}
+                  {group.messages.map((message) => {
+                    // 내 메시지 판별 로직 사용
+                    const isMe = isMyMessage(message);
 
-                      <MessageContent>
+                    // 멘션 처리
+                    const isMentioned = isUserMentioned(message);
+
+                    return (
+                      <MessageItem key={message.id} isMe={isMe}>
+                        {/* 내 메시지가 아닐 때만 좌측에 프로필 표시 */}
                         {!isMe && (
-                          <SenderUserName isMe={isMe}>
-                            {message.senderName}
-                          </SenderUserName>
+                          <MessageProfile isMe={isMe}>
+                            {getUserInitials(message.senderName)}
+                          </MessageProfile>
                         )}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-end",
-                            justifyContent: isMe ? "flex-end" : "flex-start",
-                            width: "100%",
-                          }}
-                        >
-                          {isMe && (
-                            <MessageTime isMe={isMe}>
-                              {formatMessageTime(message.createdAt)}
-                            </MessageTime>
-                          )}
-                          <MessageBubble
-                            isMe={isMe}
-                            hasMention={isMentioned}
-                            isReply={!!message.replyTo}
-                            onContextMenu={(e) =>
-                              handleMessageContextMenu(e, message)
-                            }
-                          >
-                            {message.replyTo && (
-                              <ReplyQuote isMe={isMe}>
-                                <ReplyQuoteSender isMe={isMe}>
-                                  {message.replyTo.senderName}
-                                </ReplyQuoteSender>
-                                <ReplyQuoteText isMe={isMe}>
-                                  {message.replyTo.text}
-                                </ReplyQuoteText>
-                              </ReplyQuote>
-                            )}
-                            {renderMessageText(message)}
-                          </MessageBubble>
+
+                        <MessageContent>
                           {!isMe && (
-                            <MessageTime isMe={isMe}>
-                              {formatMessageTime(message.createdAt)}
-                            </MessageTime>
+                            <SenderUserName isMe={isMe}>
+                              {message.senderName}
+                            </SenderUserName>
                           )}
-                        </div>
-                        {renderReactions(message, isMe)}
-                      </MessageContent>
-                    </MessageItem>
-                  );
-                })}
-              </MessageGroup>
-            ))}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-end",
+                              justifyContent: isMe ? "flex-end" : "flex-start",
+                              width: "100%",
+                            }}
+                          >
+                            {isMe && (
+                              <MessageTime isMe={isMe}>
+                                {formatMessageTime(message.createdAt)}
+                              </MessageTime>
+                            )}
+                            <MessageBubble
+                              isMe={isMe}
+                              hasMention={isMentioned}
+                              isReply={!!message.replyTo}
+                              onContextMenu={(e) =>
+                                handleMessageContextMenu(e, message)
+                              }
+                            >
+                              {message.replyTo && (
+                                <ReplyQuote isMe={isMe}>
+                                  <ReplyQuoteSender isMe={isMe}>
+                                    {message.replyTo.senderName}
+                                  </ReplyQuoteSender>
+                                  <ReplyQuoteText isMe={isMe}>
+                                    {message.replyTo.text}
+                                  </ReplyQuoteText>
+                                </ReplyQuote>
+                              )}
+                              {renderMessageText(message)}
+                            </MessageBubble>
+                            {!isMe && (
+                              <MessageTime isMe={isMe}>
+                                {formatMessageTime(message.createdAt)}
+                              </MessageTime>
+                            )}
+                          </div>
+                          {renderReactions(message, isMe)}
+                        </MessageContent>
+                      </MessageItem>
+                    );
+                  })}
+                </MessageGroup>
+              ))
+            ) : (
+              // 메시지가 없을 때 표시할 내용
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: "100%",
+                  color: "#666",
+                }}
+              >
+                이 채팅방에는 아직 대화가 없습니다.
+              </div>
+            )}
             <div ref={messageEndRef} />
           </MessageContainer>
 
@@ -2255,7 +2295,9 @@ const ChatWindow = () => {
               {selectedSender ? (
                 <>
                   <span style={{ marginLeft: "5px", flex: 1 }}>
-                    {selectedSender.name}
+                    {typeof selectedSender === "string"
+                      ? selectedSender
+                      : selectedSender.name}
                   </span>
                   <span style={{ fontSize: "10px", marginLeft: "4px" }}>▼</span>
                 </>
