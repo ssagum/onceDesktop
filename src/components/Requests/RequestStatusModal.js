@@ -110,6 +110,11 @@ const ItemDetailModal = ({
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(""); // 현재 상태를 저장할 변수 추가
 
+  // 전역에서 모달 닫기 함수 제공
+  window.closeDetailModal = () => {
+    setIsVisible(false);
+  };
+
   // 대표원장 여부 확인
   const isOwner = isHospitalOwner(userLevelData, currentUser);
 
@@ -318,8 +323,10 @@ const ItemDetailModal = ({
     if (!selectedStatus) return; // 선택된 상태가 있어야 함
 
     if (onStatusChange && reason.trim()) {
+      // 1. 상태 변경 함수 호출 (간단히)
       onStatusChange(item.id, selectedStatus, reason);
-      showToast(`상태가 '${selectedStatus}'(으)로 변경되었습니다.`, "success");
+
+      // 2. 모달 바로 닫기
       setIsVisible(false);
     } else {
       showToast("사유를 입력해주세요.", "error");
@@ -700,16 +707,40 @@ const ReasonInputModal = ({
     // 제출 중 상태로 설정
     isSubmittingRef.current = true;
 
-    // 비동기로 처리하여 입력이 완전히 적용되도록 보장
+    // 입력이 완전히 적용되도록 약간의 지연 추가
     setTimeout(() => {
       if (onSubmit && reason.trim()) {
-        onSubmit(reason);
-      }
-      handleClose();
+        // 직접 Firestore 업데이트
+        const { itemId, toStatus } = window.targetStatusChange || {};
 
-      // 제출 후 상태 초기화
+        if (itemId && toStatus) {
+          // 모달을 먼저 닫아 UX 개선
+          handleClose();
+
+          // Firestore 직접 업데이트
+          onSubmit(reason)
+            .then(() => {
+              console.log("사유 제출 및 상태 변경 완료:", toStatus);
+              // 상세 모달도 닫기
+              if (typeof window.closeDetailModal === "function") {
+                window.closeDetailModal();
+              }
+            })
+            .catch((error) => {
+              console.error("사유 제출 중 오류:", error);
+            });
+        } else {
+          // 일반적인 경우
+          onSubmit(reason);
+          handleClose();
+        }
+      } else {
+        handleClose();
+      }
+
+      // 제출 중 상태 초기화
       isSubmittingRef.current = false;
-    }, 50); // 약간의 지연 추가
+    }, 50);
   };
 
   // 개선된 키 이벤트 핸들러
@@ -2836,6 +2867,8 @@ const RequestStatusModal = ({
     if (!itemId || !toStatus) return Promise.resolve(); // Promise 반환
 
     try {
+      console.log("상태 변경 시작:", { itemId, fromStatus, toStatus, reason });
+
       // 현재 아이템 정보 가져오기
       let currentCollection;
       let currentItem;
@@ -2868,6 +2901,11 @@ const RequestStatusModal = ({
         // 이제 승인 -> 승인됨 변환은 필요 없음
         if (dbStatus === "반려") dbStatus = "반려됨";
 
+        console.log(`Firestore 업데이트 시작: ${currentCollection}/${itemId}`, {
+          이전상태: currentItem.status,
+          새상태: dbStatus,
+        });
+
         const docRef = doc(db, currentCollection, currentItem.id);
         await updateDoc(docRef, {
           status: dbStatus,
@@ -2876,6 +2914,39 @@ const RequestStatusModal = ({
           updatedBy: userLevelData?.id || "system",
           updatedByName: userLevelData?.name || "System",
         });
+
+        console.log("Firestore 업데이트 완료");
+
+        // 즉시 메모리 상의 데이터도 업데이트 - UI 즉시 반영을 위함
+        switch (activeTab) {
+          case "vacation":
+            setVacationRequests((prev) =>
+              prev.map((item) =>
+                item.id === itemId
+                  ? { ...item, status: dbStatus, approvalReason: reason }
+                  : item
+              )
+            );
+            break;
+          case "stock":
+            setStockRequests((prev) =>
+              prev.map((item) =>
+                item.id === itemId
+                  ? { ...item, status: dbStatus, approvalReason: reason }
+                  : item
+              )
+            );
+            break;
+          case "request":
+            setGeneralRequests((prev) =>
+              prev.map((item) =>
+                item.id === itemId
+                  ? { ...item, status: dbStatus, approvalReason: reason }
+                  : item
+              )
+            );
+            break;
+        }
 
         showToast(
           `상태가 '${
@@ -2909,8 +2980,11 @@ const RequestStatusModal = ({
           await sendStockNotification(currentItem, toStatus, reason);
         }
 
-        // 데이터 리프레시
-        loadRealData();
+        // 데이터 리프레시 - 1초 후 서버 데이터와 동기화
+        setTimeout(() => {
+          loadRealData();
+          console.log("상태 변경 후 데이터 리프레시 완료");
+        }, 1000);
 
         return Promise.resolve(true); // 성공했을 때 true 반환
       } catch (error) {
@@ -3091,56 +3165,205 @@ const RequestStatusModal = ({
     }
   };
 
-  // 상세 모달에서 상태 변경 처리
+  // 상세 모달에서 상태 변경 처리 함수 수정
   const handleModalStatusChange = (itemId, newStatus, reason) => {
-    // 권한 체크 로직 추가
-    // 승인/반려 권한 체크
+    console.log("모달 상태 변경 시작:", { itemId, newStatus, reason });
+
+    // 권한 체크 로직
     if (newStatus === "승인됨" || newStatus === "반려됨") {
-      if (activeTab === "vacation") {
-        if (!canApproveVacation(userLevelData, currentUser)) {
-          showToast("휴가 신청을 승인/반려할 권한이 없습니다.", "error");
-          return;
-        }
-      } else if (activeTab === "stock") {
-        if (!canApproveStockRequest(userLevelData, currentUser)) {
-          showToast("비품 신청을 승인/반려할 권한이 없습니다.", "error");
-          return;
-        }
-      } else if (activeTab === "request") {
-        // 요청 탭에서는 누구나 상태 변경 가능하도록 변경
-        // 권한 체크 로직 제거
-      }
-    }
-    // 주문 관련 상태 체크 (비품에만 해당)
-    else if (
-      ["주문 필요", "주문 완료", "입고 완료"].includes(newStatus) &&
-      activeTab === "stock"
-    ) {
-      if (!canOrderStock(userLevelData, currentUser)) {
-        showToast("비품 주문 상태를 변경할 권한이 없습니다.", "error");
+      if (
+        activeTab === "vacation" &&
+        !canApproveVacation(userLevelData, currentUser)
+      ) {
+        showToast("휴가 신청을 승인/반려할 권한이 없습니다.", "error");
+        return;
+      } else if (
+        activeTab === "stock" &&
+        !canApproveStockRequest(userLevelData, currentUser)
+      ) {
+        showToast("비품 신청을 승인/반려할 권한이 없습니다.", "error");
         return;
       }
+    } else if (
+      ["주문 필요", "주문 완료", "입고 완료"].includes(newStatus) &&
+      activeTab === "stock" &&
+      !canOrderStock(userLevelData, currentUser)
+    ) {
+      showToast("비품 주문 상태를 변경할 권한이 없습니다.", "error");
+      return;
     }
 
-    // reason이 이미 전달되면 직접 처리
+    // 현재 아이템 정보 가져오기
+    let currentCollection;
+    let currentItem;
+
+    switch (activeTab) {
+      case "vacation":
+        currentCollection = "vacations";
+        currentItem = vacationRequests.find((item) => item.id === itemId);
+        break;
+      case "stock":
+        currentCollection = "stockRequests";
+        currentItem = stockRequests.find((item) => item.id === itemId);
+        break;
+      case "request":
+        currentCollection = "requests";
+        currentItem = generalRequests.find((item) => item.id === itemId);
+        break;
+      default:
+        return;
+    }
+
+    if (!currentItem) {
+      console.log("Current item not found", itemId);
+      showToast("상태 변경할 항목을 찾을 수 없습니다.", "error");
+      return;
+    }
+
+    // 같은 상태로 변경하려는 경우 방지
+    if (currentItem.status === newStatus) {
+      showToast(`이미 '${newStatus}' 상태입니다.`, "warning");
+      return;
+    }
+
+    // 사유가 전달된 경우와 아닌 경우를 구분 처리
     if (reason) {
-      setTargetStatusChange({
-        itemId,
-        fromStatus: selectedItem?.status || "대기중",
-        toStatus: newStatus,
-      });
-      handleReasonSubmit(reason).then(() => {
-        // 데이터 리프레시 (비동기 작업 후 수행)
-        loadRealData();
-      });
+      // 직접 Firestore 업데이트 처리 (handleReasonSubmit 대신 직접 처리)
+      const updateFirestore = async () => {
+        try {
+          let dbStatus = newStatus;
+          if (dbStatus === "반려") dbStatus = "반려됨";
+
+          console.log(
+            "Firestore 직접 업데이트 시작:",
+            currentCollection,
+            itemId
+          );
+
+          // Firestore 문서 업데이트
+          const docRef = doc(db, currentCollection, itemId);
+          await updateDoc(docRef, {
+            status: dbStatus,
+            approvalReason: reason,
+            updatedAt: new Date(),
+            updatedBy: userLevelData?.id || "system",
+            updatedByName: userLevelData?.name || "System",
+          });
+
+          console.log("Firestore 업데이트 완료, 알림 처리 시작");
+
+          // 알림 처리
+          if (
+            activeTab === "request" &&
+            (newStatus === "승인됨" || newStatus === "반려됨")
+          ) {
+            await sendCallNotification(currentItem, newStatus, reason);
+          } else if (
+            activeTab === "vacation" &&
+            (newStatus === "승인됨" || newStatus === "반려됨")
+          ) {
+            await sendVacationNotification(currentItem, newStatus, reason);
+          } else if (
+            activeTab === "stock" &&
+            (newStatus === "승인됨" ||
+              newStatus === "반려됨" ||
+              newStatus === "주문완료")
+          ) {
+            await sendStockNotification(currentItem, newStatus, reason);
+          }
+
+          // 성공 메시지 표시
+          showToast(
+            `상태가 '${
+              STATUS_DISPLAY_NAMES[newStatus] || newStatus
+            }'(으)로 변경되었습니다.`,
+            "success"
+          );
+
+          // 데이터 리프레시 - 드래그앤드롭과 동일하게 바로 호출
+          loadRealData();
+
+          // 상세 모달 닫기
+          setShowDetailModal(false);
+        } catch (error) {
+          console.error("상태 업데이트 오류:", error);
+          showToast("상태 업데이트 중 오류가 발생했습니다.", "error");
+        }
+      };
+
+      // 바로 실행
+      updateFirestore();
     } else {
-      // 기존 방식 유지 (이전 코드와의 호환성)
-      setTargetStatusChange({
-        itemId,
-        fromStatus: selectedItem?.status || "대기중",
-        toStatus: newStatus,
-      });
-      setShowReasonModal(true);
+      // 승인/반려/주문완료는 사유 입력 필요
+      if (
+        newStatus === "승인됨" ||
+        newStatus === "반려됨" ||
+        newStatus === "주문완료"
+      ) {
+        // 상태 변경 정보 저장 (ReasonInputModal에서 사용)
+        setTargetStatusChange({
+          itemId,
+          fromStatus: currentItem.status,
+          toStatus: newStatus,
+        });
+
+        // 사유 입력 모달 표시
+        setShowReasonModal(true);
+      } else {
+        // 다른 상태는 빈 문자열로 직접 처리
+        const emptyReason = "";
+
+        // 상태 변경 정보 저장
+        setTargetStatusChange({
+          itemId,
+          fromStatus: currentItem.status,
+          toStatus: newStatus,
+        });
+
+        // Firestore 직접 업데이트
+        const updateFirestore = async () => {
+          try {
+            let dbStatus = newStatus;
+            if (dbStatus === "반려") dbStatus = "반려됨";
+
+            console.log(
+              "Firestore 직접 업데이트 시작:",
+              currentCollection,
+              itemId
+            );
+
+            // Firestore 문서 업데이트
+            const docRef = doc(db, currentCollection, itemId);
+            await updateDoc(docRef, {
+              status: dbStatus,
+              approvalReason: emptyReason,
+              updatedAt: new Date(),
+              updatedBy: userLevelData?.id || "system",
+              updatedByName: userLevelData?.name || "System",
+            });
+
+            // 성공 메시지 표시
+            showToast(
+              `상태가 '${
+                STATUS_DISPLAY_NAMES[newStatus] || newStatus
+              }'(으)로 변경되었습니다.`,
+              "success"
+            );
+
+            // 데이터 리프레시
+            loadRealData();
+
+            // 상세 모달 닫기
+            setShowDetailModal(false);
+          } catch (error) {
+            console.error("상태 업데이트 오류:", error);
+            showToast("상태 업데이트 중 오류가 발생했습니다.", "error");
+          }
+        };
+
+        // 바로 실행
+        updateFirestore();
+      }
     }
   };
 
@@ -3694,6 +3917,14 @@ const RequestStatusModal = ({
 
   // ItemDetailModal에서 접근할 수 있도록 전역 객체에 할당
   globalThis.onceHandleVendorClick = handleVendorClick;
+
+  // 상태 변경을 위한 전역 상태 공유
+  window.targetStatusChange = targetStatusChange;
+
+  // RequestStatusModal 컴포넌트 내에서 targetStatusChange가 변경될 때마다 전역 변수에 복사
+  useEffect(() => {
+    window.targetStatusChange = targetStatusChange;
+  }, [targetStatusChange]);
 
   return (
     <>

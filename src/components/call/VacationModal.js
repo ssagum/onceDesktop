@@ -947,7 +947,7 @@ export default function VacationModal({ isVisible, setIsVisible }) {
         userId: currentUser.id,
         userName: currentUser.name || "익명",
         email: currentUser.email || "",
-        department: userLevelData.department || "",
+        department: currentUser.department || userLevelData.department || "",
         location: userLevelData.location || "",
         startDate: formattedStartDate,
         startTime: vacationForm.startTime,
