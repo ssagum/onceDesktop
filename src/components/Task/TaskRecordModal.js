@@ -114,8 +114,15 @@ const InteractiveHeader = styled.div`
 // 안전하게 시간 포맷팅하는 함수 - 컴포넌트 바깥으로 이동
 function formatTimeWithFallback(timestamp) {
   try {
+    if (!timestamp) return "-";
+
     const date = new Date(timestamp);
-    return isValid(date) ? format(date, "HH:mm") : "-";
+    if (!isValid(date)) return "-";
+
+    // 12시간제로 변경
+    const hours = date.getHours() % 12 || 12; // 0시는 12로 표시
+    const minutes = date.getMinutes();
+    return `${hours}:${minutes.toString().padStart(2, "0")}`;
   } catch (error) {
     console.error("시간 포맷팅 오류:", error, timestamp);
     return "-";
@@ -308,24 +315,27 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
 
       // 반복성 업무거나 아직 종료일이 도래하지 않은 경우 오늘 날짜까지로 제한
       if (task?.category === "반복성" || endDate === INFINITE_END_DATE) {
-        // 시간 정보 제거하고 날짜만 사용
+        // 시간 정보 제거하고 날짜만 사용 (오늘 날짜 포함)
         endDateObj = new Date();
-        endDateObj.setHours(0, 0, 0, 0);
+        // 종료일은 오늘 날짜를 포함하도록 시간을 23:59:59로 설정
+        endDateObj.setHours(23, 59, 59, 999);
       } else {
         try {
           endDateObj = parseToDateWithoutTime(endDate);
           if (!isValid(endDateObj)) {
             console.error("종료일 파싱 오류:", endDate);
             endDateObj = new Date(); // 오류 시 오늘 날짜 사용
+            endDateObj.setHours(23, 59, 59, 999);
           }
         } catch (error) {
           console.error("종료일 파싱 예외 발생:", error);
           endDateObj = new Date();
+          endDateObj.setHours(23, 59, 59, 999);
         }
 
         // 종료일이 미래인 경우 오늘까지만 표시
         const todayWithoutTime = new Date();
-        todayWithoutTime.setHours(0, 0, 0, 0);
+        todayWithoutTime.setHours(23, 59, 59, 999); // 오늘 날짜를 포함하도록 23:59:59로 설정
         if (endDateObj > todayWithoutTime) {
           endDateObj = todayWithoutTime;
         }
@@ -393,67 +403,108 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
   const getCompletionStatus = (dateStr) => {
     if (!taskHistory || taskHistory.length === 0) return { status: "미완료" };
 
-    // 이 날짜에 대한 기록 찾기 (액션 타입 무관)
-    const dateRecords = taskHistory.filter((item) => {
+    // 이 날짜에 대한 관련 기록 찾기 (complete, cancel_complete, update_completers)
+    const relevantRecords = taskHistory.filter((item) => {
       if (!item.timestamp) return false;
 
       try {
         const recordDate = new Date(item.timestamp);
         if (!isValid(recordDate)) return false;
 
-        // 시간 정보 없이 년/월/일만 비교하기 위해 형식 변환
+        // 시간 정보 없이 년/월/일만 비교
         const recordDateStr = format(recordDate, "yyyy/MM/dd");
 
-        // 날짜가 일치하는 기록 모두 포함 (액션 타입 확인 안 함)
-        return recordDateStr === dateStr;
+        // 날짜가 일치하고 관련 액션인 경우
+        return (
+          recordDateStr === dateStr &&
+          ["complete", "cancel_complete", "update_completers"].includes(
+            item.action
+          )
+        );
       } catch (error) {
-        console.error("날짜 비교 오류:", error, item.timestamp);
+        console.error(
+          "날짜/액션 비교 오류:",
+          error,
+          item.timestamp,
+          item.action
+        );
         return false;
       }
     });
 
-    if (dateRecords.length === 0) return { status: "미완료" };
+    if (relevantRecords.length === 0) return { status: "미완료" };
 
-    // 가장 최근 기록 기준 (시간순으로 정렬 후)
-    dateRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    const latestRecord = dateRecords[0];
+    // 가장 최근 관련 기록 기준 (시간순으로 정렬 후)
+    relevantRecords.sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    const latestRelevantRecord = relevantRecords[0];
 
+    // 최신 기록이 완료 취소면 미완료 상태
+    if (latestRelevantRecord.action === "cancel_complete") {
+      return { status: "미완료" };
+    }
+
+    // 완료 또는 완료자 변경 기록이 있으면 완료 상태
     // 완료자 정보 처리
     let actors = [];
+    const record = latestRelevantRecord; // 명확성을 위해 변수명 변경
 
-    // actors 배열이 있는 경우
-    if (Array.isArray(latestRecord.actors) && latestRecord.actors.length > 0) {
-      actors = latestRecord.actors;
+    // actors 배열 처리
+    if (Array.isArray(record.actors) && record.actors.length > 0) {
+      actors = record.actors;
     }
-    // actor 문자열이 있는 경우
-    else if (latestRecord.actor) {
-      actors = [latestRecord.actor];
+    // actor 문자열 처리 (쉼표 구분 포함)
+    else if (record.actor) {
+      actors = (
+        typeof record.actor === "string" && record.actor.includes(",")
+          ? record.actor.split(",").map((a) => a.trim())
+          : [record.actor]
+      ).filter(Boolean); // 빈 문자열 제거
     }
-    // actionBy 문자열이 있는 경우
-    else if (latestRecord.actionBy) {
-      actors = [latestRecord.actionBy];
+    // completedBy 문자열 처리 (쉼표 구분 포함)
+    else if (record.completedBy) {
+      actors = (
+        typeof record.completedBy === "string" &&
+        record.completedBy.includes(",")
+          ? record.completedBy.split(",").map((a) => a.trim())
+          : [record.completedBy]
+      ).filter(Boolean); // 빈 문자열 제거
+    }
+    // actionBy 문자열 처리 (쉼표 구분 포함)
+    else if (record.actionBy) {
+      actors = (
+        typeof record.actionBy === "string" && record.actionBy.includes(",")
+          ? record.actionBy.split(",").map((a) => a.trim())
+          : [record.actionBy]
+      ).filter(Boolean); // 빈 문자열 제거
     }
 
     // 각 actor를 객체 형태로 변환 (NameCoin 컴포넌트 요구사항)
-    const actorObjects = actors.map((actor) => {
-      // 이미 객체인 경우 그대로 사용
-      if (typeof actor === "object" && actor !== null) {
-        return {
-          id: actor.id || actor.userId || actor,
-          name: formatActorName(actor.name || actor.userName || actor),
-          ...actor,
-        };
-      }
-      // 문자열인 경우 객체로 변환
-      return {
-        id: actor,
-        name: formatActorName(actor),
-      };
-    });
+    const actorObjects = actors
+      .map((actor) => {
+        // 이미 객체인 경우
+        if (typeof actor === "object" && actor !== null) {
+          return {
+            id: actor.id || actor.userId || actor, // 다양한 ID 필드 고려
+            name: formatActorName(actor.name || actor.userName || actor), // 다양한 이름 필드 고려
+            ...actor,
+          };
+        }
+        // 문자열인 경우 객체로 변환
+        if (typeof actor === "string" && actor.trim()) {
+          return {
+            id: actor.trim(),
+            name: formatActorName(actor.trim()),
+          };
+        }
+        return null; // 유효하지 않은 액터는 null 반환
+      })
+      .filter(Boolean); // null 값 제거
 
     return {
       status: "상완",
-      timestamp: latestRecord.timestamp,
+      timestamp: record.timestamp,
       actors: actorObjects,
     };
   };
@@ -475,17 +526,33 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
       const dateRecord = taskHistory.find((item) => {
         if (!item.timestamp) return false;
 
-        // 시간 정보 없이 년/월/일만 비교
-        const recordDate = new Date(item.timestamp);
-        const recordDateStr = format(recordDate, "yyyy/MM/dd");
+        try {
+          // 시간 정보 없이 년/월/일만 비교
+          const recordDate = new Date(item.timestamp);
+          const recordDateStr = format(recordDate, "yyyy/MM/dd");
 
-        return recordDateStr === dateStr && item.action === "complete";
+          // 해당 날짜의 완료 작업만 확인
+          return (
+            recordDateStr === dateStr &&
+            (item.action === "complete" ||
+              (item.completedBy && item.completedBy.length > 0))
+          );
+        } catch (error) {
+          console.error("날짜 비교 오류:", error, item.timestamp);
+          return false;
+        }
       });
+
+      // 오늘 날짜 확인
+      const today = new Date();
+      const todayStr = format(today, "yyyy/MM/dd");
+      const isToday = dateStr === todayStr;
 
       // 날짜와 상태 정보 반환
       return {
         date: dateStr,
         dayName, // 요일 추가
+        isToday, // 오늘 날짜 여부 플래그 추가
         ...completionInfo,
         // 시간 정보 추가 (완료된 경우에만)
         ...(dateRecord
@@ -802,11 +869,22 @@ function TaskRecordModal({ isVisible, setIsVisible, task }) {
                       key={index}
                       className={`flex border-b border-gray-100 ${
                         index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                      }`}
+                      } ${record.isToday ? "bg-yellow-50" : ""}`}
                     >
                       <div className="w-1/2 py-4 px-4 flex flex-col items-center justify-center">
-                        <div className="font-medium text-gray-700">
+                        <div
+                          className={`font-medium ${
+                            record.isToday
+                              ? "text-orange-600 font-bold"
+                              : "text-gray-700"
+                          }`}
+                        >
                           {record.date} ({record.dayName})
+                          {record.isToday && (
+                            <span className="ml-1 text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
+                              오늘
+                            </span>
+                          )}
                         </div>
                         {record.status === "상완" &&
                           record.dayPeriod !== "-" && (

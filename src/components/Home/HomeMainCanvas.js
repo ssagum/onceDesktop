@@ -478,7 +478,7 @@ export default function HomeMainCanvas() {
           ignoreSchedule: false,
         });
         setAllUserTasks(userTasksResult);
-        setFilteredTasks(userTasksResult);
+        filterUserTasks(userTasksResult);
       } catch (error) {
         console.error("사용자 업무 가져오기 오류:", error);
       }
@@ -488,6 +488,10 @@ export default function HomeMainCanvas() {
       fetchTasks();
     }
   }, [userLevelData?.department, currentDate]);
+
+  useEffect(() => {
+    filterUserTasks(allUserTasks);
+  }, [allUserTasks, currentDate]);
 
   const filterUserTasks = (tasks) => {
     if (!tasks || tasks.length === 0) {
@@ -1159,7 +1163,10 @@ export default function HomeMainCanvas() {
           <div className="mt-[20px]">
             <OnceOnOffButton
               text={"업무 추가하기 +"}
-              onClick={() => setShowTaskAdd(true)}
+              onClick={() => {
+                setSelectedTask(null);
+                setShowTaskAdd(true);
+              }}
             />
           </div>
         </LeftZone>
@@ -1214,7 +1221,12 @@ export default function HomeMainCanvas() {
                     <div onClick={() => setShowNoticeEditor(true)}>
                       <Square title={"공지등록"} />
                     </div>
-                    <div onClick={() => setShowTaskAdd(true)}>
+                    <div
+                      onClick={() => {
+                        setSelectedTask(null);
+                        setShowTaskAdd(true);
+                      }}
+                    >
                       <Square title={"업무추가"} />
                     </div>
                   </div>

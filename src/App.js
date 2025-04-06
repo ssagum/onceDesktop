@@ -106,37 +106,43 @@ const AppContent = () => {
           // 앱 시작 이후에 생성된 메시지만 알림 표시 (음수면 앱 시작 전 메시지)
           if (messageTime > APP_START_TIME) {
             // 알림음 재생 시도 (여러 방법 시도)
-            try {
-              // 1. AudioContext 방식으로 알림음 재생
-              playNotificationSound(notification);
+            const callType = data.type || "호출";
 
-              // 백업 방식들 시도
-              setTimeout(() => {
-                // 2. Base64 데이터 시도
-                playNotificationSound(NOTIFICATION_BASE64);
+            // 채팅 타입이 아닐 때만 알림음 재생
+            if (callType !== "채팅방") {
+              try {
+                // 1. AudioContext 방식으로 알림음 재생
+                playNotificationSound(notification);
 
-                // 3. 마지막으로 Electron IPC 통신 시도
+                // 백업 방식들 시도
                 setTimeout(() => {
-                  if (
-                    window.electron &&
-                    window.electron.playNotificationSound
-                  ) {
-                    window.electron
-                      .playNotificationSound()
-                      .then((result) =>
-                        console.log("알림음 재생 결과:", result)
-                      )
-                      .catch((err) => console.error("알림음 재생 오류:", err));
-                  }
+                  // 2. Base64 데이터 시도
+                  playNotificationSound(NOTIFICATION_BASE64);
+
+                  // 3. 마지막으로 Electron IPC 통신 시도
+                  setTimeout(() => {
+                    if (
+                      window.electron &&
+                      window.electron.playNotificationSound
+                    ) {
+                      window.electron
+                        .playNotificationSound()
+                        .then((result) =>
+                          console.log("알림음 재생 결과:", result)
+                        )
+                        .catch((err) =>
+                          console.error("알림음 재생 오류:", err)
+                        );
+                    }
+                  }, 300);
                 }, 300);
-              }, 300);
-            } catch (error) {
-              console.error("알림음 재생 오류:", error);
+              } catch (error) {
+                console.error("알림음 재생 오류:", error);
+              }
             }
 
             if (window.electron && window.electron.sendNotification) {
               // 호출 타입에 따른 메시지 포맷팅
-              const callType = data.type || "호출";
               let typePrefix = "";
 
               switch (callType) {

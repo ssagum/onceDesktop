@@ -8,6 +8,7 @@ import TaskCompleterSelector from "./TaskCompleterSelector";
 import TaskRecordModal from "../Task/TaskRecordModal";
 import { getTaskHistory, getTaskCompleters } from "../Task/TaskService";
 import { useToast } from "../../contexts/ToastContext";
+import { format } from "date-fns";
 
 const ColorZone = styled.div``;
 const TextZone = styled.div``;
@@ -95,7 +96,7 @@ function SingleTodoItem({
   const [hasTaskHistory, setHasTaskHistory] = useState(false);
   const [showTaskHistory, setShowTaskHistory] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const { showToast } = useToast();
+  const { showToast, currentUser } = useToast();
 
   // 최신 currentDate를 추적하는 ref
   const currentDateRef = useRef(currentDate);
@@ -249,79 +250,47 @@ function SingleTodoItem({
     return isRecentRequest && isSameRequest;
   };
 
-  // 업무 완료 처리 함수 - 디바운싱 적용 및 중복 호출 방지
+  // 업무 완료 처리 함수 - Optimistic Update 및 actionBy 추가
   const handleCompleteTask = async (staffIds = null) => {
-    // 이미 처리 중인 경우 중복 호출 방지
-    if (isProcessingRef.current) {
-      return;
-    }
+    if (isProcessingRef.current) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
 
-    // 타이머가 있으면 취소 (디바운싱)
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    // 디바운싱 적용 (300ms)
     timerRef.current = setTimeout(async () => {
       try {
-        // 처리 시작 플래그 설정
         isProcessingRef.current = true;
         setIsDataLoading(true);
 
-        // 완료자 검증
-        if (
-          !staffIds &&
-          (!selectedCompleters || selectedCompleters.length === 0)
-        ) {
+        const completersToSet = staffIds || selectedCompleters; // 완료자 ID 배열
+
+        if (!completersToSet || completersToSet.length === 0) {
           showToast("완료자를 선택해주세요.", "warning");
           isProcessingRef.current = false;
           setIsDataLoading(false);
           return;
         }
 
-        const completers = staffIds || selectedCompleters;
-
-        // TaskService 모듈 동적 import - completeTask만 가져오기
+        // TaskService 동적 import
         const { completeTask } = await import("../Task/TaskService");
 
-        // *** 중요: 항상 최신 currentDate 사용 ***
-        // 1. ref에서 최신 currentDate 가져오기 (현재 참조되는 값)
+        // 날짜 처리
         const latestDate = currentDateRef.current;
-
-        // 2. 날짜 객체 생성 - 항상 명시적으로 전달된 날짜만 사용
         let dateObj;
-
         if (latestDate) {
-          // 문자열이면 Date 객체로 변환
-          if (typeof latestDate === "string") {
-            dateObj = new Date(latestDate);
-          }
-          // Date 객체면 복사
-          else if (latestDate instanceof Date) {
+          if (typeof latestDate === "string") dateObj = new Date(latestDate);
+          else if (latestDate instanceof Date)
             dateObj = new Date(latestDate.getTime());
-          }
-          // 시간 초기화 (00:00:00)
-          if (dateObj) {
-            dateObj.setHours(0, 0, 0, 0);
-          }
+          if (dateObj) dateObj.setHours(0, 0, 0, 0);
         }
-
-        // 유효하지 않은 날짜인 경우 (여기서는 현재 날짜를 사용하지 않고 오류 처리)
         if (!dateObj || isNaN(dateObj.getTime())) {
           console.error("[ToDo] 유효한 날짜가 제공되지 않았습니다.");
           isProcessingRef.current = false;
           setIsDataLoading(false);
           return;
         }
-
-        // 3. YYYY-MM-DD 형식 문자열 생성
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-        const day = String(dateObj.getDate()).padStart(2, "0");
-        const dateStr = `${year}-${month}-${day}`;
+        const dateStr = format(dateObj, "yyyy-MM-dd");
 
         // 중복 요청 확인
-        if (isDuplicateRequest(id, completers, dateStr)) {
+        if (isDuplicateRequest(id, completersToSet, dateStr)) {
           isProcessingRef.current = false;
           setIsDataLoading(false);
           return;
@@ -330,49 +299,78 @@ function SingleTodoItem({
         // 현재 요청 정보 저장
         lastRequestRef.current = {
           taskId: id,
-          staffIds: completers,
+          staffIds: completersToSet,
           dateStr,
           timestamp: Date.now(),
         };
 
-        // 업무 완료 처리 - 명확한 옵션 객체 전달
+        // --- Optimistic Update 시작 ---
+        // 1. 예상되는 새 히스토리 객체 생성
+        const optimisticHistory = {
+          id: `${id}_${dateStr}`, // 예상 ID
+          taskId: id,
+          dateStr: dateStr,
+          timestamp: new Date(), // 현재 시간 사용
+          action: "complete",
+          actors: completersToSet, // ID 배열
+          actionBy: currentUser?.uid || "unknown", // 실제 로그인 사용자 ID 사용
+          title: title,
+          content: content,
+        };
+
+        // 2. 로컬 상태 즉시 업데이트 (taskHistory, selectedCompleters)
+        setTaskHistory((prevHistory) => {
+          // 기존에 같은 날짜의 히스토리가 있다면 제거하고 새 것으로 교체
+          const filteredHistory = prevHistory.filter(
+            (h) => h.dateStr !== dateStr
+          );
+          return [...filteredHistory, optimisticHistory];
+        });
+
+        // selectedCompleters도 객체 형태로 업데이트 (이름 정보는 필요시 조회)
+        // 이 예시에서는 ID만 사용한다고 가정
+        setSelectedCompleters(completersToSet);
+        setHasTaskHistory(true); // 완료 상태로 변경
+
+        // UI 로딩 상태 해제 (즉시 반영)
+        setIsDataLoading(false);
+        // --- Optimistic Update 끝 ---
+
+        // 3. 실제 서버에 완료 요청 보내기
         const options = {
           taskDateStr: dateStr,
           date: dateObj,
+          actionBy: currentUser?.uid || "unknown", // 실제 로그인 사용자 ID 전달
         };
 
-        // 먼저 상태를 업데이트하여 UI가 즉시 반응하도록 함
-        setHasTaskHistory(true);
-        setSelectedCompleters(completers);
+        await completeTask(id, completersToSet, options);
 
-        await completeTask(id, completers, options);
+        // 성공 메시지 (서버 성공 여부와 관계없이 먼저 표시될 수 있음)
+        showToast("업무가 성공적으로 완료 처리되었습니다.", "success");
 
-        // 완료한 날짜와 동일한 날짜로 이력 다시 조회
-        const updatedHistory = await getTaskHistory(id, dateObj);
-
-        setTaskHistory(updatedHistory || []);
-
-        // 완료 상태 및 완료자 업데이트
-        if (updatedHistory && updatedHistory.length > 0) {
-          const latestHistory = updatedHistory[0];
-          setHasTaskHistory(true);
-          setSelectedCompleters(latestHistory.actors || completers || []);
-        }
-
-        // 성공 메시지 표시
-        showToast("업무가 성공적으로 완료되었습니다.", "success");
+        // 선택 사항: 서버 응답 후 상태 재확인 (필요한 경우)
+        // const updatedHistory = await getTaskHistory(id, dateObj);
+        // setTaskHistory(updatedHistory || []);
+        // // 필요하다면 selectedCompleters 재설정
       } catch (error) {
         console.error("업무 완료 처리 중 오류:", error);
         showToast(
           "업무 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
           "error"
         );
+
+        // --- Optimistic Update 롤백 (오류 발생 시) ---
+        // setTaskHistory(이전 상태 복원);
+        // setSelectedCompleters(이전 상태 복원);
+        // setHasTaskHistory(이전 상태 복원);
+        // setIsDataLoading(false); // 로딩 상태 복원
+        // --- 롤백 끝 ---
       } finally {
-        // 처리 완료 플래그 설정
         isProcessingRef.current = false;
-        setIsDataLoading(false);
+        // Optimistic Update에서는 로딩 종료를 즉시 반영했으므로 여기서는 제거
+        // setIsDataLoading(false);
       }
-    }, 300); // 300ms 디바운싱
+    }, 300);
   };
 
   // 업무 이력 보기 핸들러
@@ -447,18 +445,40 @@ function SingleTodoItem({
                 <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
               </div>
             ) : (
-              <TaskCompleterSelector
-                selectedPeople={selectedCompleters}
-                onPeopleChange={(selectedIds) => {
-                  // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
-                  if (selectedIds && selectedIds.length > 0) {
-                    handleCompleteTask(selectedIds);
-                  }
-                }}
-                isCurrentDate={isToday()}
-                isCompleted={isCompletedForCurrentDate()}
-                taskDate={currentDate}
-              />
+              <>
+                {isCompletedForCurrentDate() ? (
+                  // 완료된 경우 완료자 정보 표시
+                  <div className="flex items-center h-[40px] px-4">
+                    {selectedCompleters && selectedCompleters.length > 0 ? (
+                      selectedCompleters.map((completer, index) => (
+                        <NameCoin
+                          key={index}
+                          item={{
+                            id: completer.id || completer,
+                            name: completer.name || completer,
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <span className="text-sm text-gray-500">완료됨</span>
+                    )}
+                  </div>
+                ) : (
+                  // 완료되지 않은 경우 선택 UI 표시
+                  <TaskCompleterSelector
+                    selectedPeople={selectedCompleters}
+                    onPeopleChange={(selectedIds) => {
+                      // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
+                      if (selectedIds && selectedIds.length > 0) {
+                        handleCompleteTask(selectedIds);
+                      }
+                    }}
+                    isCurrentDate={isToday()}
+                    isCompleted={isCompletedForCurrentDate()}
+                    taskDate={currentDate}
+                  />
+                )}
+              </>
             )}
           </div>
         )}

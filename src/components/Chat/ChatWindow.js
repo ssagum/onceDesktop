@@ -19,6 +19,8 @@ import {
 } from "./ChatService";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import { IoPaperPlaneSharp } from "react-icons/io5";
+import { db } from "../../firebase.js";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const Container = styled.div`
   display: flex;
@@ -1419,6 +1421,13 @@ const ChatWindow = () => {
       if (messageEndRef.current) {
         messageEndRef.current.scrollIntoView({ behavior: "auto" });
       }
+
+      // 메시지 로딩이 완료되면 입력 필드에 포커스
+      setTimeout(() => {
+        if (canSend && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 300);
     });
 
     setMessageUnsubscribe(() => unsubscribe);
@@ -1431,6 +1440,18 @@ const ChatWindow = () => {
     // 멤버 패널 초기화
     setShowMembers(false);
   };
+
+  // selectedRoom이 변경될 때마다 입력 필드에 포커스
+  useEffect(() => {
+    if (selectedRoom && canSend && inputRef.current) {
+      // 약간의 지연 후 포커스 (UI가 완전히 렌더링된 후)
+      const timer = setTimeout(() => {
+        inputRef.current.focus();
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [selectedRoom, canSend]);
 
   // 컴포넌트 언마운트 시 구독 정리
   useEffect(() => {
@@ -1859,6 +1880,54 @@ const ChatWindow = () => {
       // 메시지 전송
       await sendMessage(selectedRoom.id, messageData, sender);
 
+      // 채팅 메시지를 호출 컬렉션에도 저장 (부서 단위 전달을 위해)
+      try {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, "0");
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const formattedTime = `${hours}:${minutes}`;
+
+        // 수신자 결정 - 선택된 채팅방 타입에 따라 결정
+        let receiverId;
+        if (selectedRoom.type === CHAT_TYPES.TEAM) {
+          // 팀 채팅인 경우 팀 이름을 수신자로
+          receiverId = selectedRoom.departmentName || selectedRoom.name;
+        } else {
+          // 전체 채팅인 경우 '전체'로 설정
+          receiverId = "전체";
+        }
+
+        const callData = {
+          message: `${sender.name}: ${messageText.trim()}`,
+          receiverId: receiverId,
+          senderId:
+            userLevelData?.department || userLevelData?.location || sender.name,
+          formattedTime,
+          createdAt: Date.now(),
+          createdAt2: serverTimestamp(),
+          type: "채팅방",
+          [receiverId]: true,
+          [userLevelData?.department ||
+          userLevelData?.location ||
+          sender.name]: true,
+        };
+
+        // 발신자 정보 추가
+        callData.senderName = sender.name;
+
+        // 채팅 메시지가 멘션을 포함하는 경우 추가 정보
+        const mentions = extractMentions(messageText);
+        if (mentions && mentions.length > 0) {
+          callData.mentions = mentions;
+          callData.hasMention = true;
+        }
+
+        await addDoc(collection(db, "calls"), callData);
+        console.log("채팅 메시지를 calls 컬렉션에 저장 완료");
+      } catch (error) {
+        console.error("채팅 메시지를 calls에 저장 중 오류:", error);
+      }
+
       // 입력 필드 초기화
       setMessageText("");
 
@@ -2030,25 +2099,24 @@ const ChatWindow = () => {
     };
   }, []);
 
-  // 클릭 위치로 커서 이동 처리 함수 추가
-  const handleContainerClick = (e) => {
-    if (!inputRef.current || !canSend) return;
-
-    const container = document.querySelector(".mention-input-container");
-    if (!container) return;
-
-    // 컨테이너 내부 클릭 위치 계산
-    const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // 입력 필드에 포커스
-    inputRef.current.focus();
-
-    // 클릭 위치에 가장 가까운 텍스트 위치 계산
-    // (정확한 구현은 복잡하므로 간단히 처리)
-    // textarea의 내부 요소이므로 입력 필드 클릭만으로도 적절한 위치에 커서가 위치함
+  // 입력 필드에 자동 포커스를 주는 함수
+  const focusInputField = () => {
+    if (selectedRoom && canSend && inputRef.current) {
+      inputRef.current.focus();
+    }
   };
+
+  // 채팅 UI가 마운트되었을 때 입력 필드에 포커스
+  useEffect(() => {
+    if (selectedRoom) {
+      // 약간의 지연 후 여러 번 시도 (모바일에서도 확실히 동작하도록)
+      const focusTimers = [100, 300, 500, 800].map((delay) =>
+        setTimeout(focusInputField, delay)
+      );
+
+      return () => focusTimers.forEach((timer) => clearTimeout(timer));
+    }
+  }, [selectedRoom, canSend]);
 
   const isMyMessage = (message) => {
     if (!message) return false;
@@ -2341,7 +2409,12 @@ const ChatWindow = () => {
             <MentionInputContainer
               disabled={!canSend}
               className="mention-input-container"
-              onClick={handleContainerClick}
+              onClick={(e) => {
+                // 컨테이너 클릭 시 자동으로 입력 필드에 포커스
+                if (canSend && inputRef.current) {
+                  inputRef.current.focus();
+                }
+              }}
               onBlur={() => {
                 // 포커스를 잃을 때 현재 스크롤 위치 저장
                 const container = document.querySelector(
@@ -2377,6 +2450,12 @@ const ChatWindow = () => {
                   overflowWrap: "break-word",
                   height: !messageText ? "100%" : "auto",
                 }}
+                onClick={() => {
+                  // 내부 요소 클릭 시에도 입력 필드에 포커스
+                  if (canSend && inputRef.current) {
+                    inputRef.current.focus();
+                  }
+                }}
               >
                 {!messageText && (
                   <>
@@ -2404,6 +2483,7 @@ const ChatWindow = () => {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={!canSend}
+                autoFocus={canSend && !!selectedRoom}
                 onBlur={() => {
                   // 포커스를 잃을 때 현재 스크롤 위치 저장
                   const container = document.querySelector(

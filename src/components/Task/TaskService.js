@@ -413,18 +413,16 @@ export const completeTask = async (taskId, staffIds, options = {}) => {
       const historyDocRef = doc(db, "taskHistory", historyId);
       const existingHistoryDoc = await getDoc(historyDocRef);
 
-      // 7. 히스토리 데이터 생성 (action은 "complete"로 고정)
+      // 7. 히스토리 데이터 생성 (action은 "complete"으로 고정)
       const historyData = {
         id: historyId,
         taskId,
         dateStr,
-        timestamp: dateObj,
+        timestamp: new Date(),
         date: serverTimestamp(),
         action: "complete",
-        actor: staffIdArray.join(", "),
         actors: staffIdArray,
-        actionBy: staffIdArray[0],
-        completedBy: staffIdArray.join(", "),
+        actionBy: options.actionBy || staffIdArray[0],
         title: taskData.title,
         content: taskData.content,
         ...(options.memo && { memo: options.memo }),
@@ -437,14 +435,11 @@ export const completeTask = async (taskId, staffIds, options = {}) => {
         );
 
         try {
-          // 중요: 기존 문서가 있으면 완전 덮어쓰기 (merge:false)하지 않고
-          // 필요한 필드만 업데이트
           await updateDoc(historyDocRef, {
             actors: staffIdArray,
-            actor: staffIdArray.join(", "),
-            actionBy: staffIdArray[0],
-            completedBy: staffIdArray.join(", "),
-            date: serverTimestamp(), // 업데이트 시간만 갱신
+            actionBy: options.actionBy || staffIdArray[0],
+            timestamp: new Date(),
+            date: serverTimestamp(),
           });
         } catch (updateError) {
           // 업데이트 중 오류가 발생해도 조용히 처리 (무시)
@@ -589,13 +584,11 @@ export const updateTaskCompleters = async (
         id: historyId,
         taskId,
         dateStr,
-        timestamp: dateObj,
+        timestamp: new Date(),
         date: serverTimestamp(),
-        action: "update_completers", // 여기서는 action이 다름
-        actor: updatedBy,
+        action: "update_completers",
         actors: newStaffIds,
         actionBy: updatedBy,
-        completedBy: newStaffIds.join(", "),
         title: taskData.title,
         content: taskData.content,
         ...(options.memo && { memo: options.memo }),
@@ -610,11 +603,10 @@ export const updateTaskCompleters = async (
         try {
           await updateDoc(historyDocRef, {
             actors: newStaffIds,
-            actor: updatedBy,
             actionBy: updatedBy,
-            completedBy: newStaffIds.join(", "),
             action: "update_completers",
-            date: serverTimestamp(), // 업데이트 시간만 갱신
+            timestamp: new Date(),
+            date: serverTimestamp(),
           });
         } catch (updateError) {
           // 업데이트 중 오류가 발생해도 조용히 처리 (무시)
