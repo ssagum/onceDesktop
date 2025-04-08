@@ -472,10 +472,15 @@ export default function HomeMainCanvas() {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
+        // 사용자 권한 확인 (리더급인지)
+        const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+
         const userTasksResult = await getUserTasks({
           department: userLevelData?.department,
           date: currentDate,
           ignoreSchedule: false,
+          // 리더급 사용자일 경우 추가 파라미터 전달 (TaskService.js 수정 필요)
+          includeHighLevelTasks: isLeader,
         });
         setAllUserTasks(userTasksResult);
         filterUserTasks(userTasksResult);

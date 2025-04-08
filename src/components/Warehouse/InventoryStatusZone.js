@@ -469,7 +469,7 @@ const InventoryStatusZone = ({ onDataUpdate, setWarehouseMode }) => {
                       : "border-gray-400"
                   }`}
                 >
-                  방사선
+                  영상의학
                 </button>
               </div>
             </div>

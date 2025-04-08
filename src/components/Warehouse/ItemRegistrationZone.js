@@ -871,7 +871,7 @@ const ItemRegistrationZone = ({ onRegister, item }) => {
               />
               <SelectableButton
                 field={department}
-                value="방사선"
+                value="영상의학"
                 onChange={handleDepartmentChange}
                 disabled={mode === "정정"}
               />

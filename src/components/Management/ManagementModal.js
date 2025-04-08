@@ -896,7 +896,7 @@ const StaffManagement = () => {
             ?.replace(/\s+/g, "")
             .toLowerCase()
             .includes(cleanedSearchTerm) ||
-          staff.email?.toLowerCase().includes(cleanedSearchTerm)
+          staff.email?.replace(/\s+/g, "").toLowerCase().includes(cleanedSearchTerm) // 이메일도 공백 제거 및 소문자 변환
       );
     }
 

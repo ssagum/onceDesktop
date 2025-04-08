@@ -12,6 +12,8 @@ import DepartmentRoleSelector from "../common/DepartmentRoleSelector";
 import { useToast } from "../../contexts/ToastContext";
 import FormLabel from "../common/FormLabel";
 import { formatSafeDate, parseKoreanDate } from "../../utils/dateUtils";
+import { useUserLevel } from "../../utils/UserLevelContext";
+import { getAllowedTaskSelections } from "../../utils/permissionUtils";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div``;
@@ -88,6 +90,18 @@ function TaskAddModal({
   // 업무 내용 상태 추가
   const [content, setContent] = useState(task?.content || "");
   const { showToast } = useToast();
+  const { userLevelData, currentUser } = useUserLevel(); // 사용자 정보 가져오기
+
+  // 디버깅 로그 추가
+  useEffect(() => {
+    console.log("TaskAddModal - 사용자 정보:", { userLevelData, currentUser });
+    if (userLevelData || currentUser) {
+      const writerOptions = getAllowedTaskSelections(userLevelData, currentUser, 'writer');
+      const assigneeOptions = getAllowedTaskSelections(userLevelData, currentUser, 'assignee');
+      console.log("TaskAddModal - 허용된 작성자 옵션:", writerOptions);
+      console.log("TaskAddModal - 허용된 담당자 옵션:", assigneeOptions);
+    }
+  }, [userLevelData, currentUser]);
 
   // 이전 날짜 값 비교를 위한 ref 추가
   const prevStartDateRef = useRef(startDate);
@@ -619,8 +633,8 @@ function TaskAddModal({
                       value={writer}
                       onChange={(val) => isFieldEditable && setWriter(val)}
                       label="작성자 선택"
-                      onlyLeaders={true}
                       disabled={!isFieldEditable}
+                      allowedOptions={getAllowedTaskSelections(userLevelData, currentUser, 'writer')}
                     />
                   </div>
                   <div className="flex flex-row">
@@ -634,6 +648,7 @@ function TaskAddModal({
                       onChange={(val) => isFieldEditable && setAssignee(val)}
                       label="담당자 선택"
                       disabled={!isFieldEditable}
+                      allowedOptions={getAllowedTaskSelections(userLevelData, currentUser, 'assignee')}
                     />
                   </div>
                 </InfoRow>

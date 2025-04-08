@@ -361,3 +361,120 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
 
   return folders;
 };
+
+/**
+ * 사용자 역할/부서 및 필드 타입('writer' 또는 'assignee')에 따라 허용된 Task 선택 옵션 목록을 반환합니다.
+ * @param {Object} userLevelData - 사용자 권한 데이터.
+ * @param {Object} currentUser - 현재 로그인한 사용자 객체 (선택적).
+ * @param {String} fieldType - 'writer' 또는 'assignee'.
+ * @returns {Array} 허용된 선택 문자열 목록.
+ */
+export const getAllowedTaskSelections = (userLevelData, currentUser, fieldType) => {
+  // 비로그인 상태 처리: 사용자 정보 없으면 빈 배열 반환
+  if (!userLevelData && !currentUser) {
+      console.log("getAllowedTaskSelections: 사용자 정보 없음 (비로그인 상태)");
+      return [];
+  }
+
+  const role = currentUser?.role || userLevelData?.role || "";
+  const department = currentUser?.department || userLevelData?.department || "";
+  const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+  const isOwner = isHospitalOwner(userLevelData, currentUser);
+  const isAdminMgr = isAdministrativeManager(userLevelData, currentUser);
+
+  // 모든 가능한 역할/부서 옵션 목록 가져오기
+  const allOptionsFlat = Object.values(roleOptions).flat();
+  // 기존에 정의된 팀장급 역할 목록 사용
+  const allLeaders = leaderRoles; // 대표원장, 팀장, 과장 등
+
+  // 부서 이름으로 팀장 역할 이름 가져오는 헬퍼 함수
+   const getLeaderRole = (dept) => {
+     const departmentMappings = {
+       "경영지원": "경영지원팀장",
+       "원무": "원무과장",
+       "간호": "간호팀장",
+       "물리치료": "물리치료팀장",
+       "영상의학": "영상의학팀장",
+       "진료": "대표원장",
+     };
+     // 부서명 뒤에 '팀'이 붙어있는 경우 제거하고 매핑 시도
+     const cleanDept = dept?.endsWith("팀") ? dept.slice(0, -1) : dept;
+     return departmentMappings[cleanDept] || null;
+  };
+
+  let allowed = [];
+
+  if (fieldType === 'writer') {
+    // --- 작성자 선택 로직 ---
+     if (isOwner) {
+        allowed = [...allLeaders];
+    } else if (isLeader) {
+        allowed = [role];
+    } else {
+        const leader = getLeaderRole(department);
+        if (leader) allowed = [leader];
+        else allowed = [];
+    }
+    console.log(`getAllowedTaskSelections (writer) calculated:`, allowed);
+
+  } else if (fieldType === 'assignee') {
+    // --- 담당자 선택 로직 (단순화) ---
+    allowed.push("미배정"); // 항상 미배정 포함
+
+    if (isOwner) {
+      // 대표원장: 모든 역할/팀 선택 가능 (+미배정)
+      allowed.push(...allOptionsFlat.filter(opt => opt !== "미배정"));
+    } else if (isLeader) {
+        // 팀장/과장: 자신, 자신의 팀, 미배정 (+원무과장 특별처리)
+        allowed.push(role); // 자신
+        const teamName = getLeaderRole(department);
+        if (teamName) allowed.push(teamName); // 자신의 팀
+        // 원무과장 특별 케이스
+        if (isAdminMgr) {
+            const radiologyTeam = getLeaderRole("영상의학");
+            const radiologyLeader = getLeaderRole("영상의학");
+            if (radiologyTeam) allowed.push(radiologyTeam);
+            if (radiologyLeader) allowed.push(radiologyLeader);
+        }
+    } else {
+        // 팀원: 자신의 팀장, 자신의 팀, 미배정
+        const leader = getLeaderRole(department);
+        if (leader) allowed.push(leader); // 자신의 팀장
+        const teamName = getLeaderRole(department);
+        if (teamName) allowed.push(teamName); // 자신의 팀
+    }
+    console.log(`getAllowedTaskSelections (assignee) calculated initial:`, [...new Set(allowed)]);
+
+  }
+
+  // 최종 반환 전 중복 제거
+  const uniqueAllowed = [...new Set(allowed)];
+
+  // --- 최종 필터링을 위한 모든 유효한 옵션 목록 생성 --- 
+  const allValidOptionsForFiltering = [];
+  Object.entries(roleOptions).forEach(([departmentKey, roles]) => {
+    const teamName = roles.includes("팀원") ? `${departmentKey}팀` : null;
+    if (teamName && departmentKey !== "대표원장" && !allValidOptionsForFiltering.includes(teamName)) {
+        if(departmentKey !== teamName.replace('팀','')) {
+             allValidOptionsForFiltering.push(teamName);
+        } else { 
+             allValidOptionsForFiltering.push(departmentKey);
+        }
+    }
+    roles.forEach(role => {
+      if (role !== "팀원" && !allValidOptionsForFiltering.includes(role)) {
+        allValidOptionsForFiltering.push(role);
+      }
+    });
+  });
+  if (!allValidOptionsForFiltering.includes("미배정")) {
+    allValidOptionsForFiltering.push("미배정");
+  }
+  // --- --- ---
+
+  // 생성된 유효 옵션 목록(allValidOptionsForFiltering)을 기준으로 최종 필터링
+  const finalAllowed = uniqueAllowed.filter(opt => allValidOptionsForFiltering.includes(opt));
+
+  console.log(`getAllowedTaskSelections 최종 반환 (${fieldType}):`, finalAllowed);
+  return finalAllowed;
+};

@@ -250,17 +250,23 @@ function SingleTodoItem({
     return isRecentRequest && isSameRequest;
   };
 
-  // 업무 완료 처리 함수 - Optimistic Update 및 actionBy 추가
+  // 업무 완료 처리 함수 - action: 'complete' 보장 및 디버깅 강화
   const handleCompleteTask = async (staffIds = null) => {
-    if (isProcessingRef.current) return;
+    // 중복 실행 방지
+    if (isProcessingRef.current) {
+      console.warn("[ToDo] 이전 완료 요청 처리 중... 중복 호출 방지됨.");
+      return;
+    }
+    // 타이머가 있으면 클리어
     if (timerRef.current) clearTimeout(timerRef.current);
 
+    // Debounce: 300ms 후에 실행
     timerRef.current = setTimeout(async () => {
       try {
-        isProcessingRef.current = true;
-        setIsDataLoading(true);
+        isProcessingRef.current = true; // 처리 시작 플래그
+        setIsDataLoading(true); // 로딩 상태 시작
 
-        const completersToSet = staffIds || selectedCompleters; // 완료자 ID 배열
+        const completersToSet = staffIds || selectedCompleters;
 
         if (!completersToSet || completersToSet.length === 0) {
           showToast("완료자를 선택해주세요.", "warning");
@@ -269,108 +275,114 @@ function SingleTodoItem({
           return;
         }
 
-        // TaskService 동적 import
-        const { completeTask } = await import("../Task/TaskService");
+        // TaskService 동적 import (필요한 경우)
+        // const { completeTask } = await import("../Task/TaskService");
+        // 현재 파일에서는 이미 import 되어 있다고 가정
 
-        // 날짜 처리
+        // 날짜 처리 (현재 컨텍스트의 최신 날짜 사용)
         const latestDate = currentDateRef.current;
         let dateObj;
         if (latestDate) {
-          if (typeof latestDate === "string") dateObj = new Date(latestDate);
-          else if (latestDate instanceof Date)
+          // 다양한 날짜 형식 처리 (string, Date 객체)
+          if (typeof latestDate === "string") {
+            // YYYY/MM/DD 또는 YYYY-MM-DD 형식 지원
+            dateObj = new Date(latestDate.replace(/\//g, "-"));
+          } else if (latestDate instanceof Date) {
             dateObj = new Date(latestDate.getTime());
-          if (dateObj) dateObj.setHours(0, 0, 0, 0);
+          }
+          // 유효한 날짜 객체인지 확인 후 시간 초기화
+          if (dateObj && !isNaN(dateObj.getTime())) {
+            dateObj.setHours(0, 0, 0, 0);
+          } else {
+            console.error("[ToDo] 유효하지 않은 날짜 형식:", latestDate);
+            dateObj = null; // 유효하지 않으면 null 처리
+          }
         }
-        if (!dateObj || isNaN(dateObj.getTime())) {
+        // 유효한 날짜 객체가 없으면 오류 처리
+        if (!dateObj) {
           console.error("[ToDo] 유효한 날짜가 제공되지 않았습니다.");
+          showToast("날짜 정보 오류로 완료 처리에 실패했습니다.", "error");
           isProcessingRef.current = false;
           setIsDataLoading(false);
           return;
         }
-        const dateStr = format(dateObj, "yyyy-MM-dd");
+        const dateStr = format(dateObj, "yyyy-MM-dd"); // 일관된 날짜 형식 사용
 
-        // 중복 요청 확인
-        if (isDuplicateRequest(id, completersToSet, dateStr)) {
-          isProcessingRef.current = false;
-          setIsDataLoading(false);
-          return;
+        // --- 중복 요청 확인 강화 ---
+        const now = Date.now();
+        if (lastRequestRef.current) {
+          const { taskId: lastTaskId, staffIds: lastStaffIds, dateStr: lastDateStr, timestamp } = lastRequestRef.current;
+          const isRecent = now - timestamp < 1500; // 확인 간격 1.5초로 늘림
+          const isSame = lastTaskId === id && JSON.stringify(lastStaffIds) === JSON.stringify(completersToSet) && lastDateStr === dateStr;
+          if (isRecent && isSame) {
+            console.warn(`[ToDo] ${id} (${dateStr}) 중복 완료 요청 감지. 무시합니다.`);
+            isProcessingRef.current = false;
+            setIsDataLoading(false);
+            return; // 중복이면 여기서 종료
+          }
         }
+        // 현재 요청 정보 저장 (타임스탬프 포함)
+        lastRequestRef.current = { taskId: id, staffIds: completersToSet, dateStr, timestamp: now };
+        // --- 중복 요청 확인 끝 ---
 
-        // 현재 요청 정보 저장
-        lastRequestRef.current = {
-          taskId: id,
-          staffIds: completersToSet,
-          dateStr,
-          timestamp: Date.now(),
-        };
+        console.log(`[ToDo] ${id} (${dateStr}) 완료 처리 시작:`, completersToSet);
 
-        // --- Optimistic Update 시작 ---
-        // 1. 예상되는 새 히스토리 객체 생성
+        // --- Optimistic Update ---
         const optimisticHistory = {
-          id: `${id}_${dateStr}`, // 예상 ID
+          id: `${id}_${dateStr}_${now}`, // 더 고유한 ID 생성
           taskId: id,
-          dateStr: dateStr,
-          timestamp: new Date(), // 현재 시간 사용
-          action: "complete",
-          actors: completersToSet, // ID 배열
-          actionBy: currentUser?.uid || "unknown", // 실제 로그인 사용자 ID 사용
+          dateStr: dateStr, // yyyy-MM-dd 형식
+          timestamp: new Date(),
+          action: 'complete', // 명시적으로 'complete' 설정
+          actors: completersToSet, // ID 배열 또는 객체 배열 (데이터 구조에 맞게)
+          actionBy: currentUser?.uid || "unknown", // 현재 사용자 ID 기록
           title: title,
           content: content,
+          // 필요 시 다른 필드 추가
         };
 
-        // 2. 로컬 상태 즉시 업데이트 (taskHistory, selectedCompleters)
-        setTaskHistory((prevHistory) => {
-          // 기존에 같은 날짜의 히스토리가 있다면 제거하고 새 것으로 교체
-          const filteredHistory = prevHistory.filter(
-            (h) => h.dateStr !== dateStr
-          );
-          return [...filteredHistory, optimisticHistory];
-        });
-
-        // selectedCompleters도 객체 형태로 업데이트 (이름 정보는 필요시 조회)
-        // 이 예시에서는 ID만 사용한다고 가정
-        setSelectedCompleters(completersToSet);
-        setHasTaskHistory(true); // 완료 상태로 변경
-
-        // UI 로딩 상태 해제 (즉시 반영)
-        setIsDataLoading(false);
+        // 로컬 상태 즉시 업데이트
+        // setSelectedCompleters(completersToSet); // TaskCompleterSelector 내부에서 처리될 수 있음
+        setHasTaskHistory(true); // 완료 상태로 간주
+        // 주의: taskHistory 직접 업데이트는 TaskRecordModal과 동기화 문제 유발 가능성 있음
+        // 필요하다면 fetchHistory()를 다시 호출하여 서버 데이터와 맞추는 것이 더 안전할 수 있음
+        // setIsDataLoading(false); // 로딩 상태 즉시 해제 (주의: 서버 실패 시 롤백 필요)
         // --- Optimistic Update 끝 ---
 
-        // 3. 실제 서버에 완료 요청 보내기
+
+        // 서버에 실제 완료 요청 보내기
         const options = {
-          taskDateStr: dateStr,
+          taskDateStr: dateStr, // yyyy-MM-dd 형식 전달
           date: dateObj,
-          actionBy: currentUser?.uid || "unknown", // 실제 로그인 사용자 ID 전달
+          actionBy: currentUser?.uid || "unknown",
+          // action: 'complete' // completeTask 함수 내부에서 처리될 것이므로 여기서 명시적 전달은 불필요할 수 있음
         };
 
+        // TaskService.completeTask 호출
         await completeTask(id, completersToSet, options);
 
-        // 성공 메시지 (서버 성공 여부와 관계없이 먼저 표시될 수 있음)
-        showToast("업무가 성공적으로 완료 처리되었습니다.", "success");
+        console.log(`[ToDo] ${id} (${dateStr}) 완료 처리 성공.`);
+        showToast("업무가 완료 처리되었습니다.", "success");
 
-        // 선택 사항: 서버 응답 후 상태 재확인 (필요한 경우)
-        // const updatedHistory = await getTaskHistory(id, dateObj);
-        // setTaskHistory(updatedHistory || []);
-        // // 필요하다면 selectedCompleters 재설정
+        // 성공 후 서버 데이터 다시 로드 (선택적이지만 권장)
+        // await fetchHistory(); // fetchHistory 내부에서 setIsDataLoading(true/false) 처리
+
       } catch (error) {
-        console.error("업무 완료 처리 중 오류:", error);
-        showToast(
-          "업무 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
-          "error"
-        );
+        console.error(`[ToDo] ${id} (${dateStr}) 완료 처리 중 오류:`, error);
+        showToast("업무 완료 처리 중 오류가 발생했습니다.", "error");
 
         // --- Optimistic Update 롤백 (오류 발생 시) ---
-        // setTaskHistory(이전 상태 복원);
-        // setSelectedCompleters(이전 상태 복원);
-        // setHasTaskHistory(이전 상태 복원);
-        // setIsDataLoading(false); // 로딩 상태 복원
+        lastRequestRef.current = null; // 마지막 요청 정보 초기화
+        // 필요하다면 이전 상태로 복원 (예: 이전 selectedCompleters, hasTaskHistory 값으로 되돌리기)
+        // await fetchHistory(); // 가장 확실한 방법은 서버 데이터 다시 로드
         // --- 롤백 끝 ---
+
       } finally {
-        isProcessingRef.current = false;
-        // Optimistic Update에서는 로딩 종료를 즉시 반영했으므로 여기서는 제거
-        // setIsDataLoading(false);
+        // 로딩 상태 종료 및 처리 플래그 해제
+        setIsDataLoading(false); // 로딩 최종 종료
+        isProcessingRef.current = false; // 처리 완료 플래그
       }
-    }, 300);
+    }, 300); // 300ms 디바운스
   };
 
   // 업무 이력 보기 핸들러

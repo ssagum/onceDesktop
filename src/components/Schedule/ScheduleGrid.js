@@ -3302,7 +3302,7 @@ const ScheduleGrid = ({
         vacationEndDate
       );
 
-      // 직원 매칭 로직 개선
+      // 직원 매칭 로직 수정 (정확히 일치하는 경우만)
       let staffIndex = -1;
       let staffMatchMethod = "";
 
@@ -3312,43 +3312,24 @@ const ScheduleGrid = ({
         if (staffIndex !== -1) staffMatchMethod = "staffId 직접 매칭";
       }
 
-      // 2. userId로 매칭 시도
+      // 2. userId로 매칭 시도 (staffId가 없을 경우)
       if (staffIndex === -1 && vacation.userId) {
         staffIndex = staff.findIndex((s) => s.id === vacation.userId);
         if (staffIndex !== -1) staffMatchMethod = "userId 직접 매칭";
       }
 
-      // 3. userName과 staff.name 비교
+      // 3. userName과 staff.name 완전 일치 비교 (staffId/userId 매칭 실패 시)
       if (staffIndex === -1 && vacation.userName) {
-        // 완전 일치 먼저 시도
         staffIndex = staff.findIndex((s) => s.name === vacation.userName);
         if (staffIndex !== -1) {
           staffMatchMethod = "userName과 staff.name 완전 일치";
-        } else {
-          // 부분 일치 시도
-          staffIndex = staff.findIndex(
-            (s) =>
-              vacation.userName.includes(s.name) ||
-              s.name.includes(vacation.userName)
-          );
-          if (staffIndex !== -1)
-            staffMatchMethod = "userName과 staff.name 부분 일치";
         }
       }
 
-      // 4. 테스트용: staff의 첫 번째 항목 사용
-      if (staffIndex === -1 && staff.length > 0) {
-        staffIndex = 0;
-        staffMatchMethod = "매칭 실패, 첫 번째 staff 사용 (테스트용)";
-      }
-
+      // 매칭 실패 시 건너뛰기
       if (staffIndex === -1) {
-        console.log(`[${vacation.id}] 휴가 건너뜀: 직원 매칭 실패`);
-        console.log(
-          "현재 staff 목록:",
-          staff.map((s) => `${s.id} (${s.name})`)
-        );
-        return;
+        console.log(`[${vacation.id || 'ID 없음'}] 휴가 건너뜀: staff 목록 [${staff.map(s => `${s.name}(${s.id})`).join(', ')}] 에서 일치하는 담당자(${vacation.userName || vacation.staffId || vacation.userId || '정보 없음'})를 찾을 수 없습니다.`);
+        return; // 매칭 실패 시 해당 휴가 렌더링 건너뛰기
       }
 
       console.log(
@@ -4132,3 +4113,4 @@ const ScheduleGrid = ({
 };
 
 export default ScheduleGrid;
+

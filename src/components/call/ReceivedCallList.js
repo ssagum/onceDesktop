@@ -256,13 +256,15 @@ export default function ReceivedCallList({
   return (
     <Container className="scrollbar-hide">
       {calls.length > 0 ? (
-        calls.map((call) => (
-          <RenderCallItem
-            key={call.id}
-            call={call}
-            onClick={() => handleCallClick(call)}
-          />
-        ))
+        calls
+          .filter(call => call.type !== "채팅방")
+          .map((call) => (
+            <RenderCallItem
+              key={call.id}
+              call={call}
+              onClick={() => handleCallClick(call)}
+            />
+          ))
       ) : (
         <NoCallMessage>수신된 호출이 없습니다.</NoCallMessage>
       )}
