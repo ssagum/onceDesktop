@@ -201,7 +201,7 @@ export default function SideBar() {
           </div>
         </IndexZone>
 
-        <div className="w-full flex flex-col h-[200px] absolute bottom-0 justify-evenly items-center">
+        <div className="w-full flex flex-col h-[300px] absolute bottom-0 justify-evenly items-center">
           <div className="w-[180px] flex flex-col items-center">
             <AudioControl />
           </div>

@@ -41,7 +41,7 @@ const processedNotifications = new Set();
 
 const AppContent = () => {
   const { userLevelData } = useUserLevel();
-  const { playNotificationSound } = useAudio();
+  const { playNotificationSound, showNotifications } = useAudio();
 
   // 모든 미디어 요소에 대한 전역 볼륨 설정
   useEffect(() => {
@@ -102,6 +102,12 @@ const AppContent = () => {
           const timeSinceAppStart = Math.floor(
             (messageTime - APP_START_TIME) / 1000
           );
+
+          // 알림이 비활성화되어 있으면 알림 처리를 건너뜀
+          if (!showNotifications) {
+            console.log("알림 비활성화 상태: 알림 처리 건너뜀");
+            return;
+          }
 
           // 앱 시작 이후에 생성된 메시지만 알림 표시 (음수면 앱 시작 전 메시지)
           if (messageTime > APP_START_TIME) {
@@ -180,7 +186,7 @@ const AppContent = () => {
     });
 
     return () => unsubscribe();
-  }, [userLevelData, playNotificationSound]);
+  }, [userLevelData, playNotificationSound, showNotifications]);
 
   // Firebase 채팅방 초기화
   useEffect(() => {

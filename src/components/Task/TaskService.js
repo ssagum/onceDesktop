@@ -336,13 +336,11 @@ export const completeTask = async (taskId, staffIds, options = {}) => {
       throw new Error("Task ID is required");
     }
 
-    if (!staffIds) {
-      console.error("업무 완료 처리 실패: 직원 ID가 제공되지 않았습니다.");
-      throw new Error("Staff IDs are required");
-    }
-
-    // 2. staffIds가 문자열이면 배열로 변환
-    const staffIdArray = Array.isArray(staffIds) ? staffIds : [staffIds];
+    // staffIds가 null 또는 undefined일 경우 빈 배열로 처리
+    const safeStaffIds = staffIds || [];
+    const staffIdArray = Array.isArray(safeStaffIds)
+      ? safeStaffIds
+      : [safeStaffIds];
 
     if (staffIdArray.length === 0) {
       console.error("업무 완료 처리 실패: 완료자 정보가 비어 있습니다.");
@@ -409,70 +407,49 @@ export const completeTask = async (taskId, staffIds, options = {}) => {
     console.log(`[completeTask] 생성된 히스토리 ID: ${historyId}`);
 
     // 6. 기존 히스토리 문서 확인 (중복 생성 방지)
-    try {
-      const historyDocRef = doc(db, "taskHistory", historyId);
-      const existingHistoryDoc = await getDoc(historyDocRef);
+    const historyDocRef = doc(db, "taskHistory", historyId);
+    const existingHistoryDoc = await getDoc(historyDocRef);
 
-      // 7. 히스토리 데이터 생성 (action은 "complete"으로 고정)
-      const historyData = {
-        id: historyId,
-        taskId,
-        dateStr,
-        timestamp: new Date(),
-        date: serverTimestamp(),
-        action: "complete",
-        actors: staffIdArray,
-        actionBy: options.actionBy || staffIdArray[0],
-        title: taskData.title,
-        content: taskData.content,
-        ...(options.memo && { memo: options.memo }),
-      };
+    // 7. 히스토리 데이터 생성 (action은 "complete"으로 고정)
+    const historyData = {
+      id: historyId,
+      taskId,
+      dateStr,
+      timestamp: new Date(),
+      date: serverTimestamp(),
+      action: "complete",
+      actors: staffIdArray,
+      actionBy:
+        options.actionBy ||
+        (staffIdArray.length > 0 ? staffIdArray[0] : "unknown"),
+      title: taskData.title,
+      content: taskData.content,
+      ...(options.memo && { memo: options.memo }),
+    };
 
-      // 8. 히스토리 문서 생성 또는 업데이트
-      if (existingHistoryDoc.exists()) {
-        console.log(
-          `[completeTask] 기존 히스토리 문서 업데이트 - ID: ${historyId}`
-        );
-
-        try {
-          await updateDoc(historyDocRef, {
-            actors: staffIdArray,
-            actionBy: options.actionBy || staffIdArray[0],
-            timestamp: new Date(),
-            date: serverTimestamp(),
-          });
-        } catch (updateError) {
-          // 업데이트 중 오류가 발생해도 조용히 처리 (무시)
-          console.warn(
-            `[completeTask] 문서 업데이트 중 오류 발생 (무시됨): ${updateError.message}`
-          );
-          // 오류를 throw하지 않음 - 정상적으로 처리된 것으로 간주
-        }
-      } else {
-        console.log(`[completeTask] 새 히스토리 문서 생성 - ID: ${historyId}`);
-        try {
-          await setDoc(historyDocRef, historyData);
-        } catch (setError) {
-          // 문서 생성 중 오류가 발생해도 조용히 처리 (무시)
-          console.warn(
-            `[completeTask] 문서 생성 중 오류 발생 (무시됨): ${setError.message}`
-          );
-          // 오류를 throw하지 않음 - 정상적으로 처리된 것으로 간주
-        }
-      }
-
+    // 8. 히스토리 문서 생성 또는 업데이트
+    if (existingHistoryDoc.exists()) {
       console.log(
-        `[completeTask] 히스토리 저장 완료 - ID: ${historyId}, 날짜: ${dateStr}`
+        `[completeTask] 기존 히스토리 문서 업데이트 - ID: ${historyId}`
       );
-    } catch (dbError) {
-      // 데이터베이스 작업 중 발생한 오류도 조용히 처리
-      console.warn(
-        `[completeTask] 데이터베이스 작업 중 오류 발생 (무시됨): ${dbError.message}`
-      );
-      // 오류를 throw하지 않고 계속 진행
+      await updateDoc(historyDocRef, {
+        actors: staffIdArray,
+        actionBy: historyData.actionBy,
+        action: "complete",
+        timestamp: historyData.timestamp,
+        date: serverTimestamp(),
+        ...(options.memo && { memo: options.memo }),
+      });
+    } else {
+      console.log(`[completeTask] 새 히스토리 문서 생성 - ID: ${historyId}`);
+      await setDoc(historyDocRef, historyData);
     }
 
-    // 9. 업데이트된 업무 데이터 반환
+    console.log(
+      `[completeTask] 히스토리 저장 완료 - ID: ${historyId}, 날짜: ${dateStr}`
+    );
+
+    // 9. 업데이트된 업무 데이터 반환 (실제로는 히스토리만 변경되므로 taskData 반환)
     return {
       id: taskId,
       ...taskData,
@@ -504,11 +481,10 @@ export const updateTaskCompleters = async (
       throw new Error("Task ID is required");
     }
 
-    if (
-      !newStaffIds ||
-      !Array.isArray(newStaffIds) ||
-      newStaffIds.length === 0
-    ) {
+    // newStaffIds가 null 또는 undefined일 경우 빈 배열로 처리
+    const safeNewStaffIds = newStaffIds || [];
+
+    if (!Array.isArray(safeNewStaffIds) || safeNewStaffIds.length === 0) {
       console.error("업무 완료자 수정 실패: 완료자 ID가 제공되지 않았습니다.");
       throw new Error("New staff IDs are required");
     }
@@ -575,73 +551,49 @@ export const updateTaskCompleters = async (
     console.log(`[updateTaskCompleters] 생성된 히스토리 ID: ${historyId}`);
 
     // 5. 기존 히스토리 문서 확인 (중복 생성 방지)
-    try {
-      const historyDocRef = doc(db, "taskHistory", historyId);
-      const existingHistoryDoc = await getDoc(historyDocRef);
+    const historyDocRef = doc(db, "taskHistory", historyId);
+    const existingHistoryDoc = await getDoc(historyDocRef);
 
-      // 6. 히스토리 데이터 생성 (action은 "update_completers"로 설정)
-      const historyData = {
-        id: historyId,
-        taskId,
-        dateStr,
-        timestamp: new Date(),
-        date: serverTimestamp(),
-        action: "update_completers",
-        actors: newStaffIds,
-        actionBy: updatedBy,
-        title: taskData.title,
-        content: taskData.content,
-        ...(options.memo && { memo: options.memo }),
-      };
+    // 6. 히스토리 데이터 생성 (action은 "update_completers"로 설정)
+    const historyData = {
+      id: historyId,
+      taskId,
+      dateStr,
+      timestamp: new Date(),
+      date: serverTimestamp(),
+      action: "update_completers",
+      actors: safeNewStaffIds,
+      actionBy: updatedBy,
+      title: taskData.title,
+      content: taskData.content,
+      ...(options.memo && { memo: options.memo }),
+    };
 
-      // 7. 히스토리 문서 생성 또는 업데이트
-      if (existingHistoryDoc.exists()) {
-        console.log(
-          `[updateTaskCompleters] 기존 히스토리 문서 업데이트 - ID: ${historyId}`
-        );
-
-        try {
-          await updateDoc(historyDocRef, {
-            actors: newStaffIds,
-            actionBy: updatedBy,
-            action: "update_completers",
-            timestamp: new Date(),
-            date: serverTimestamp(),
-          });
-        } catch (updateError) {
-          // 업데이트 중 오류가 발생해도 조용히 처리 (무시)
-          console.warn(
-            `[updateTaskCompleters] 문서 업데이트 중 오류 발생 (무시됨): ${updateError.message}`
-          );
-          // 오류를 throw하지 않음 - 정상적으로 처리된 것으로 간주
-        }
-      } else {
-        console.log(
-          `[updateTaskCompleters] 새 히스토리 문서 생성 - ID: ${historyId}`
-        );
-        try {
-          await setDoc(historyDocRef, historyData);
-        } catch (setError) {
-          // 문서 생성 중 오류가 발생해도 조용히 처리 (무시)
-          console.warn(
-            `[updateTaskCompleters] 문서 생성 중 오류 발생 (무시됨): ${setError.message}`
-          );
-          // 오류를 throw하지 않음 - 정상적으로 처리된 것으로 간주
-        }
-      }
-
+    // 7. 히스토리 문서 생성 또는 업데이트
+    if (existingHistoryDoc.exists()) {
       console.log(
-        `[updateTaskCompleters] 히스토리 저장 완료 - ID: ${historyId}, 날짜: ${dateStr}`
+        `[updateTaskCompleters] 기존 히스토리 문서 업데이트 - ID: ${historyId}`
       );
-    } catch (dbError) {
-      // 데이터베이스 작업 중 발생한 오류도 조용히 처리
-      console.warn(
-        `[updateTaskCompleters] 데이터베이스 작업 중 오류 발생 (무시됨): ${dbError.message}`
+      await updateDoc(historyDocRef, {
+        actors: safeNewStaffIds,
+        actionBy: updatedBy,
+        action: "update_completers",
+        timestamp: historyData.timestamp,
+        date: serverTimestamp(),
+        ...(options.memo && { memo: options.memo }),
+      });
+    } else {
+      console.log(
+        `[updateTaskCompleters] 새 히스토리 문서 생성 - ID: ${historyId}`
       );
-      // 오류를 throw하지 않고 계속 진행
+      await setDoc(historyDocRef, historyData);
     }
 
-    // 8. 업데이트된 업무 데이터 반환
+    console.log(
+      `[updateTaskCompleters] 히스토리 저장 완료 - ID: ${historyId}, 날짜: ${dateStr}`
+    );
+
+    // 8. 업데이트된 업무 데이터 반환 (taskData 반환)
     return {
       id: taskId,
       ...taskData,

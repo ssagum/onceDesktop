@@ -6,7 +6,11 @@ import HospitalStaffSelector from "./HospitalStaffSelector";
 import WhoSelector from "./WhoSelector";
 import TaskCompleterSelector from "./TaskCompleterSelector";
 import TaskRecordModal from "../Task/TaskRecordModal";
-import { getTaskHistory, getTaskCompleters } from "../Task/TaskService";
+import {
+  completeTask,
+  getTaskHistory,
+  getTaskCompleters,
+} from "../Task/TaskService";
 import { useToast } from "../../contexts/ToastContext";
 import { format } from "date-fns";
 
@@ -143,246 +147,241 @@ function SingleTodoItem({
     );
   }
 
-  const { id, title, content, priority = "중" } = task;
+  const { id, title, content, priority = "중" } = task || {};
 
-  // 컴포넌트 마운트 시 또는 task ID, currentDate 변경 시 taskHistory 가져오기
-  useEffect(() => {
-    if (id) {
-      // 비동기 함수 정의
-      const fetchHistory = async () => {
-        try {
-          setIsDataLoading(true);
-          // 조회할 날짜 설정 (직접 props에서 받아옴)
-          const dateToQuery = currentDate || new Date();
+  // fetchHistory function
+  const fetchHistory = async () => {
+    if (!id) return; // Exit if task ID is not available
+    try {
+      setIsDataLoading(true);
+      const dateToQuery = currentDate || new Date();
+      const history = await getTaskHistory(id, dateToQuery);
 
-          // 이력 가져오기
-          const history = await getTaskHistory(id, dateToQuery);
+      if (!history || history.length === 0) {
+        setTaskHistory([]);
+        setHasTaskHistory(false);
+        setSelectedCompleters([]);
+        return; // Exit early
+      }
 
-          // history가 없거나 빈 배열인 경우
-          if (!history || history.length === 0) {
-            setTaskHistory([]);
-            setHasTaskHistory(false);
-            setSelectedCompleters([]);
-            setIsDataLoading(false);
-            return;
+      setTaskHistory(history);
+      const isCompleted = isCompletedForCurrentDate(history);
+      setHasTaskHistory(isCompleted);
+
+      if (isCompleted) {
+        // 완료 상태일 때만 완료자 정보 추출 시도
+        const latestRecord = [...history].sort(
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+        )[0];
+
+        let completers = [];
+        if (latestRecord) {
+          if (
+            Array.isArray(latestRecord.actors) &&
+            latestRecord.actors.length > 0
+          ) {
+            // Ensure actors are objects {id, name}
+            completers = latestRecord.actors
+              .map(
+                (actor) =>
+                  typeof actor === "object" && actor !== null && actor.id
+                    ? actor // Already an object with id
+                    : { id: String(actor), name: String(actor) } // Convert string ID or other types to object
+              )
+              .filter((c) => c.id); // Ensure valid id after conversion
+          } else if (latestRecord.actor) {
+            // Fallback for older data structures?
+            completers = [
+              {
+                id: String(latestRecord.actor),
+                name: String(latestRecord.actor),
+              },
+            ];
           }
-
-          // 히스토리가 존재하면 완료된 것으로 간주
-          setTaskHistory(history);
-          setHasTaskHistory(true);
-
-          // 가장 최근 기록 기준으로 완료자 정보 설정
-          const latestRecord = [...history].sort(
-            (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-          )[0];
-
-          // 완료자 정보가 있으면 설정
-          if (latestRecord) {
-            // actors 배열이 있는 경우
-            if (
-              Array.isArray(latestRecord.actors) &&
-              latestRecord.actors.length > 0
-            ) {
-              setSelectedCompleters(latestRecord.actors);
-            }
-            // actor 문자열이 있는 경우
-            else if (latestRecord.actor) {
-              setSelectedCompleters([latestRecord.actor]);
-            }
-            // actionBy 문자열이 있는 경우
-            else if (latestRecord.actionBy) {
-              setSelectedCompleters([latestRecord.actionBy]);
-            } else {
-              setSelectedCompleters([]);
-            }
-          } else {
-            setSelectedCompleters([]);
-          }
-        } catch (error) {
-          console.error("업무 이력 조회 중 오류:", error);
-          // 오류 발생 시에도 상태 초기화
-          setHasTaskHistory(false);
-          setSelectedCompleters([]);
-        } finally {
-          setIsDataLoading(false);
+          // Note: actionBy should generally not be considered a completer
         }
-      };
-
-      // 비동기 함수 실행
-      fetchHistory();
+        // If isCompleted is true, but we couldn't find completers, log a warning.
+        if (completers.length === 0) {
+          console.warn(
+            `[ToDo] Task ${id} marked as completed but no completers found in latest record:`,
+            latestRecord
+          );
+        }
+        setSelectedCompleters(completers);
+      } else {
+        setSelectedCompleters([]); // Not completed
+      }
+    } catch (error) {
+      console.error(`업무 이력 조회 중 오류 (${id}):`, error);
+      setHasTaskHistory(false);
+      setSelectedCompleters([]);
+    } finally {
+      setIsDataLoading(false);
     }
-  }, [id, currentDate]); // 의존성 배열에 currentDate 추가
+  };
 
-  // 현재 날짜에 완료 여부 확인하는 함수
-  const isCompletedForCurrentDate = () => {
-    if (!taskHistory || taskHistory.length === 0) return false;
+  // useEffect for fetching history
+  useEffect(() => {
+    fetchHistory();
+  }, [id, currentDate]); // Dependencies
 
-    // 취소 이력이 있으면 완료 안됨
-    if (taskHistory.some((h) => h.action === "cancel_complete")) return false;
-
-    // 완료 또는 완료자 변경 이력이 있으면 완료됨
-    return taskHistory.some(
-      (h) => h.action === "complete" || h.action === "update_completers"
+  // isCompletedForCurrentDate function (seems correct)
+  const isCompletedForCurrentDate = (historyToCheck = taskHistory) => {
+    if (!historyToCheck || historyToCheck.length === 0) return false;
+    const sortedHistory = [...historyToCheck].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    const latestRelevantAction = sortedHistory.find((h) =>
+      ["complete", "update_completers", "cancel_complete"].includes(h.action)
+    );
+    return (
+      latestRelevantAction && latestRelevantAction.action !== "cancel_complete"
     );
   };
 
-  // 요청이 중복인지 확인하는 함수
-  const isDuplicateRequest = (taskId, staffIds, dateStr) => {
-    if (!lastRequestRef.current) return false;
-
-    const {
-      taskId: lastTaskId,
-      staffIds: lastStaffIds,
-      dateStr: lastDateStr,
-      timestamp,
-    } = lastRequestRef.current;
-
-    // 1초 이내의 동일한 요청은 중복으로 간주
-    const now = Date.now();
-    const isRecentRequest = now - timestamp < 1000;
-
-    // 동일한 태스크, 동일한 완료자, 동일한 날짜, 최근 요청인 경우 중복으로 판단
-    const isSameRequest =
-      lastTaskId === taskId &&
-      JSON.stringify(lastStaffIds) === JSON.stringify(staffIds) &&
-      lastDateStr === dateStr;
-
-    return isRecentRequest && isSameRequest;
-  };
-
-  // 업무 완료 처리 함수 - action: 'complete' 보장 및 디버깅 강화
+  // handleCompleteTask function
   const handleCompleteTask = async (staffIds = null) => {
-    // 중복 실행 방지
     if (isProcessingRef.current) {
-      console.warn("[ToDo] 이전 완료 요청 처리 중... 중복 호출 방지됨.");
+      console.warn("[ToDo] 이전 완료 요청 처리 중...");
       return;
     }
-    // 타이머가 있으면 클리어
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Debounce: 300ms 후에 실행
     timerRef.current = setTimeout(async () => {
+      let previousCompleters = [...selectedCompleters];
+      let previousHasHistory = hasTaskHistory;
+      setIsDataLoading(true); // Indicate loading START
+
       try {
-        isProcessingRef.current = true; // 처리 시작 플래그
-        setIsDataLoading(true); // 로딩 상태 시작
+        isProcessingRef.current = true;
 
-        const completersToSet = staffIds || selectedCompleters;
+        // Ensure staffIds is an array of IDs and not empty
+        const completersToSet = Array.isArray(staffIds)
+          ? staffIds.filter(Boolean)
+          : []; // Filter out any null/undefined IDs
 
-        if (!completersToSet || completersToSet.length === 0) {
+        if (completersToSet.length === 0) {
           showToast("완료자를 선택해주세요.", "warning");
-          isProcessingRef.current = false;
-          setIsDataLoading(false);
-          return;
+          throw new Error("No completers selected"); // Throw error to simplify cleanup
         }
 
-        // TaskService 동적 import (필요한 경우)
-        // const { completeTask } = await import("../Task/TaskService");
-        // 현재 파일에서는 이미 import 되어 있다고 가정
-
-        // 날짜 처리 (현재 컨텍스트의 최신 날짜 사용)
+        // --- Date processing ---
         const latestDate = currentDateRef.current;
         let dateObj;
         if (latestDate) {
-          // 다양한 날짜 형식 처리 (string, Date 객체)
           if (typeof latestDate === "string") {
-            // YYYY/MM/DD 또는 YYYY-MM-DD 형식 지원
+            // Attempt to parse YYYY/MM/DD or YYYY-MM-DD
             dateObj = new Date(latestDate.replace(/\//g, "-"));
           } else if (latestDate instanceof Date) {
             dateObj = new Date(latestDate.getTime());
           }
-          // 유효한 날짜 객체인지 확인 후 시간 초기화
+          // Validate and normalize
           if (dateObj && !isNaN(dateObj.getTime())) {
             dateObj.setHours(0, 0, 0, 0);
           } else {
-            console.error("[ToDo] 유효하지 않은 날짜 형식:", latestDate);
-            dateObj = null; // 유효하지 않으면 null 처리
+            console.error(
+              "[ToDo] Invalid date object created from:",
+              latestDate
+            );
+            dateObj = null;
           }
         }
-        // 유효한 날짜 객체가 없으면 오류 처리
         if (!dateObj) {
-          console.error("[ToDo] 유효한 날짜가 제공되지 않았습니다.");
           showToast("날짜 정보 오류로 완료 처리에 실패했습니다.", "error");
-          isProcessingRef.current = false;
-          setIsDataLoading(false);
-          return;
+          throw new Error("Invalid date provided");
         }
-        const dateStr = format(dateObj, "yyyy-MM-dd"); // 일관된 날짜 형식 사용
+        const dateStr = format(dateObj, "yyyy-MM-dd");
 
-        // --- 중복 요청 확인 강화 ---
+        // --- Duplicate request check ---
         const now = Date.now();
         if (lastRequestRef.current) {
-          const { taskId: lastTaskId, staffIds: lastStaffIds, dateStr: lastDateStr, timestamp } = lastRequestRef.current;
-          const isRecent = now - timestamp < 1500; // 확인 간격 1.5초로 늘림
-          const isSame = lastTaskId === id && JSON.stringify(lastStaffIds) === JSON.stringify(completersToSet) && lastDateStr === dateStr;
+          const {
+            taskId: lastTaskId,
+            staffIds: lastStaffIds,
+            dateStr: lastDateStr,
+            timestamp,
+          } = lastRequestRef.current;
+          const isRecent = now - timestamp < 1500;
+          // Compare stringified ID arrays for simplicity
+          const isSame =
+            lastTaskId === id &&
+            JSON.stringify(lastStaffIds?.sort()) ===
+              JSON.stringify(completersToSet?.sort()) &&
+            lastDateStr === dateStr;
           if (isRecent && isSame) {
-            console.warn(`[ToDo] ${id} (${dateStr}) 중복 완료 요청 감지. 무시합니다.`);
+            console.warn(
+              `[ToDo] ${id} (${dateStr}) 중복 완료 요청 감지. 무시합니다.`
+            );
+            // Stop processing but ensure finally block runs for cleanup
             isProcessingRef.current = false;
             setIsDataLoading(false);
-            return; // 중복이면 여기서 종료
+            return;
           }
         }
-        // 현재 요청 정보 저장 (타임스탬프 포함)
-        lastRequestRef.current = { taskId: id, staffIds: completersToSet, dateStr, timestamp: now };
-        // --- 중복 요청 확인 끝 ---
+        // Store the original ID array for duplicate check
+        lastRequestRef.current = {
+          taskId: id,
+          staffIds: completersToSet,
+          dateStr,
+          timestamp: now,
+        };
 
-        console.log(`[ToDo] ${id} (${dateStr}) 완료 처리 시작:`, completersToSet);
+        console.log(
+          `[ToDo] ${id} (${dateStr}) 완료 처리 시도:`,
+          completersToSet
+        );
 
         // --- Optimistic Update ---
-        const optimisticHistory = {
-          id: `${id}_${dateStr}_${now}`, // 더 고유한 ID 생성
-          taskId: id,
-          dateStr: dateStr, // yyyy-MM-dd 형식
-          timestamp: new Date(),
-          action: 'complete', // 명시적으로 'complete' 설정
-          actors: completersToSet, // ID 배열 또는 객체 배열 (데이터 구조에 맞게)
-          actionBy: currentUser?.uid || "unknown", // 현재 사용자 ID 기록
-          title: title,
-          content: content,
-          // 필요 시 다른 필드 추가
-        };
+        // Convert IDs to objects for local state display
+        // Fetch user details for better optimistic display might be needed here later
+        const completerObjects = completersToSet.map((cId) => ({
+          id: cId,
+          name: cId,
+        })); // Simple optimistic display
+        setSelectedCompleters(completerObjects);
+        setHasTaskHistory(true);
 
-        // 로컬 상태 즉시 업데이트
-        // setSelectedCompleters(completersToSet); // TaskCompleterSelector 내부에서 처리될 수 있음
-        setHasTaskHistory(true); // 완료 상태로 간주
-        // 주의: taskHistory 직접 업데이트는 TaskRecordModal과 동기화 문제 유발 가능성 있음
-        // 필요하다면 fetchHistory()를 다시 호출하여 서버 데이터와 맞추는 것이 더 안전할 수 있음
-        // setIsDataLoading(false); // 로딩 상태 즉시 해제 (주의: 서버 실패 시 롤백 필요)
-        // --- Optimistic Update 끝 ---
-
-
-        // 서버에 실제 완료 요청 보내기
+        // --- Call Service ---
         const options = {
-          taskDateStr: dateStr, // yyyy-MM-dd 형식 전달
+          taskDateStr: dateStr,
           date: dateObj,
           actionBy: currentUser?.uid || "unknown",
-          // action: 'complete' // completeTask 함수 내부에서 처리될 것이므로 여기서 명시적 전달은 불필요할 수 있음
         };
-
-        // TaskService.completeTask 호출
-        await completeTask(id, completersToSet, options);
+        console.log(`[ToDo] Calling completeTask with:`, {
+          id,
+          staffIds: completersToSet,
+          options,
+        });
+        await completeTask(id, completersToSet, options); // Pass the ID array
 
         console.log(`[ToDo] ${id} (${dateStr}) 완료 처리 성공.`);
         showToast("업무가 완료 처리되었습니다.", "success");
 
-        // 성공 후 서버 데이터 다시 로드 (선택적이지만 권장)
-        // await fetchHistory(); // fetchHistory 내부에서 setIsDataLoading(true/false) 처리
-
+        // --- Post-Success: Consider re-fetching history ---
+        // await fetchHistory(); // Uncomment for maximum data consistency assurance
       } catch (error) {
-        console.error(`[ToDo] ${id} (${dateStr}) 완료 처리 중 오류:`, error);
-        showToast("업무 완료 처리 중 오류가 발생했습니다.", "error");
+        console.error(`[ToDo] ${id} 완료 처리 중 오류:`, error);
+        // Avoid double toasts if validation failed
+        if (
+          error.message !== "No completers selected" &&
+          error.message !== "Invalid date provided"
+        ) {
+          showToast("업무 완료 처리 중 오류가 발생했습니다.", "error");
+        }
 
-        // --- Optimistic Update 롤백 (오류 발생 시) ---
-        lastRequestRef.current = null; // 마지막 요청 정보 초기화
-        // 필요하다면 이전 상태로 복원 (예: 이전 selectedCompleters, hasTaskHistory 값으로 되돌리기)
-        // await fetchHistory(); // 가장 확실한 방법은 서버 데이터 다시 로드
-        // --- 롤백 끝 ---
-
+        // --- Rollback ---
+        console.warn(`[ToDo] 오류 발생으로 상태 롤백 중...`);
+        lastRequestRef.current = null; // Clear last request on error
+        setSelectedCompleters(previousCompleters);
+        setHasTaskHistory(previousHasHistory);
       } finally {
-        // 로딩 상태 종료 및 처리 플래그 해제
-        setIsDataLoading(false); // 로딩 최종 종료
-        isProcessingRef.current = false; // 처리 완료 플래그
+        // --- Cleanup ---
+        setIsDataLoading(false); // Indicate loading END
+        isProcessingRef.current = false;
+        // Clear timer reference
+        timerRef.current = null;
       }
-    }, 300); // 300ms 디바운스
+    }, 300); // Debounce
   };
 
   // 업무 이력 보기 핸들러
@@ -436,70 +435,61 @@ function SingleTodoItem({
           }`}
         />
 
-        <TextZone className="flex-1 px-[20px] flex flex-col justify-center">
+        <TextZone className="flex-1 px-[20px] flex flex-col justify-center overflow-hidden">
           <span
             className={`font-medium truncate ${
-              isCompletedForCurrentDate() ? "line-through text-gray-500" : ""
+              hasTaskHistory ? "line-through text-gray-500" : ""
             }`}
+            title={title || content || "제목 없음"}
           >
             {title || content || "제목 없음"}
           </span>
         </TextZone>
 
-        {/* 완료자 선택 표시 - 로딩 상태 관리 추가 */}
+        {/* Completer Display Area */}
         {showCompleter && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center"
+            className="flex items-center justify-center min-w-[120px] px-2"
           >
+            {/* Loading State */}
             {isDataLoading ? (
-              <div className="h-[40px] flex items-center justify-center px-4">
+              <div className="h-[40px] flex items-center justify-center">
                 <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
               </div>
-            ) : (
-              <>
-                {isCompletedForCurrentDate() ? (
-                  // 완료된 경우 완료자 정보 표시
-                  <div className="flex items-center h-[40px] px-4">
-                    {selectedCompleters && selectedCompleters.length > 0 ? (
-                      selectedCompleters.map((completer, index) => (
-                        <NameCoin
-                          key={index}
-                          item={{
-                            id: completer.id || completer,
-                            name: completer.name || completer,
-                          }}
-                        />
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-500">완료됨</span>
-                    )}
-                  </div>
+            ) : hasTaskHistory ? (
+              <div className="flex items-center justify-center h-[40px] gap-1 flex-wrap">
+                {selectedCompleters && selectedCompleters.length > 0 ? (
+                  // Display NameCoins for completers
+                  selectedCompleters.map((completer, index) => (
+                    <NameCoin key={completer.id || index} item={completer} />
+                  ))
                 ) : (
-                  // 완료되지 않은 경우 선택 UI 표시
-                  <TaskCompleterSelector
-                    selectedPeople={selectedCompleters}
-                    onPeopleChange={(selectedIds) => {
-                      // 직접 완료 처리만 호출 (상태 업데이트는 completeTask 내부에서 수행)
-                      if (selectedIds && selectedIds.length > 0) {
-                        handleCompleteTask(selectedIds);
-                      }
-                    }}
-                    isCurrentDate={isToday()}
-                    isCompleted={isCompletedForCurrentDate()}
-                    taskDate={currentDate}
-                  />
+                  // Completed but no completer info (indicates data issue)
+                  <span className="text-xs text-gray-500 italic whitespace-nowrap">
+                    완료됨(정보?)
+                  </span>
                 )}
-              </>
+              </div>
+            ) : (
+              <TaskCompleterSelector
+                selectedPeople={selectedCompleters
+                  .map((c) => c.id)
+                  .filter(Boolean)}
+                onPeopleChange={handleCompleteTask}
+                isCurrentDate={isToday()}
+                isCompleted={false}
+                taskDate={currentDate}
+              />
             )}
           </div>
         )}
 
-        {/* 드래그 핸들 렌더링 */}
+        {/* Drag Handle */}
         {isDraggable && renderDragHandle && renderDragHandle()}
       </div>
 
-      {/* 히스토리 모달 - 필요한 경우에만 표시 */}
+      {/* History Modal */}
       {showTaskHistory && (
         <TaskRecordModal
           isVisible={showTaskHistory}
