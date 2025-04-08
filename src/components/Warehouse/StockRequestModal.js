@@ -623,7 +623,7 @@ const StockRequestModal = ({ isVisible, setIsVisible }) => {
                 />
                 <SelectableButton
                   field={department}
-                  value="방사선"
+                  value="영상의학"
                   onChange={handleDepartmentChange}
                 />
               </div>

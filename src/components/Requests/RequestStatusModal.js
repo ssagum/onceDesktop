@@ -92,6 +92,24 @@ const styles = `
   }
 `;
 
+// Writer 정보 포맷 함수
+const formatWriter = (writer) => {
+  if (!writer) return "Unknown";
+  
+  if (typeof writer === 'object') {
+    if (writer.name) return writer.name.split('_')[0];
+    if (writer.displayName) return writer.displayName.split('_')[0];
+    return "Unknown";
+  }
+  
+  if (Array.isArray(writer) && writer.length > 0) {
+    const firstWriter = writer[0];
+    return firstWriter ? firstWriter.split('_')[0] : "Unknown";
+  }
+  
+  return typeof writer === 'string' ? writer.split('_')[0] : writer || "Unknown";
+};
+
 // 아이템 상세 모달 컴포넌트
 const ItemDetailModal = ({
   isVisible,
@@ -1364,7 +1382,7 @@ const DraggableItem = ({
     case "stock":
       content = (
         <>
-          <div className="font-medium text-gray-800 text-base mb-2 border-l-4 border-green-500 pl-2">
+          <div className="font-medium text-gray-800 text-base mb-2 border-l-4 border-green-500 pl-2 truncate" title={data.itemName}>
             {data.itemName}
           </div>
 
@@ -1463,7 +1481,7 @@ const DraggableItem = ({
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 />
               </svg>
-              {data.writer || "Unknown"}
+              {formatWriter(data.writer)}
             </div>
             <div>{formatShortDate(data.createdAt)}</div>
           </div>

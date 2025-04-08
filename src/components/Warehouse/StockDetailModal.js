@@ -41,6 +41,13 @@ const TopRightZone = styled.div``;
 const Zone = styled.div``;
 const PlusPurchaseModal = styled.div``;
 
+// 작성자 이름 처리 함수 추가
+const formatWriterName = (name) => {
+  if (!name) return "";
+  // "_" 문자가 있는 경우 "_" 앞 부분만 반환
+  return name.split("_")[0];
+};
+
 export default function StockDetailModal({
   isVisible,
   setIsVisible,
@@ -166,12 +173,19 @@ export default function StockDetailModal({
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const history = snapshot.docs.map((doc) => {
         const data = doc.data();
+        // 작성자 이름 포맷팅 적용
+        let writerName = data.writer;
+        if (Array.isArray(data.writer) && data.writer.length > 0) {
+          writerName = formatWriterName(data.writer[0]);
+        }
+        
         return {
           ...data,
           date: data.date?.toDate().toLocaleDateString() || "-",
           requester: data.requester || "-",
           state: data.state || "-",
           dateForSort: data.date?.toDate() || new Date(0),
+          writer: writerName,  // 포맷팅된 이름 사용
         };
       });
 

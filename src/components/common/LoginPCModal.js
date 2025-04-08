@@ -6,6 +6,7 @@ import {
   roleOptions,
 } from "../../datas/users";
 import OnceOnOffButton from "./OnceOnOffButton";
+import { useUserLevel } from "../../utils/UserLevelContext";
 
 /**
  * 로그인과 PC할당 기능을 하나의 모달로 통합한 컴포넌트
@@ -20,6 +21,9 @@ const LoginPCModal = ({
   defaultRole = "",
   defaultLocation = "",
 }) => {
+  // 사용자 레벨 컨텍스트에서 필요한 함수들 가져오기
+  const { resetPCData, logout } = useUserLevel();
+
   // 내부 상태 관리
   const [activeTab, setActiveTab] = useState("login"); // 'login' 또는 'pc'
   const [department, setDepartment] = useState(defaultDepartment);
@@ -99,6 +103,39 @@ const LoginPCModal = ({
     }
   };
 
+  // 모든 로컬 정보 삭제 처리
+  const handleClearAllLocalData = () => {
+    try {
+      // 로컬 스토리지 초기화
+      localStorage.clear();
+      
+      // UserLevelContext의 상태 초기화
+      if (logout) {
+        logout();  // 로그아웃 처리 (사용자 정보 초기화)
+      }
+      
+      if (resetPCData) {
+        resetPCData();  // PC 할당 데이터 초기화
+      }
+      
+      // 현재 상태 초기화
+      setDepartment(defaultDepartment);
+      const initRole = roleOptions[defaultDepartment] ? roleOptions[defaultDepartment][0] : "";
+      setRole(initRole);
+      setDepartmentLeader(initRole?.includes("장") || false);
+      setLocation(locationOptions[defaultDepartment] ? locationOptions[defaultDepartment][0] : "");
+      
+      // 완료 메시지
+      setMessage("모든 로컬 데이터가 초기화되었습니다");
+      
+      // 로그인 탭으로 전환
+      setActiveTab("login");
+    } catch (e) {
+      console.error("로컬 데이터 삭제 중 오류 발생", e);
+      setMessage("데이터 삭제 중 오류가 발생했습니다");
+    }
+  };
+
   // 모달이 닫혀있으면 렌더링하지 않음
   if (!isOpen) return null;
 
@@ -167,26 +204,6 @@ const LoginPCModal = ({
               </select>
             </div>
 
-            {/* 역할 선택 */}
-            {/* <div className="flex flex-row items-center">
-              <label className="block text-sm w-[50px]">역할:</label>
-              <select
-                value={role}
-                onChange={(e) => {
-                  const newRole = e.target.value;
-                  setRole(newRole);
-                  setDepartmentLeader(newRole.includes("장"));
-                }}
-                className="w-full border rounded px-2 py-1"
-              >
-                {(roleOptions[department] || []).map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div> */}
-
             {/* 위치 선택 */}
             <div className="flex flex-row items-center">
               <label className="block text-sm w-[50px]">위치:</label>
@@ -212,6 +229,17 @@ const LoginPCModal = ({
                 onChange={(e) => setAdminPasswordInput(e.target.value)}
                 className="w-full border rounded px-2 py-1"
               />
+            </div>
+
+            {/* 모든 로컬 데이터 삭제 버튼 */}
+            <div className="w-full">
+              <button
+                type="button"
+                onClick={handleClearAllLocalData}
+                className="w-full bg-red-700 text-white py-2 rounded-md hover:bg-red-800 transition-colors"
+              >
+                모든 로컬 데이터 초기화
+              </button>
             </div>
 
             <div className="w-full">
