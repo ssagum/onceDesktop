@@ -472,28 +472,15 @@ export default function HomeMainCanvas() {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        // 사용자 권한 확인
-        const isOwner = isHospitalOwner(userLevelData, currentUser);
-        const isLeader = isLeaderOrHigher(userLevelData, currentUser);
-        const userRole = userLevelData?.role || "";
-        const isManager = userRole.includes("과장");
+        console.log("===== 모든 업무 데이터 로딩 =====");
 
-        // 사용자 역할별 파라미터 설정
-        const taskParams = {
-          department: userLevelData?.department,
-          date: currentDate,
-          ignoreSchedule: false,
-          // 역할에 따른 추가 파라미터
-          includeHighLevelTasks: isLeader, // 팀장급 업무 포함
-          includeManagerTasks: isManager, // 과장급 업무 포함
-          includeDirectorTasks: isOwner, // 대표원장 업무 포함
-          userRole: userRole, // 사용자 역할 전달
-        };
+        // 1. 모든 업무를 가져옵니다 (필터링 없음)
+        const allTasksResult = await getAllTasks();
+        console.log(`총 ${allTasksResult.length}개 업무 로드됨`);
 
-        console.log("업무 조회 파라미터:", taskParams);
-        const userTasksResult = await getUserTasks(taskParams);
-        setAllUserTasks(userTasksResult);
-        filterUserTasks(userTasksResult);
+        // 2. 모든 업무를 하나의 함수에서 필터링합니다
+        // 여기서는 데이터만 가져오고, 모든 필터링은 applyAllFilters에서 처리
+        applyAllFilters(allTasksResult);
       } catch (error) {
         console.error("사용자 업무 가져오기 오류:", error);
       }
@@ -502,47 +489,45 @@ export default function HomeMainCanvas() {
     if (userLevelData?.department) {
       fetchTasks();
     }
-  }, [userLevelData?.department, currentDate]);
+  }, [userLevelData?.department, currentDate, currentUser]);
 
-  useEffect(() => {
-    filterUserTasks(allUserTasks);
-  }, [allUserTasks, currentDate]);
-
-  const filterUserTasks = (tasks) => {
-    if (!tasks || tasks.length === 0) {
+  // 모든 필터링 로직을 하나의 함수로 통합
+  const applyAllFilters = (allTasks) => {
+    if (!allTasks || allTasks.length === 0) {
+      setAllUserTasks([]);
       setFilteredTasks([]);
       return;
     }
 
+    const userDepartment = userLevelData?.department || "";
+    const userRole = currentUser?.role || "";
+    const userName = currentUser?.name || "";
+
+    console.log(`===== 필터링 시작 =====`);
+    console.log(
+      `사용자: ${userName}, 부서: ${userDepartment}, 역할: ${
+        userRole || "일반"
+      }`
+    );
+
+    // 1단계: 날짜 필터링
     const currentDateOnly = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
       currentDate.getDate()
     );
 
-    // 사용자 역할 확인
-    const isOwner = isHospitalOwner(userLevelData, currentUser);
-    const isLeader = isLeaderOrHigher(userLevelData, currentUser);
-    const userRole = userLevelData?.role || "";
-    const isManager = userRole.includes("과장");
-
-    // 날짜 범위로 기본 필터링
-    let filteredByDate = tasks.filter((task) => {
-      let taskStartDate, taskEndDate;
-
+    const dateFiltered = allTasks.filter((task) => {
       try {
-        if (task.startDate && task.startDate.seconds) {
-          taskStartDate = new Date(task.startDate.seconds * 1000);
-        } else {
-          taskStartDate = new Date(task.startDate);
-        }
+        let taskStartDate = task.startDate?.seconds
+          ? new Date(task.startDate.seconds * 1000)
+          : new Date(task.startDate);
 
-        if (task.endDate && task.endDate.seconds) {
-          taskEndDate = new Date(task.endDate.seconds * 1000);
-        } else {
-          taskEndDate = new Date(task.endDate);
-        }
+        let taskEndDate = task.endDate?.seconds
+          ? new Date(task.endDate.seconds * 1000)
+          : new Date(task.endDate);
 
+        // 날짜만 비교
         taskStartDate = new Date(
           taskStartDate.getFullYear(),
           taskStartDate.getMonth(),
@@ -555,55 +540,29 @@ export default function HomeMainCanvas() {
           taskEndDate.getDate()
         );
 
-        const isInDateRange =
-          taskStartDate <= currentDateOnly && currentDateOnly <= taskEndDate;
-
-        return isInDateRange;
-      } catch (error) {
-        console.error(
-          `업무 [${task.title || task.id}] 날짜 처리 중 오류:`,
-          error
+        return (
+          taskStartDate <= currentDateOnly && currentDateOnly <= taskEndDate
         );
+      } catch (error) {
+        console.error(`날짜 처리 오류 (${task.title}):`, error);
         return false;
       }
     });
 
-    // 역할 기반 업무 필터링
-    if (!isOwner) {
-      // 대표원장이 아닌 경우 역할별 필터링 적용
-      filteredByDate = filteredByDate.filter((task) => {
-        // 업무 레벨 정보 (기본값은 일반 업무)
-        const taskLevel = task.level || "normal";
+    console.log(`날짜 필터 후: ${dateFiltered.length}개 업무`);
 
-        // 일반 업무는 모든 사용자가 볼 수 있음
-        if (taskLevel === "normal") return true;
-
-        // 팀장급 업무는 팀장/과장/대표원장만 볼 수 있음
-        if (taskLevel === "leader" && !isLeader) return false;
-
-        // 과장급 업무는 과장/대표원장만 볼 수 있음
-        if (taskLevel === "manager" && !isManager && !isOwner) return false;
-
-        // 대표원장급 업무는 대표원장만 볼 수 있음
-        if (taskLevel === "director" && !isOwner) return false;
-
-        // 모든 조건을 통과하면 해당 업무 표시
-        return true;
-      });
-    }
-
+    // 2단계: 요일 필터링
     const dayOfWeek = currentDateOnly.getDay();
     const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
     const todayName = dayNames[dayOfWeek];
 
-    const finalFiltered = filteredByDate.filter((task) => {
+    const dayFiltered = dateFiltered.filter((task) => {
       // 매일 실행되는 업무
       if (task.cycle === "daily" || task.cycle === "매일") {
         return true;
       }
 
-      // 주간 또는 격주 업무 - 요일만 체크하고 격주 패턴은 일단 무시
-      // 실제로는 격주 패턴 계산이 필요하지만, 우선 요일만으로 필터링
+      // 주간/격주 업무
       if (
         (task.cycle === "weekly" ||
           task.cycle === "매주" ||
@@ -614,76 +573,139 @@ export default function HomeMainCanvas() {
       ) {
         const dayMatches = task.days.includes(todayName);
 
-        // 주간 업무는 요일만 확인
+        // 요일이 일치하지 않으면 제외
+        if (!dayMatches) return false;
+
+        // 매주 업무는 요일만 체크하면 됨
         if (task.cycle === "weekly" || task.cycle === "매주") {
-          return dayMatches;
+          return true;
         }
 
         // 격주 업무는 주차 계산 필요
-        if (
-          (task.cycle === "biweekly" || task.cycle === "격주") &&
-          dayMatches
-        ) {
+        if (task.cycle === "biweekly" || task.cycle === "격주") {
           try {
-            // 시작일 가져오기
-            let startDate;
-            if (task.startDate instanceof Date) {
-              startDate = new Date(task.startDate.getTime());
-            } else if (task.startDate?.seconds) {
-              startDate = new Date(task.startDate.seconds * 1000);
-            } else {
-              startDate = new Date(task.startDate);
-            }
+            let startDate = task.startDate?.seconds
+              ? new Date(task.startDate.seconds * 1000)
+              : new Date(task.startDate);
 
-            // 날짜를 00:00:00으로 설정하여 계산 정확도 높임
             startDate.setHours(0, 0, 0, 0);
-            const currentDateCopy = new Date(currentDateOnly.getTime());
-            currentDateCopy.setHours(0, 0, 0, 0);
-
-            // 두 날짜 사이의 일수 계산
             const timeDiff = Math.abs(
-              currentDateCopy.getTime() - startDate.getTime()
+              currentDateOnly.getTime() - startDate.getTime()
             );
             const diffDays = Math.floor(timeDiff / (1000 * 3600 * 24));
-
-            // 주차 계산 (0부터 시작)
             const weeksFromStart = Math.floor(diffDays / 7);
 
-            // 짝수 주차(0, 2, 4...)인지 홀수 주차(1, 3, 5...)인지 확인
-            const isEvenWeek = weeksFromStart % 2 === 0;
-
-            // 0, 2, 4... 주차에 업무 표시 (첫 주 포함, 다음 주 제외, 다다음 주 포함...)
-            return isEvenWeek;
+            // 짝수 주차(0, 2, 4...)에만 표시
+            return weeksFromStart % 2 === 0;
           } catch (error) {
-            console.error(`업무 [${task.title}]: 격주 계산 중 오류:`, error);
-            // 오류 발생 시 안전하게 처리
-            return dayMatches;
+            console.error(`격주 계산 오류 (${task.title}):`, error);
+            return true; // 오류 시 안전하게 표시
           }
         }
 
         return dayMatches;
       }
 
-      // 월간 업무
-      if (task.cycle === "monthly" || task.cycle === "매월") {
+      // 월간 업무 또는 기타 주기 유형
+      if (
+        task.cycle === "monthly" ||
+        task.cycle === "매월" ||
+        !task.cycle ||
+        task.cycle === "none" ||
+        task.cycle === "1회성"
+      ) {
         return true;
       }
 
-      // 기타 주기 유형
-      return true;
+      return true; // 기본적으로 표시
     });
 
-    finalFiltered.sort((a, b) => {
-      const dateA = a.startDate?.seconds
-        ? new Date(a.startDate.seconds * 1000)
-        : new Date(a.startDate);
-      const dateB = b.startDate?.seconds
-        ? new Date(b.startDate.seconds * 1000)
-        : new Date(b.startDate);
-      return dateA - dateB;
-    });
+    console.log(`요일 필터 후: ${dayFiltered.length}개 업무`);
 
-    setFilteredTasks(finalFiltered);
+    // 3단계: 역할 기반 필터링 (가장 단순한 규칙 적용)
+    let roleFiltered = [];
+
+    // 대표원장: 대표원장 업무만 볼 수 있음 (이전에는 모든 업무)
+    if (userRole === "대표원장") {
+      console.log("대표원장 권한: 대표원장 업무만 표시");
+      roleFiltered = dayFiltered.filter((task) => {
+        // 본인에게 할당된 개인 업무
+        if (task.assignee === userName) {
+          return true;
+        }
+
+        // 대표원장 업무만 표시
+        if (task.assignee === "대표원장") {
+          return true;
+        }
+
+        return false;
+      });
+    }
+    // 팀장: 팀장 업무만 볼 수 있음 (팀 업무 제외)
+    else if (userRole === "팀장" || userLevelData?.departmentLeader) {
+      console.log(`팀장 권한: ${userDepartment}장 업무만 표시`);
+      roleFiltered = dayFiltered.filter((task) => {
+        // 본인에게 할당된 개인 업무
+        if (task.assignee === userName) {
+          return true;
+        }
+
+        // 팀장 업무 (두 가지 표준 형식만 지원)
+        if (
+          task.assignee === `${userDepartment}장` ||
+          task.assignee === `${userDepartment.replace("팀", "")}팀장`
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+    }
+    // 일반 사용자: 팀 업무만 볼 수 있음 (팀장 업무 제외)
+    else {
+      console.log(`일반 사용자 권한: ${userDepartment} 업무만 표시`);
+      roleFiltered = dayFiltered.filter((task) => {
+        // 본인에게 할당된 개인 업무
+        if (task.assignee === userName) {
+          return true;
+        }
+
+        // 팀 업무 (팀장 업무 제외)
+        if (task.assignee === userDepartment) {
+          return true;
+        }
+
+        return false;
+      });
+    }
+
+    console.log(`최종 필터링 결과: ${roleFiltered.length}개 업무`);
+
+    // 디버깅을 위한 팀장 업무 확인
+    const teamLeaderTasks = roleFiltered.filter(
+      (task) =>
+        task.assignee &&
+        (task.assignee.includes("팀장") || task.assignee.endsWith("장"))
+    );
+
+    if (teamLeaderTasks.length > 0) {
+      console.log(`최종 팀장 관련 업무: ${teamLeaderTasks.length}개`);
+      teamLeaderTasks.forEach((task) => {
+        console.log(`- ${task.title} (${task.assignee})`);
+      });
+    }
+
+    // 상태 업데이트
+    setAllUserTasks(allTasks); // 원본 데이터 보존
+    setFilteredTasks(roleFiltered); // 필터링된 업무만 표시
+  };
+
+  // filterUserTasks 함수 삭제 또는 대체
+  const filterUserTasks = (tasks) => {
+    // 이 함수는 더 이상 사용하지 않습니다
+    // applyAllFilters에서 모든 필터링을 수행합니다
+    console.log("filterUserTasks는 더 이상 사용되지 않습니다");
   };
 
   const handlePrevDay = () => {
@@ -1084,7 +1106,7 @@ export default function HomeMainCanvas() {
             </Link>
           </InsideHeaderZone>
 
-          <div className="w-full h-[200px] overflow-y-auto scrollbar-hide">
+          <div className="w-full h-[200px] overflow-y-auto scrollbar-hide pb-[40px]">
             {(() => {
               // 부서명 비교 함수 (팀 명칭 유무에 상관없이 비교)
               const isDepartmentMatch = (dept1, dept2) => {
@@ -1174,10 +1196,11 @@ export default function HomeMainCanvas() {
               </div>
               <div className="ml-[20px] text-once20 font-semibold">
                 {(() => {
-                  // 사용자의 역할 확인
-                  const isOwner = isHospitalOwner(userLevelData, currentUser);
-                  const isLeader = isLeaderOrHigher(userLevelData, currentUser);
-                  const userRole = userLevelData?.role || "";
+                  // 사용자의 역할 확인 - 역할은 currentUser, 부서는 userLevelData
+                  const userRole = currentUser?.role || "";
+                  const isOwner = userRole === "대표원장";
+                  const isTeamLeader =
+                    userRole === "팀장" || userLevelData?.departmentLeader;
                   const department = userLevelData?.department || "미분류";
 
                   // 역할에 따른 표시 방법 설정
@@ -1185,10 +1208,7 @@ export default function HomeMainCanvas() {
                     return `${department} (대표원장)`;
                   } else if (userRole.includes("과장")) {
                     return `${department} (과장)`;
-                  } else if (
-                    userRole.includes("팀장") ||
-                    userLevelData?.departmentLeader
-                  ) {
+                  } else if (isTeamLeader) {
                     return `${department} (팀장)`;
                   } else {
                     return department;
@@ -1223,7 +1243,37 @@ export default function HomeMainCanvas() {
             return null;
           })()}
 
-          <ToDoZone className="flex-1 mt-[20px] overflow-auto">
+          <ToDoZone className="flex-1 mt-[20px] overflow-y-auto h-[500px] max-h-[calc(100vh-350px)] scrollbar-hide">
+            {(() => {
+              // ToDo 컴포넌트에 전달되기 직전에 filteredTasks 내용 출력
+              console.log(
+                "ToDo 컴포넌트에 전달되는 업무 목록:",
+                filteredTasks.map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  assignee: task.assignee,
+                }))
+              );
+
+              // 팀장 업무 확인
+              const teamLeaderTasks = filteredTasks.filter(
+                (task) =>
+                  task.assignee &&
+                  (task.assignee.includes("팀장") ||
+                    task.assignee.endsWith("장"))
+              );
+
+              console.log(
+                "팀장 관련 업무 목록:",
+                teamLeaderTasks.map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  assignee: task.assignee,
+                }))
+              );
+
+              return null;
+            })()}
             <ToDo
               tasks={filteredTasks}
               showCompleter={true}
