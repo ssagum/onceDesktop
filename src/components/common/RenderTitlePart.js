@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import HoverFrame from "./HoverFrame";
 import ShrinkText from "./ShrinkText";
-import NoticeShowModal from "../Notice.js/NoticeShowModal";
+import NoticeShowModal from "../Notice/NoticeShowModal";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useToast } from "../../contexts/ToastContext";

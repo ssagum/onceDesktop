@@ -69,7 +69,7 @@ const ALLOWED_FILE_TYPES = [
 
 const DEPARTMENTS = [
   { label: "전체", value: "전체" },
-  { label: "원장", value: "원장" },
+  { label: "진료", value: "진료" },
   { label: "간호", value: "간호" },
   { label: "물리치료", value: "물리치료" },
   { label: "원무", value: "원무" },

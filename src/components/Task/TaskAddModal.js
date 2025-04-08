@@ -14,6 +14,7 @@ import FormLabel from "../common/FormLabel";
 import { formatSafeDate, parseKoreanDate } from "../../utils/dateUtils";
 import { useUserLevel } from "../../utils/UserLevelContext";
 import { getAllowedTaskSelections } from "../../utils/permissionUtils";
+import { isHospitalOwner, isLeaderOrHigher } from "../../utils/permissionUtils";
 
 const ModalHeaderZone = styled.div``;
 const ModalContentZone = styled.div``;
@@ -59,6 +60,35 @@ const formatDateForCalendar = (dateStr) => {
   }
 };
 
+// permissionUtils.js에 있는 getSpecificRoleTitle 함수를 가져와 사용
+// 직접 함수 정의
+const getSpecificRoleTitle = (role, department) => {
+  if (!role || !department) return role || "";
+
+  // 부서에서 '팀' 접미사 정리
+  const deptBase = department.endsWith("팀")
+    ? department.slice(0, -1)
+    : department;
+
+  // 팀장인 경우
+  if (role === "팀장") {
+    return `${deptBase}팀장`;
+  }
+
+  // 과장인 경우
+  if (role === "과장") {
+    return `${deptBase}과장`;
+  }
+
+  // 대표원장 또는 원장인 경우
+  if (role === "원장" || role === "대표원장") {
+    return "대표원장";
+  }
+
+  // 기타 역할은 그대로 반환
+  return role;
+};
+
 function TaskAddModal({
   isVisible,
   setIsVisible,
@@ -79,7 +109,7 @@ function TaskAddModal({
   const [selectedDays, setSelectedDays] = useState(task?.days || []);
   const [selectedCycle, setSelectedCycle] = useState(task?.cycle || "매일");
   const [title, setTitle] = useState(task?.title || "");
-  const [writer, setWriter] = useState(task?.writer || "");
+  const [writer, setWriter] = useState("");
   const [assignee, setAssignee] = useState(task?.assignee || "");
   const [category, setCategory] = useState(task?.category || "1회성");
   const [priority, setPriority] = useState(task?.priority || "중");
@@ -96,12 +126,112 @@ function TaskAddModal({
   useEffect(() => {
     console.log("TaskAddModal - 사용자 정보:", { userLevelData, currentUser });
     if (userLevelData || currentUser) {
-      const writerOptions = getAllowedTaskSelections(userLevelData, currentUser, 'writer');
-      const assigneeOptions = getAllowedTaskSelections(userLevelData, currentUser, 'assignee');
+      const writerOptions = getAllowedTaskSelections(
+        userLevelData,
+        currentUser,
+        "writer"
+      );
+      const assigneeOptions = getAllowedTaskSelections(
+        userLevelData,
+        currentUser,
+        "assignee"
+      );
       console.log("TaskAddModal - 허용된 작성자 옵션:", writerOptions);
       console.log("TaskAddModal - 허용된 담당자 옵션:", assigneeOptions);
     }
   }, [userLevelData, currentUser]);
+
+  // 작성자 초기값을 위한 함수
+  const getInitialWriter = () => {
+    if (task?.writer) return task.writer;
+
+    // 사용자 정보 기반 기본값 설정
+    const role = currentUser?.role || userLevelData?.role || "";
+    const department =
+      currentUser?.department || userLevelData?.department || "";
+    const isOwner = isHospitalOwner?.(userLevelData, currentUser) || false;
+    const isLeader = isLeaderOrHigher?.(userLevelData, currentUser) || false;
+
+    if (isOwner) return "대표원장";
+    if (isLeader) {
+      // 구체적인 직함을 사용 (팀장 -> 간호팀장 등)
+      return getSpecificRoleTitle(role, department);
+    }
+    if (department)
+      return department.endsWith("팀") ? department : `${department}팀`;
+    return "";
+  };
+
+  // 사용자 정보가 로드되면 자동으로 작성자 설정
+  useEffect(() => {
+    // 디버깅을 위한 로그 추가
+    console.log("작성자 자동 선택 useEffect 실행:", {
+      isVisible,
+      mode,
+      writer,
+      taskWriter: task?.writer,
+      userRole: userLevelData?.role || currentUser?.role,
+      userDept: userLevelData?.department || currentUser?.department,
+    });
+
+    // 이미 작성자가 설정되어 있거나 편집 모드인 경우 무시 - 조건 단순화
+    if (!isVisible) {
+      console.log("모달이 표시되지 않아 작성자 자동 선택 건너뜀");
+      return;
+    }
+
+    if (writer) {
+      console.log("이미 작성자가 설정되어 있어 자동 선택 건너뜀:", writer);
+      return;
+    }
+
+    if (task?.writer) {
+      console.log("기존 작업의 작성자가 있어 자동 선택 건너뜀:", task.writer);
+      return;
+    }
+
+    if (mode !== "create") {
+      console.log("생성 모드가 아니어서 자동 선택 건너뜀:", mode);
+      return;
+    }
+
+    // 현재 사용자에 기반한 기본 작성자 설정
+    const role = currentUser?.role || userLevelData?.role || "";
+    const department =
+      currentUser?.department || userLevelData?.department || "";
+    const isOwner = isHospitalOwner(userLevelData, currentUser);
+    const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+
+    let defaultWriter = "";
+
+    if (isOwner) {
+      // 대표원장인 경우
+      defaultWriter = "대표원장";
+      console.log("대표원장 사용자, 기본 작성자 설정:", defaultWriter);
+    } else if (isLeader) {
+      // 팀장/과장인 경우 구체적인 직함 사용 (예: 간호팀장)
+      defaultWriter = getSpecificRoleTitle(role, department);
+      console.log("팀장급 사용자, 기본 작성자 설정:", defaultWriter);
+    } else {
+      // 일반 사용자인 경우 자신의 부서
+      if (department) {
+        defaultWriter = department.endsWith("팀")
+          ? department
+          : `${department}팀`;
+        console.log("일반 사용자, 부서 기반 작성자 설정:", defaultWriter);
+      } else {
+        defaultWriter = "대표원장"; // 기본값
+        console.log("부서 정보 없음, 기본 작성자 설정:", defaultWriter);
+      }
+    }
+
+    if (defaultWriter) {
+      console.log(`TaskAddModal - 기본 작성자 설정 완료: ${defaultWriter}`);
+      setWriter(defaultWriter);
+    } else {
+      console.warn("적절한 기본 작성자를 찾을 수 없음");
+    }
+  }, [isVisible, userLevelData, currentUser, writer, task?.writer, mode]);
 
   // 이전 날짜 값 비교를 위한 ref 추가
   const prevStartDateRef = useRef(startDate);
@@ -154,7 +284,8 @@ function TaskAddModal({
         }
 
         setTitle(task.title || "");
-        setWriter(task.writer || "");
+        // 작성자 초기값 설정 개선
+        setWriter(task.writer || getInitialWriter());
         setAssignee(task.assignee || "");
         setCategory(task.category || "1회성");
         setPriority(task.priority || "중");
@@ -281,7 +412,8 @@ function TaskAddModal({
       setSelectedDays([]);
       setSelectedCycle("매일");
       setTitle("");
-      setWriter("");
+      // 작성자 초기값 설정 개선
+      setWriter(getInitialWriter());
       setAssignee("");
       setCategory("1회성");
       setPriority("중");
@@ -290,6 +422,18 @@ function TaskAddModal({
       setContent("");
     }
   };
+
+  // 모달이 열릴 때 초기값 강제 설정
+  useEffect(() => {
+    if (isVisible && !writer) {
+      console.log("모달이 열렸고 작성자가 비어있음 - 초기값 설정 시도");
+      const initialWriter = getInitialWriter();
+      if (initialWriter) {
+        console.log("작성자 초기값 강제 설정:", initialWriter);
+        setWriter(initialWriter);
+      }
+    }
+  }, [isVisible, writer, userLevelData, currentUser]);
 
   // 모달 닫기 핸들러
   const handleCloseModal = () => {
@@ -623,32 +767,42 @@ function TaskAddModal({
                   />
                 </div>
                 <InfoRow className="grid grid-cols-2 gap-4 mb-[20px]">
-                  <div className="flex flex-row">
+                  <div className="flex flex-row items-center w-full">
                     <FormLabel
                       label="작성자"
                       required={true}
-                      className="mb-2"
+                      className="mb-2 mr-2 min-w-[70px]"
                     />
                     <DepartmentRoleSelector
                       value={writer}
                       onChange={(val) => isFieldEditable && setWriter(val)}
                       label="작성자 선택"
                       disabled={!isFieldEditable}
-                      allowedOptions={getAllowedTaskSelections(userLevelData, currentUser, 'writer')}
+                      className="w-full"
+                      allowedOptions={getAllowedTaskSelections(
+                        userLevelData,
+                        currentUser,
+                        "writer"
+                      )}
                     />
                   </div>
-                  <div className="flex flex-row">
+                  <div className="flex flex-row items-center w-full">
                     <FormLabel
                       label="담당자"
                       required={false}
-                      className="mb-2"
+                      className="mb-2 mr-2 min-w-[70px]"
                     />
                     <DepartmentRoleSelector
                       value={assignee}
                       onChange={(val) => isFieldEditable && setAssignee(val)}
                       label="담당자 선택"
                       disabled={!isFieldEditable}
-                      allowedOptions={getAllowedTaskSelections(userLevelData, currentUser, 'assignee')}
+                      className="w-full"
+                      allowedOptions={getAllowedTaskSelections(
+                        userLevelData,
+                        currentUser,
+                        "assignee"
+                      )}
                     />
                   </div>
                 </InfoRow>

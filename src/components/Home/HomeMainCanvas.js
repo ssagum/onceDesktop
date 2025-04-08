@@ -472,16 +472,26 @@ export default function HomeMainCanvas() {
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        // 사용자 권한 확인 (리더급인지)
+        // 사용자 권한 확인
+        const isOwner = isHospitalOwner(userLevelData, currentUser);
         const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+        const userRole = userLevelData?.role || "";
+        const isManager = userRole.includes("과장");
 
-        const userTasksResult = await getUserTasks({
+        // 사용자 역할별 파라미터 설정
+        const taskParams = {
           department: userLevelData?.department,
           date: currentDate,
           ignoreSchedule: false,
-          // 리더급 사용자일 경우 추가 파라미터 전달 (TaskService.js 수정 필요)
-          includeHighLevelTasks: isLeader,
-        });
+          // 역할에 따른 추가 파라미터
+          includeHighLevelTasks: isLeader, // 팀장급 업무 포함
+          includeManagerTasks: isManager, // 과장급 업무 포함
+          includeDirectorTasks: isOwner, // 대표원장 업무 포함
+          userRole: userRole, // 사용자 역할 전달
+        };
+
+        console.log("업무 조회 파라미터:", taskParams);
+        const userTasksResult = await getUserTasks(taskParams);
         setAllUserTasks(userTasksResult);
         filterUserTasks(userTasksResult);
       } catch (error) {
@@ -510,6 +520,13 @@ export default function HomeMainCanvas() {
       currentDate.getDate()
     );
 
+    // 사용자 역할 확인
+    const isOwner = isHospitalOwner(userLevelData, currentUser);
+    const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+    const userRole = userLevelData?.role || "";
+    const isManager = userRole.includes("과장");
+
+    // 날짜 범위로 기본 필터링
     let filteredByDate = tasks.filter((task) => {
       let taskStartDate, taskEndDate;
 
@@ -550,6 +567,30 @@ export default function HomeMainCanvas() {
         return false;
       }
     });
+
+    // 역할 기반 업무 필터링
+    if (!isOwner) {
+      // 대표원장이 아닌 경우 역할별 필터링 적용
+      filteredByDate = filteredByDate.filter((task) => {
+        // 업무 레벨 정보 (기본값은 일반 업무)
+        const taskLevel = task.level || "normal";
+
+        // 일반 업무는 모든 사용자가 볼 수 있음
+        if (taskLevel === "normal") return true;
+
+        // 팀장급 업무는 팀장/과장/대표원장만 볼 수 있음
+        if (taskLevel === "leader" && !isLeader) return false;
+
+        // 과장급 업무는 과장/대표원장만 볼 수 있음
+        if (taskLevel === "manager" && !isManager && !isOwner) return false;
+
+        // 대표원장급 업무는 대표원장만 볼 수 있음
+        if (taskLevel === "director" && !isOwner) return false;
+
+        // 모든 조건을 통과하면 해당 업무 표시
+        return true;
+      });
+    }
 
     const dayOfWeek = currentDateOnly.getDay();
     const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
@@ -1043,37 +1084,36 @@ export default function HomeMainCanvas() {
             </Link>
           </InsideHeaderZone>
 
-          {/* 부서명 비교 유틸리티 함수 */}
-          {(() => {
-            // 부서명 비교 함수 (팀 명칭 유무에 상관없이 비교)
-            const isDepartmentMatch = (dept1, dept2) => {
-              // null/undefined/빈 문자열 체크
-              if (!dept1 || !dept2) return false;
+          <div className="w-full h-[200px] overflow-y-auto scrollbar-hide">
+            {(() => {
+              // 부서명 비교 함수 (팀 명칭 유무에 상관없이 비교)
+              const isDepartmentMatch = (dept1, dept2) => {
+                // null/undefined/빈 문자열 체크
+                if (!dept1 || !dept2) return false;
 
-              // 문자열로 변환
-              const dept1Str = String(dept1).trim();
-              const dept2Str = String(dept2).trim();
+                // 문자열로 변환
+                const dept1Str = String(dept1).trim();
+                const dept2Str = String(dept2).trim();
 
-              // 정확히 일치하는 경우
-              if (dept1Str === dept2Str) return true;
+                // 정확히 일치하는 경우
+                if (dept1Str === dept2Str) return true;
 
-              // '팀' 명칭 제거 후 비교
-              const dept1Base = dept1Str.endsWith("팀")
-                ? dept1Str.slice(0, -1)
-                : dept1Str;
-              const dept2Base = dept2Str.endsWith("팀")
-                ? dept2Str.slice(0, -1)
-                : dept2Str;
+                // '팀' 명칭 제거 후 비교
+                const dept1Base = dept1Str.endsWith("팀")
+                  ? dept1Str.slice(0, -1)
+                  : dept1Str;
+                const dept2Base = dept2Str.endsWith("팀")
+                  ? dept2Str.slice(0, -1)
+                  : dept2Str;
 
-              return dept1Base === dept2Base;
-            };
+                return dept1Base === dept2Base;
+              };
 
-            // 대표원장 확인
-            const isOwner = isHospitalOwner(userLevelData, currentUser);
+              // 대표원장 확인
+              const isOwner = isHospitalOwner(userLevelData, currentUser);
 
-            // 필터링된 공지사항
-            const filteredNotices = notices
-              .filter((notice) => {
+              // 필터링된 공지사항
+              const filteredNotices = notices.filter((notice) => {
                 // 숨겨진 공지는 표시하지 않음
                 if (notice.isHidden) return false;
 
@@ -1083,39 +1123,46 @@ export default function HomeMainCanvas() {
                 // 대표원장은 모든 공지 확인 가능
                 if (isOwner) return true;
 
-                // 부서 정보가 없는 공지는 전체 공개 공지로 간주
-                if (!notice.department) return true;
+                // 분류 정보가 없는 공지는 전체 공개 공지로 간주
+                if (!notice.classification) return true;
 
-                // '전체' 부서인 공지는 모든 사용자에게 보임
-                if (notice.department === "전체") return true;
+                // '전체' 분류인 공지는 모든 사용자에게 보임
+                if (notice.classification === "전체") return true;
 
-                // 사용자 부서와 공지 부서 일치 여부 확인
+                // 사용자 부서와 공지 분류 일치 여부 확인
                 return isDepartmentMatch(
                   userLevelData?.department,
-                  notice.department
+                  notice.classification
                 );
-              })
-              .slice(0, 4);
+              });
 
-            // 필터링된 공지사항 렌더링
-            return filteredNotices.map((notice) => (
-              <RenderTitlePart key={notice.id} row={notice} isHomeMode={true} />
-            ));
-          })()}
+              // 필터링된 공지사항 렌더링
+              return filteredNotices.map((notice) => (
+                <RenderTitlePart
+                  key={notice.id}
+                  row={notice}
+                  isHomeMode={true}
+                />
+              ));
+            })()}
 
-          {notices.filter(
-            (notice) =>
-              notice.pinned &&
-              !notice.isHidden &&
-              (isHospitalOwner(userLevelData, currentUser) ||
-                !notice.department ||
-                notice.department === "전체" ||
-                isDepartmentMatch(userLevelData?.department, notice.department))
-          ).length === 0 && (
-            <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
-              <span className="mb-[40px]">등록된 공지사항이 없습니다.</span>
-            </div>
-          )}
+            {notices.filter(
+              (notice) =>
+                notice.pinned &&
+                !notice.isHidden &&
+                (isHospitalOwner(userLevelData, currentUser) ||
+                  !notice.classification ||
+                  notice.classification === "전체" ||
+                  isDepartmentMatch(
+                    userLevelData?.department,
+                    notice.classification
+                  ))
+            ).length === 0 && (
+              <div className="w-full h-[200px] flex justify-center items-center text-gray-500">
+                <span className="mb-[40px]">등록된 공지사항이 없습니다.</span>
+              </div>
+            )}
+          </div>
         </div>
       </TopZone>
       <BottomZone className="flex-[2] w-full p-[20px] flex flex-row gap-[30px]">
@@ -1126,7 +1173,27 @@ export default function HomeMainCanvas() {
                 <img src={task} alt="logo" className="w-[34px] h-auto" />
               </div>
               <div className="ml-[20px] text-once20 font-semibold">
-                {userLevelData?.department}
+                {(() => {
+                  // 사용자의 역할 확인
+                  const isOwner = isHospitalOwner(userLevelData, currentUser);
+                  const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+                  const userRole = userLevelData?.role || "";
+                  const department = userLevelData?.department || "미분류";
+
+                  // 역할에 따른 표시 방법 설정
+                  if (isOwner) {
+                    return `${department} (대표원장)`;
+                  } else if (userRole.includes("과장")) {
+                    return `${department} (과장)`;
+                  } else if (
+                    userRole.includes("팀장") ||
+                    userLevelData?.departmentLeader
+                  ) {
+                    return `${department} (팀장)`;
+                  } else {
+                    return department;
+                  }
+                })()}
               </div>
             </div>
             <DayChanger

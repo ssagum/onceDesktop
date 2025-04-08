@@ -5,7 +5,7 @@ import SideBar from "../components/SideBar";
 import TextEditorModal from "../components/TextEditorModal";
 import HomeMainCanvas from "../components/Home/HomeMainCanvas";
 import HomeTimerCanvas from "../components/Home/HomeTimerCanvas";
-import NoticeMainCanvas from "../components/Notice.js/NoticeMainCanvas";
+import NoticeMainCanvas from "../components/Notice/NoticeMainCanvas";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useToast } from "../contexts/ToastContext";

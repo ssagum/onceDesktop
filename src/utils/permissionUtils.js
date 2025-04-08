@@ -125,8 +125,6 @@ export const isLeaderOrHigher = (userLevelData, currentUser) => {
   // Firebase에서 가져온 정보 우선 사용
   const role = currentUser?.role || userLevelData?.role || "";
   const department = currentUser?.department || userLevelData?.department || "";
-  const departmentLeader =
-    currentUser?.departmentLeader || userLevelData?.departmentLeader || false;
 
   // 대표원장이나 원장은 무조건 true
   if (role === "원장" || role === "대표원장") {
@@ -134,15 +132,15 @@ export const isLeaderOrHigher = (userLevelData, currentUser) => {
     return true;
   }
 
-  // departmentLeader가 true이면 팀장급으로 간주
-  if (departmentLeader === true) {
-    console.log("팀장 여부 직접 확인됨");
-    return true;
-  }
-
   // 과장이 포함된 역할명은 모두 리더로 처리
   if (role === "과장" || role.includes("과장")) {
     console.log("과장급 권한 확인됨");
+    return true;
+  }
+
+  // 원무과장 케이스 명시적으로 체크 (역할 이름에 "원무과장"이 포함되어 있지 않은 경우도 처리)
+  if (isAdministrativeManager(userLevelData, currentUser)) {
+    console.log("원무과장 권한 확인됨");
     return true;
   }
 
@@ -282,8 +280,6 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
   // Firebase에서 가져온 정보 우선 사용
   const role = currentUser?.role || userLevelData?.role || "";
   const department = currentUser?.department || userLevelData?.department || "";
-  const departmentLeader =
-    currentUser?.departmentLeader || userLevelData?.departmentLeader || false;
 
   // 팀장급 권한 여부 확인
   const isLeader = isLeaderOrHigher(userLevelData, currentUser);
@@ -362,6 +358,34 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
   return folders;
 };
 
+// 역할과 부서를 결합하여 구체적인 직함을 생성하는 유틸리티 함수
+export const getSpecificRoleTitle = (role, department) => {
+  if (!role || !department) return role || "";
+
+  // 부서에서 '팀' 접미사 정리
+  const deptBase = department.endsWith("팀")
+    ? department.slice(0, -1)
+    : department;
+
+  // 팀장인 경우
+  if (role === "팀장") {
+    return `${deptBase}팀장`;
+  }
+
+  // 과장인 경우
+  if (role === "과장") {
+    return `${deptBase}과장`;
+  }
+
+  // 대표원장 또는 원장인 경우
+  if (role === "원장" || role === "대표원장") {
+    return "대표원장";
+  }
+
+  // 기타 역할은 그대로 반환
+  return role;
+};
+
 /**
  * 사용자 역할/부서 및 필드 타입('writer' 또는 'assignee')에 따라 허용된 Task 선택 옵션 목록을 반환합니다.
  * @param {Object} userLevelData - 사용자 권한 데이터.
@@ -369,101 +393,195 @@ export const getVisibleFolders = (userLevelData, currentUser) => {
  * @param {String} fieldType - 'writer' 또는 'assignee'.
  * @returns {Array} 허용된 선택 문자열 목록.
  */
-export const getAllowedTaskSelections = (userLevelData, currentUser, fieldType) => {
+export const getAllowedTaskSelections = (
+  userLevelData,
+  currentUser,
+  fieldType
+) => {
   // 비로그인 상태 처리: 사용자 정보 없으면 빈 배열 반환
   if (!userLevelData && !currentUser) {
-      console.log("getAllowedTaskSelections: 사용자 정보 없음 (비로그인 상태)");
-      return [];
+    console.log("getAllowedTaskSelections: 사용자 정보 없음 (비로그인 상태)");
+    return [];
   }
 
   const role = currentUser?.role || userLevelData?.role || "";
   const department = currentUser?.department || userLevelData?.department || "";
-  const isLeader = isLeaderOrHigher(userLevelData, currentUser);
-  const isOwner = isHospitalOwner(userLevelData, currentUser);
-  const isAdminMgr = isAdministrativeManager(userLevelData, currentUser);
 
-  // 모든 가능한 역할/부서 옵션 목록 가져오기
-  const allOptionsFlat = Object.values(roleOptions).flat();
   // 기존에 정의된 팀장급 역할 목록 사용
   const allLeaders = leaderRoles; // 대표원장, 팀장, 과장 등
 
   // 부서 이름으로 팀장 역할 이름 가져오는 헬퍼 함수
-   const getLeaderRole = (dept) => {
-     const departmentMappings = {
-       "경영지원": "경영지원팀장",
-       "원무": "원무과장",
-       "간호": "간호팀장",
-       "물리치료": "물리치료팀장",
-       "영상의학": "영상의학팀장",
-       "진료": "대표원장",
-     };
-     // 부서명 뒤에 '팀'이 붙어있는 경우 제거하고 매핑 시도
-     const cleanDept = dept?.endsWith("팀") ? dept.slice(0, -1) : dept;
-     return departmentMappings[cleanDept] || null;
+  const getLeaderRole = (dept) => {
+    if (!dept) return null;
+
+    // 부서명 정리 (앞뒤 공백 제거 및 소문자 변환)
+    const cleanDept = dept.trim().toLowerCase();
+
+    // 정확한 매핑
+    const departmentMappings = {
+      경영지원: "경영지원팀장",
+      경영지원팀: "경영지원팀장",
+      원무: "원무과장",
+      원무팀: "원무과장",
+      간호: "간호팀장",
+      간호팀: "간호팀장",
+      물리치료: "물리치료팀장",
+      물리치료팀: "물리치료팀장",
+      영상의학: "영상의학팀장",
+      영상의학팀: "영상의학팀장",
+      진료: "대표원장",
+      진료팀: "대표원장",
+    };
+
+    // 정확한 매핑 먼저 시도
+    if (departmentMappings[cleanDept]) {
+      return departmentMappings[cleanDept];
+    }
+
+    // 포함 관계로 일치 시도
+    if (cleanDept.includes("경영") || cleanDept.includes("지원"))
+      return "경영지원팀장";
+    if (cleanDept.includes("원무")) return "원무과장";
+    if (cleanDept.includes("간호")) return "간호팀장";
+    if (cleanDept.includes("물리") || cleanDept.includes("치료"))
+      return "물리치료팀장";
+    if (cleanDept.includes("영상") || cleanDept.includes("의학"))
+      return "영상의학팀장";
+    if (
+      cleanDept.includes("진료") ||
+      cleanDept.includes("의사") ||
+      cleanDept.includes("원장")
+    )
+      return "대표원장";
+
+    // 마지막 방어막: 부서명에 "팀"이 있는 경우 팀장 역할 추론
+    if (cleanDept.includes("팀")) {
+      const baseName = cleanDept.replace("팀", "").trim();
+      if (baseName) {
+        return `${baseName}팀장`;
+      }
+    }
+
+    console.warn(`부서 "${dept}"에 해당하는 팀장 역할을 찾을 수 없습니다.`);
+    return null;
   };
 
   let allowed = [];
 
-  if (fieldType === 'writer') {
-    // --- 작성자 선택 로직 ---
-     if (isOwner) {
-        allowed = [...allLeaders];
-    } else if (isLeader) {
-        allowed = [role];
-    } else {
-        const leader = getLeaderRole(department);
-        if (leader) allowed = [leader];
-        else allowed = [];
-    }
-    console.log(`getAllowedTaskSelections (writer) calculated:`, allowed);
-
-  } else if (fieldType === 'assignee') {
-    // --- 담당자 선택 로직 (단순화) ---
-    allowed.push("미배정"); // 항상 미배정 포함
+  if (fieldType === "writer") {
+    // --- 작성자 선택 로직 (요구사항 반영) ---
+    const isOwner = isHospitalOwner(userLevelData, currentUser);
+    const isLeader = isLeaderOrHigher(userLevelData, currentUser);
+    const isAdminMgr = isAdministrativeManager(userLevelData, currentUser);
 
     if (isOwner) {
-      // 대표원장: 모든 역할/팀 선택 가능 (+미배정)
-      allowed.push(...allOptionsFlat.filter(opt => opt !== "미배정"));
+      // 대표원장: 자신의 부서와 "대표원장" 역할만 선택 가능
+      allowed.push("대표원장");
+      if (department) {
+        const deptWithTeam = department.endsWith("팀")
+          ? department
+          : `${department}팀`;
+        allowed.push(deptWithTeam);
+      }
+    } else if (isAdminMgr) {
+      // 원무과장: 정확한 직함을 사용
+      allowed.push("원무과장");
     } else if (isLeader) {
-        // 팀장/과장: 자신, 자신의 팀, 미배정 (+원무과장 특별처리)
-        allowed.push(role); // 자신
-        const teamName = getLeaderRole(department);
-        if (teamName) allowed.push(teamName); // 자신의 팀
-        // 원무과장 특별 케이스
-        if (isAdminMgr) {
-            const radiologyTeam = getLeaderRole("영상의학");
-            const radiologyLeader = getLeaderRole("영상의학");
-            if (radiologyTeam) allowed.push(radiologyTeam);
-            if (radiologyLeader) allowed.push(radiologyLeader);
-        }
+      // 팀장/과장: 부서와 연계된 구체적인 직함 사용
+      const specificRole = getSpecificRoleTitle(role, department);
+      allowed.push(specificRole);
     } else {
-        // 팀원: 자신의 팀장, 자신의 팀, 미배정
-        const leader = getLeaderRole(department);
-        if (leader) allowed.push(leader); // 자신의 팀장
-        const teamName = getLeaderRole(department);
-        if (teamName) allowed.push(teamName); // 자신의 팀
+      // 일반 사용자: 자신의 부서만 선택 가능
+      if (department) {
+        const deptWithTeam = department.endsWith("팀")
+          ? department
+          : `${department}팀`;
+        allowed.push(deptWithTeam);
+      } else {
+        // 부서 정보 없을 시 기본값
+        allowed.push("대표원장");
+      }
     }
-    console.log(`getAllowedTaskSelections (assignee) calculated initial:`, [...new Set(allowed)]);
 
+    // 미배정은 항상 제외
+    allowed = allowed.filter((option) => option !== "미배정");
+  } else if (fieldType === "assignee") {
+    // --- 담당자 선택 로직 ---
+    allowed.push("미배정"); // 항상 미배정 포함
+
+    if (isHospitalOwner(userLevelData, currentUser)) {
+      // 대표원장: 모든 역할/팀 선택 가능 (+미배정)
+      allowed.push(
+        ...Object.values(roleOptions)
+          .flat()
+          .filter((opt) => opt !== "미배정")
+      );
+    } else if (isAdministrativeManager(userLevelData, currentUser)) {
+      // 원무과장: 자신, 원무팀, 영상의학 관련, 미배정
+      allowed.push("원무과장"); // 자신
+      allowed.push("원무팀"); // 원무팀
+
+      // 원무과장은 영상의학 관련 폴더 접근 권한 있음
+      const radiologyTeam = "영상의학팀";
+      const radiologyLeader = "영상의학팀장";
+      allowed.push(radiologyTeam);
+      allowed.push(radiologyLeader);
+    } else if (isLeaderOrHigher(userLevelData, currentUser)) {
+      // 팀장/과장: 부서와 연계된 구체적인 직함 사용
+      const specificRole = getSpecificRoleTitle(role, department);
+      allowed.push(specificRole); // 구체적인 직함
+
+      // 자신의 팀 이름 생성
+      if (department) {
+        const teamName = department.endsWith("팀")
+          ? department
+          : `${department}팀`;
+        allowed.push(teamName);
+      }
+    } else {
+      // 팀원: 자신의 팀과 미배정만 선택 가능 (팀장 옵션 제거)
+      // 자신의 팀 이름 생성
+      if (department) {
+        const teamName = department.endsWith("팀")
+          ? department
+          : `${department}팀`;
+        allowed.push(teamName);
+      }
+      // 주의: 팀장 옵션은 더 이상 추가하지 않음
+    }
   }
 
   // 최종 반환 전 중복 제거
   const uniqueAllowed = [...new Set(allowed)];
 
-  // --- 최종 필터링을 위한 모든 유효한 옵션 목록 생성 --- 
+  // --- 최종 필터링을 위한 모든 유효한 옵션 목록 생성 ---
   const allValidOptionsForFiltering = [];
   Object.entries(roleOptions).forEach(([departmentKey, roles]) => {
-    const teamName = roles.includes("팀원") ? `${departmentKey}팀` : null;
-    if (teamName && departmentKey !== "대표원장" && !allValidOptionsForFiltering.includes(teamName)) {
-        if(departmentKey !== teamName.replace('팀','')) {
-             allValidOptionsForFiltering.push(teamName);
-        } else { 
-             allValidOptionsForFiltering.push(departmentKey);
-        }
+    // 팀 이름 생성
+    let teamName = null;
+    if (roles.includes("팀원") && departmentKey !== "대표원장") {
+      if (departmentKey.endsWith("팀")) teamName = departmentKey;
+      else {
+        const mappings = {
+          원무: "원무팀",
+          경영지원: "경영지원팀",
+          진료: "진료팀",
+          간호: "간호팀",
+          물리치료: "물리치료팀",
+          영상의학: "영상의학팀",
+        };
+        teamName = mappings[departmentKey] || `${departmentKey}팀`;
+      }
+      if (!allValidOptionsForFiltering.includes(teamName))
+        allValidOptionsForFiltering.push(teamName);
     }
-    roles.forEach(role => {
-      if (role !== "팀원" && !allValidOptionsForFiltering.includes(role)) {
-        allValidOptionsForFiltering.push(role);
+    // 역할 이름 추가
+    roles.forEach((roleName) => {
+      if (
+        roleName !== "팀원" &&
+        !allValidOptionsForFiltering.includes(roleName)
+      ) {
+        allValidOptionsForFiltering.push(roleName);
       }
     });
   });
@@ -473,8 +591,13 @@ export const getAllowedTaskSelections = (userLevelData, currentUser, fieldType) 
   // --- --- ---
 
   // 생성된 유효 옵션 목록(allValidOptionsForFiltering)을 기준으로 최종 필터링
-  const finalAllowed = uniqueAllowed.filter(opt => allValidOptionsForFiltering.includes(opt));
+  const finalAllowed = uniqueAllowed.filter((opt) =>
+    allValidOptionsForFiltering.includes(opt)
+  );
 
-  console.log(`getAllowedTaskSelections 최종 반환 (${fieldType}):`, finalAllowed);
+  console.log(
+    `getAllowedTaskSelections 최종 반환 (${fieldType}):`,
+    finalAllowed
+  );
   return finalAllowed;
 };
